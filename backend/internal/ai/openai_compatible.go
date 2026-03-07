@@ -154,6 +154,11 @@ func systemPrompt() string {
 }
 
 func userPrompt(in Input) string {
+	docRefs := make([]string, 0, len(in.DocumentationRefs))
+	for _, ref := range in.DocumentationRefs {
+		docRefs = append(docRefs, fmt.Sprintf("- %s (%s)", ref.Title, ref.URL))
+	}
+
 	return strings.Join([]string{
 		"User request:",
 		in.UserMessage,
@@ -175,5 +180,11 @@ func userPrompt(in Input) string {
 		"",
 		"Cluster snapshot brief:",
 		in.ClusterSnapshotBrief,
+		"",
+		"Documentation context:",
+		in.DocumentationContext,
+		"",
+		"Documentation references:",
+		strings.Join(docRefs, "\n"),
 	}, "\n")
 }

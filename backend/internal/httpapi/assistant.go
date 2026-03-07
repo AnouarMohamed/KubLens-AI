@@ -59,6 +59,7 @@ func (s *Server) handleAssistant(w http.ResponseWriter, r *http.Request) {
 	pods, nodes := s.cluster.Snapshot(r.Context())
 	diag := diagnostics.BuildDiagnostics(pods, nodes)
 	lower := strings.ToLower(message)
+	docRefs := s.retrieveDocReferences(r.Context(), message, diag.Summary)
 
 	if match := diagnoseRegex.FindStringSubmatch(lower); len(match) == 2 {
 		hint := match[1]
@@ -70,6 +71,7 @@ func (s *Server) handleAssistant(w http.ResponseWriter, r *http.Request) {
 				localAnswer:        "I could not find a pod matching `" + hint + "`. Try a fuller pod name from the Pods tab.",
 				hints:              []string{"Diagnose payment-gateway", "Show cluster health", "What should I fix first"},
 				resources:          nil,
+				docReferences:      docRefs,
 				diagnosticsSummary: diag.Summary,
 				priorityActions:    diagnostics.BuildPriorityActions(diag),
 				pods:               pods,
@@ -89,6 +91,7 @@ func (s *Server) handleAssistant(w http.ResponseWriter, r *http.Request) {
 			localAnswer:        answer,
 			hints:              []string{"Show failed pods", "Show node risks", "Generate deployment manifest"},
 			resources:          []string{pod.Namespace + "/" + pod.Name},
+			docReferences:      docRefs,
 			diagnosticsSummary: diag.Summary,
 			priorityActions:    diagnostics.BuildPriorityActions(diag),
 			pods:               pods,
@@ -105,6 +108,7 @@ func (s *Server) handleAssistant(w http.ResponseWriter, r *http.Request) {
 			localAnswer:        "Here is a production-safe starter deployment template:\n\n" + diagnostics.GenerateManifestTemplate(),
 			hints:              defaultHints,
 			resources:          nil,
+			docReferences:      docRefs,
 			diagnosticsSummary: diag.Summary,
 			priorityActions:    diagnostics.BuildPriorityActions(diag),
 			pods:               pods,
@@ -118,6 +122,7 @@ func (s *Server) handleAssistant(w http.ResponseWriter, r *http.Request) {
 			localAnswer:        diag.Summary,
 			hints:              healthHints,
 			resources:          collectIssueResources(diag.Issues),
+			docReferences:      docRefs,
 			diagnosticsSummary: diag.Summary,
 			priorityActions:    diagnostics.BuildPriorityActions(diag),
 			pods:               pods,
@@ -131,6 +136,7 @@ func (s *Server) handleAssistant(w http.ResponseWriter, r *http.Request) {
 			localAnswer:        diagnostics.BuildPriorityActions(diag),
 			hints:              defaultHints,
 			resources:          collectIssueResources(diag.Issues),
+			docReferences:      docRefs,
 			diagnosticsSummary: diag.Summary,
 			priorityActions:    diagnostics.BuildPriorityActions(diag),
 			pods:               pods,
@@ -152,6 +158,7 @@ func (s *Server) handleAssistant(w http.ResponseWriter, r *http.Request) {
 			}, "\n"),
 			hints:              defaultHints,
 			resources:          nil,
+			docReferences:      docRefs,
 			diagnosticsSummary: diag.Summary,
 			priorityActions:    diagnostics.BuildPriorityActions(diag),
 			pods:               pods,
@@ -166,6 +173,7 @@ type assistantContext struct {
 	localAnswer        string
 	hints              []string
 	resources          []string
+	docReferences      []model.DocumentationReference
 	diagnosticsSummary string
 	priorityActions    string
 	pods               []model.PodSummary
@@ -185,7 +193,7 @@ func (s *Server) writeAssistantResponse(w http.ResponseWriter, reqCtx context.Co
 		}
 	}
 
-	writeJSON(w, http.StatusOK, s.assistantResponse(answer, ctx.hints, ctx.resources))
+	writeJSON(w, http.StatusOK, s.assistantResponse(answer, ctx.hints, ctx.resources, ctx.docReferences))
 }
 
 func (s *Server) enhanceAssistantAnswer(ctx context.Context, c assistantContext) (string, error) {
@@ -204,6 +212,8 @@ func (s *Server) enhanceAssistantAnswer(ctx context.Context, c assistantContext)
 		PriorityActions:      c.priorityActions,
 		ReferencedResources:  dedupeStrings(c.resources),
 		ClusterSnapshotBrief: buildClusterSnapshotBrief(c.pods, c.nodes),
+		DocumentationContext: buildDocumentationContext(c.docReferences),
+		DocumentationRefs:    mapDocReferencesForAI(c.docReferences),
 	}
 
 	answer, err := s.ai.Generate(timeoutCtx, in)
@@ -267,13 +277,69 @@ func dedupeStrings(values []string) []string {
 	return out
 }
 
-func (s *Server) assistantResponse(answer string, hints []string, resources []string) model.AssistantResponse {
+func (s *Server) assistantResponse(
+	answer string,
+	hints []string,
+	resources []string,
+	docRefs []model.DocumentationReference,
+) model.AssistantResponse {
 	return model.AssistantResponse{
 		Answer:              answer,
 		Hints:               append([]string(nil), hints...),
 		ReferencedResources: append([]string(nil), resources...),
+		References:          append([]model.DocumentationReference(nil), docRefs...),
 		Timestamp:           s.now().UTC().Format(time.RFC3339),
 	}
+}
+
+func (s *Server) retrieveDocReferences(ctx context.Context, message, diagnosticsSummary string) []model.DocumentationReference {
+	if s.docs == nil || !s.docs.Enabled() {
+		return nil
+	}
+	query := strings.TrimSpace(message)
+	if query == "" {
+		query = "kubernetes troubleshooting"
+	}
+	if strings.TrimSpace(diagnosticsSummary) != "" {
+		query += " " + diagnosticsSummary
+	}
+
+	refs := s.docs.Retrieve(ctx, query, 3)
+	if len(refs) == 0 {
+		return nil
+	}
+	return refs
+}
+
+func mapDocReferencesForAI(refs []model.DocumentationReference) []ai.DocReference {
+	out := make([]ai.DocReference, 0, len(refs))
+	for _, ref := range refs {
+		out = append(out, ai.DocReference{
+			Title:   ref.Title,
+			URL:     ref.URL,
+			Source:  ref.Source,
+			Snippet: ref.Snippet,
+		})
+	}
+	return out
+}
+
+func buildDocumentationContext(refs []model.DocumentationReference) string {
+	if len(refs) == 0 {
+		return "No documentation snippets available."
+	}
+
+	lines := make([]string, 0, len(refs))
+	for _, ref := range refs {
+		if strings.TrimSpace(ref.Snippet) == "" {
+			continue
+		}
+		lines = append(lines, fmt.Sprintf("[%s] %s", ref.Title, ref.Snippet))
+	}
+	if len(lines) == 0 {
+		return "References available without snippets."
+	}
+	return strings.Join(lines, "\n")
 }
 
 func detectIntent(lowerMessage string) assistantIntent {

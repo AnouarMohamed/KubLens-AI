@@ -209,11 +209,19 @@ type PredictionsResult struct {
 	Items       []IncidentPrediction `json:"items"`
 }
 
+type DocumentationReference struct {
+	Title   string `json:"title"`
+	URL     string `json:"url"`
+	Source  string `json:"source"`
+	Snippet string `json:"snippet,omitempty"`
+}
+
 type AssistantResponse struct {
-	Answer              string   `json:"answer"`
-	Hints               []string `json:"hints"`
-	ReferencedResources []string `json:"referencedResources"`
-	Timestamp           string   `json:"timestamp"`
+	Answer              string                   `json:"answer"`
+	Hints               []string                 `json:"hints"`
+	ReferencedResources []string                 `json:"referencedResources"`
+	References          []DocumentationReference `json:"references,omitempty"`
+	Timestamp           string                   `json:"timestamp"`
 }
 
 type ResourceRecord struct {

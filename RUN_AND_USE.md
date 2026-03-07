@@ -51,6 +51,13 @@ If missing, install Metrics Server in your cluster.
 - `Terminal`: execute shell commands on backend host
 - `Assistant`: operator Q&A with deterministic fallback
 
+## 6.1 Assistant RAG Grounding
+
+The assistant can retrieve Kubernetes and Docker docs snippets for grounded answers.
+
+- Env: `ASSISTANT_RAG_ENABLED=true|false` (default enabled)
+- Endpoint output includes doc references when available
+
 ## 7. Terminal Usage Notes
 
 - Endpoint: `POST /api/terminal/exec`

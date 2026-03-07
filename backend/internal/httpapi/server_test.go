@@ -170,6 +170,33 @@ func TestAssistantFallsBackWhenProviderFails(t *testing.T) {
 	}
 }
 
+func TestAssistantIncludesDocumentationReferences(t *testing.T) {
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	server := newServer(
+		testClusterReader{},
+		nil,
+		logger,
+		WithDocsRetriever(testDocsRetriever{}),
+	)
+	router := server.Router("")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/assistant", strings.NewReader(`{"message":"diagnose payment-gateway"}`))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status code = %d, want 200", rr.Code)
+	}
+
+	var payload model.AssistantResponse
+	if err := json.NewDecoder(rr.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(payload.References) == 0 {
+		t.Fatal("expected documentation references in assistant response")
+	}
+}
+
 func TestResourcesEndpoint(t *testing.T) {
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
 	server := newServer(testClusterReader{}, nil, logger)
@@ -560,4 +587,19 @@ func (p *testPredictionProvider) Predict(context.Context, predictorRequest) (mod
 		return model.PredictionsResult{}, p.err
 	}
 	return p.response, nil
+}
+
+type testDocsRetriever struct{}
+
+func (testDocsRetriever) Enabled() bool { return true }
+
+func (testDocsRetriever) Retrieve(context.Context, string, int) []model.DocumentationReference {
+	return []model.DocumentationReference{
+		{
+			Title:   "Kubernetes Pod lifecycle",
+			URL:     "https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/",
+			Source:  "kubernetes",
+			Snippet: "Pending can indicate scheduling or image pull problems.",
+		},
+	}
 }

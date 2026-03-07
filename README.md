@@ -1,83 +1,73 @@
 # KubeLens AI
 
-A full-stack Kubernetes operations dashboard for cluster visibility, diagnostics, incident prediction, and guided actions.
+KubeLens AI is a Kubernetes operations dashboard built for two realities:
+- quick local demos with deterministic mock data
+- real cluster operations with live Kubernetes + metrics APIs
 
-## What this project does
-- Shows live cluster inventory: pods, nodes, workloads, networking, storage, and RBAC resources.
-- Pulls real CPU/memory usage through `metrics.k8s.io` when Metrics Server is available.
-- Runs diagnostics with severity-ranked findings and recommendations.
-- Runs incident prediction with a Python predictor service and safe local fallback.
-- Supports operator actions: pod create/restart/delete, node cordon, workload scale/restart/rollback, YAML edit/apply.
+It combines observability, diagnostics, predictions, assistant guidance, and safe operational actions in one interface.
 
-## Architecture (short)
+## What you get
+- Cluster inventory: pods, nodes, workloads, networking, storage, RBAC
+- Real-time usage: CPU and memory (when `metrics.k8s.io` is available)
+- Diagnostics engine: deterministic issue scoring and recommendations
+- Predictions engine: Python predictor service with local fallback
+- Ops actions: create/restart/delete pod, cordon node, scale/restart/rollback workloads, edit/apply YAML
+- In-app terminal execution with timeout and output capture
+
+## How the system works
 - Frontend: React + Vite (`src/`)
-- Backend API: Go + client-go (`backend/`)
-- Optional predictor: FastAPI (`predictor/`)
-- Deployment: Docker Compose and Kubernetes manifests (`docker-compose.yml`, `k8s/`)
+- Backend: Go + client-go (`backend/`)
+- Optional ML service: FastAPI predictor (`predictor/`)
 
-## Codebase separation
-This repository now enforces a clearer structure to keep it scalable.
+Request flow:
+1. UI calls `/api/*`
+2. Backend reads cluster state from Kubernetes API
+3. Backend enriches with metrics from Metrics Server
+4. Diagnostics/predictions are generated
+5. UI renders tables, charts, and recommendations
 
-### Frontend
-- Views are isolated by feature folder: `src/views/<view>/index.tsx`
-- Each view has local extension points:
-  - `components/`
-  - `hooks/`
-  - `api/`
-- Shared UI lives in `src/components/`
-- Shared data/API utilities live in `src/types.ts` and `src/lib/api.ts`
+## Mock mode vs real mode
 
-### Backend
-- `backend/internal/cluster/`
-  - `query_*` for reads
-  - `command_*` for writes/actions
-  - `mapper_*` for K8s -> API model mapping
-  - `service_*` for service runtime and cache
-  - `support_*` for common helpers
-- `backend/internal/diagnostics/`
-  - `analysis_*` for diagnostics logic
-  - `present_*` for output narrative formatting
+### Mock mode (default if no kubeconfig)
+Use mock mode when you want to run and test UX/logic without cluster access.
 
-## Quality gates
-Local and CI checks now enforce structure and quality.
+Behavior:
+- Backend starts with deterministic pod/node/resource data
+- Diagnostics and predictions still work (using local rules/fallback)
+- Resource actions are simulated in-memory
 
-- `npm run lint`
-  - TypeScript compile checks
-  - Structure/import rules (`scripts/structure-lint.mjs`)
-- `npm run test:go`
-- `npm run build`
+### Real mode (live cluster)
+Use real mode when you want actual cluster data and real actions.
 
-CI workflow:
-- `.github/workflows/ci.yml`
-- Runs on push and pull requests
+Behavior:
+- Backend reads live objects from Kubernetes API
+- CPU/memory usage comes from `metrics.k8s.io` if available
+- Resource actions execute against your cluster
 
-## Quick start (mock mode)
-Use this when you do not want to connect to a real cluster.
+## Run guide
 
+### 1) Local quick start (mock)
 ```bash
 npm install
 npm run dev
 ```
-
 - Frontend: `http://localhost:5173`
 - Backend: `http://localhost:3000`
 
-If `KUBECONFIG_DATA` is missing, backend falls back to deterministic mock data.
-
-## Run with real cluster + real metrics
-1. Confirm cluster access:
+### 2) Real cluster setup
+Verify access:
 ```bash
 kubectl cluster-info
 kubectl get nodes
 ```
 
-2. Confirm Metrics Server is available:
+Verify metrics:
 ```bash
 kubectl top nodes
 kubectl top pods -A
 ```
 
-3. Set `KUBECONFIG_DATA`.
+Set kubeconfig payload.
 
 PowerShell:
 ```powershell
@@ -92,47 +82,134 @@ export KUBECONFIG_DATA=$(base64 -w 0 ~/.kube/config)
 npm run dev
 ```
 
-## Predictor service (optional)
-Run the predictor in Docker:
-
+### 3) Optional predictor service
 ```bash
 npm run docker:build:predictor
 npm run docker:run:predictor
 ```
-
-Then set backend env:
+Set:
 - `PREDICTOR_URL=http://localhost:8001/predict`
 
-## Docker
-Run full stack with compose:
+### 3.1) Assistant RAG toggle
+- Default: enabled
+- Env: `ASSISTANT_RAG_ENABLED=true|false`
 
+### 4) Docker full stack
 ```bash
 npm run docker:up
 npm run docker:down
 ```
 
-## Kubernetes deployment
-Use the manifests in `k8s/`:
-
+### 5) Kubernetes deployment
 ```bash
 kubectl apply -k k8s
 ```
-
-See details:
+See:
 - `k8s/README.md`
 - `RUN_AND_USE.md`
 
-## Screenshots
+## How key features work
 
-### Overview
-![Overview](screenshots/Screenshot%202026-03-07%20133914.png)
-
-### Metrics
-![Metrics](screenshots/Screenshot%202026-03-07%20134004.png)
+### Diagnostics
+- Rule-based engine (`backend/internal/diagnostics/analysis_*`)
+- Scans pod/node snapshots for risk patterns (failed pod, pending pod, high restarts, not-ready node)
+- Produces:
+  - health score
+  - severity-ranked issues
+  - human-readable summary
 
 ### Predictions
-![Predictions](screenshots/Screenshot%202026-03-07%20134415.png)
+- Backend endpoint: `/api/predictions`
+- Tries Python predictor service first
+- If predictor is unavailable, backend returns local fallback predictions
+- Frontend handles legacy route fallback (`/api/predictive-incidents`) if needed
 
-## Notes
-- If predictions return 404, restart backend and confirm you are running the latest code.
-- If CPU/memory show `N/A`, verify Metrics Server and `kubectl top` first.
+### Assistant
+- Endpoint: `/api/assistant`
+- Intent-based local response path (diagnose/health/manifest/priority)
+- RAG grounding from Kubernetes + Docker documentation
+- Optional AI provider enhancement if configured
+- Safe fallback to deterministic answer if provider fails
+- Returns documentation references with links and excerpts in the UI
+
+### Terminal
+- Endpoint: `/api/terminal/exec`
+- Executes command in shell (`powershell` on Windows, `sh -lc` on Unix)
+- Guardrails:
+  - command required
+  - max length: 2000 chars
+  - timeout clamped (default 10s, max 30s)
+  - captures stdout/stderr and exit code
+
+## Error handling and troubleshooting
+
+Common cases and what to do:
+- `404` on predictions page:
+  - restart backend and ensure latest API routes are running
+- CPU/memory shows `N/A`:
+  - Metrics Server missing or unavailable
+  - check `kubectl top nodes` and `kubectl top pods -A`
+- Assistant output is generic:
+  - provider may be unavailable; app is using deterministic fallback
+  - enable RAG (`ASSISTANT_RAG_ENABLED=true`) and check docs links in responses
+  - check provider env config and backend logs
+- Terminal command fails:
+  - inspect returned `stderr`, `exitCode`, and `durationMs`
+  - verify working directory and command syntax
+
+## Implementation guide (extend the project)
+
+### Frontend structure
+- Views are feature folders: `src/views/<view>/index.tsx`
+- Each view can own:
+  - `components/`
+  - `hooks/`
+  - `api/`
+- Shared modules:
+  - `src/components/`
+  - `src/lib/api.ts`
+  - `src/types.ts`
+
+### Backend structure
+- `backend/internal/cluster/`
+  - `query_*` read paths
+  - `command_*` write/action paths
+  - `mapper_*` normalization
+  - `service_*` runtime/cache setup
+  - `support_*` helper utilities
+- `backend/internal/diagnostics/`
+  - `analysis_*` diagnosis logic
+  - `present_*` narrative formatting
+
+### Recommended workflow for a new feature
+1. Add backend model in `backend/internal/model/types.go` if needed
+2. Add cluster/query/command logic in matching `query_*` or `command_*` files
+3. Expose endpoint in `backend/internal/httpapi/*`
+4. Add typed frontend API call in `src/lib/api.ts`
+5. Implement UI in `src/views/<feature>/`
+6. Add tests and run quality gates
+
+## Quality gates
+- `npm run lint` (TypeScript + structure/import rules)
+- `npm run test:go`
+- `npm run build`
+
+CI is configured in:
+- `.github/workflows/ci.yml`
+
+## Screenshots
+
+![Screenshot 1](screenshots/Screenshot%202026-03-07%20133914.png)
+![Screenshot 2](screenshots/Screenshot%202026-03-07%20133928.png)
+![Screenshot 3](screenshots/Screenshot%202026-03-07%20134004.png)
+![Screenshot 4](screenshots/Screenshot%202026-03-07%20134029.png)
+![Screenshot 5](screenshots/Screenshot%202026-03-07%20134040.png)
+![Screenshot 6](screenshots/Screenshot%202026-03-07%20134107.png)
+![Screenshot 7](screenshots/Screenshot%202026-03-07%20134152.png)
+![Screenshot 8](screenshots/Screenshot%202026-03-07%20134252.png)
+![Screenshot 9](screenshots/Screenshot%202026-03-07%20134328.png)
+![Screenshot 10](screenshots/Screenshot%202026-03-07%20134342.png)
+![Screenshot 11](screenshots/Screenshot%202026-03-07%20134356.png)
+![Screenshot 12](screenshots/Screenshot%202026-03-07%20134415.png)
+![Screenshot 13](screenshots/Screenshot%202026-03-07%20134428.png)
+![Screenshot 14](screenshots/Screenshot%202026-03-07%20134458.png)

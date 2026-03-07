@@ -17,6 +17,7 @@ import (
 	"kubelens-backend/internal/cluster"
 	"kubelens-backend/internal/httpapi"
 	"kubelens-backend/internal/model"
+	"kubelens-backend/internal/rag"
 )
 
 func main() {
@@ -33,6 +34,10 @@ func main() {
 	if providerErr != nil {
 		log.Printf("assistant provider warning: %v", providerErr)
 	}
+	ragEnabled := parseBoolDefault(os.Getenv("ASSISTANT_RAG_ENABLED"), true)
+	ragSvc := rag.NewService(rag.Config{
+		Enabled: ragEnabled,
+	})
 	predictorURL := strings.TrimSpace(os.Getenv("PREDICTOR_BASE_URL"))
 	predictorTimeout := parseSecondsAsDuration(os.Getenv("PREDICTOR_TIMEOUT_SECONDS"), 4*time.Second)
 	buildInfo := model.BuildInfo{
@@ -45,6 +50,7 @@ func main() {
 		clusterSvc,
 		httpapi.WithAIProvider(aiProvider),
 		httpapi.WithAITimeout(aiTimeout),
+		httpapi.WithDocsRetriever(ragSvc),
 		httpapi.WithPredictor(predictorURL, predictorTimeout),
 		httpapi.WithBuildInfo(buildInfo),
 	)
@@ -64,6 +70,11 @@ func main() {
 		log.Printf("Assistant provider enabled (%s, timeout=%s)", aiProvider.Name(), aiTimeout)
 	} else {
 		log.Printf("Assistant provider disabled (deterministic local mode)")
+	}
+	if ragEnabled {
+		log.Printf("Assistant RAG enabled (Kubernetes + Docker docs grounding)")
+	} else {
+		log.Printf("Assistant RAG disabled")
 	}
 	if predictorURL != "" {
 		log.Printf("Predictor service enabled (%s, timeout=%s)", predictorURL, predictorTimeout)
@@ -164,4 +175,20 @@ func parseIntDefault(raw string, fallback int) int {
 		return fallback
 	}
 	return parsed
+}
+
+func parseBoolDefault(raw string, fallback bool) bool {
+	value := strings.ToLower(strings.TrimSpace(raw))
+	if value == "" {
+		return fallback
+	}
+
+	switch value {
+	case "1", "true", "yes", "on":
+		return true
+	case "0", "false", "no", "off":
+		return false
+	default:
+		return fallback
+	}
 }

@@ -136,6 +136,12 @@ export interface AssistantResponse {
   answer: string;
   hints: string[];
   referencedResources: string[];
+  references?: Array<{
+    title: string;
+    url: string;
+    source: string;
+    snippet?: string;
+  }>;
   timestamp: string;
 }
 

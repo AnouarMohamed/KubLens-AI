@@ -43,6 +43,7 @@ type Server struct {
 	metrics   *requestMetrics
 	ai        ai.Provider
 	aiTTL     time.Duration
+	docs      docsRetriever
 	predictor predictionProvider
 	buildInfo model.BuildInfo
 
@@ -54,6 +55,11 @@ type Server struct {
 type predictionsCacheEntry struct {
 	data      model.PredictionsResult
 	expiresAt time.Time
+}
+
+type docsRetriever interface {
+	Enabled() bool
+	Retrieve(ctx context.Context, query string, limit int) []model.DocumentationReference
 }
 
 type Option func(*Server)
@@ -69,6 +75,12 @@ func WithAITimeout(timeout time.Duration) Option {
 		if timeout > 0 {
 			s.aiTTL = timeout
 		}
+	}
+}
+
+func WithDocsRetriever(retriever docsRetriever) Option {
+	return func(s *Server) {
+		s.docs = retriever
 	}
 }
 

@@ -8,6 +8,7 @@
 - `diagnostics/` -> health scoring + issue inference
 - `httpapi/` -> HTTP handlers, routing, transport concerns
 - `model/` -> canonical backend API models
+- `rag/` -> documentation retrieval and grounding for assistant responses
 
 Navigation tips:
 
