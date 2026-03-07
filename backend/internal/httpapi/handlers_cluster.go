@@ -85,6 +85,7 @@ func (s *Server) handleApplyResourceYAML(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	s.invalidatePredictionsCache()
 	writeJSON(w, http.StatusOK, result)
 }
 
@@ -105,6 +106,7 @@ func (s *Server) handleScaleResource(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.invalidatePredictionsCache()
 	writeJSON(w, http.StatusOK, result)
 }
 
@@ -118,6 +120,7 @@ func (s *Server) handleRestartResource(w http.ResponseWriter, r *http.Request) {
 		handleActionError(w, err, "Resource not found")
 		return
 	}
+	s.invalidatePredictionsCache()
 	writeJSON(w, http.StatusOK, result)
 }
 
@@ -131,6 +134,7 @@ func (s *Server) handleRollbackResource(w http.ResponseWriter, r *http.Request) 
 		handleActionError(w, err, "Resource not found")
 		return
 	}
+	s.invalidatePredictionsCache()
 	writeJSON(w, http.StatusOK, result)
 }
 
@@ -150,6 +154,7 @@ func (s *Server) handleCreatePod(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	s.invalidatePredictionsCache()
 	writeJSON(w, http.StatusOK, result)
 }
 
@@ -180,6 +185,7 @@ func (s *Server) handleRestartPod(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.invalidatePredictionsCache()
 	writeJSON(w, http.StatusOK, result)
 }
 
@@ -197,6 +203,7 @@ func (s *Server) handleDeletePod(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.invalidatePredictionsCache()
 	writeJSON(w, http.StatusOK, result)
 }
 
@@ -241,6 +248,7 @@ func (s *Server) handleCordonNode(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	s.invalidatePredictionsCache()
 	writeJSON(w, http.StatusOK, result)
 }
 

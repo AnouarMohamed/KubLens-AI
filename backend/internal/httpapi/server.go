@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -44,6 +45,15 @@ type Server struct {
 	aiTTL     time.Duration
 	predictor predictionProvider
 	buildInfo model.BuildInfo
+
+	predictionsTTL   time.Duration
+	predictionsMu    sync.RWMutex
+	predictionsCache predictionsCacheEntry
+}
+
+type predictionsCacheEntry struct {
+	data      model.PredictionsResult
+	expiresAt time.Time
 }
 
 type Option func(*Server)
@@ -68,6 +78,14 @@ func WithPredictor(baseURL string, timeout time.Duration) Option {
 			return
 		}
 		s.predictor = newPredictorClient(baseURL, timeout)
+	}
+}
+
+func WithPredictionsTTL(ttl time.Duration) Option {
+	return func(s *Server) {
+		if ttl > 0 {
+			s.predictionsTTL = ttl
+		}
 	}
 }
 
@@ -98,11 +116,12 @@ func newServer(clusterSvc clusterReader, now func() time.Time, logger *slog.Logg
 	}
 
 	server := &Server{
-		cluster: clusterSvc,
-		now:     now,
-		logger:  logger,
-		metrics: newRequestMetrics(now),
-		aiTTL:   8 * time.Second,
+		cluster:        clusterSvc,
+		now:            now,
+		logger:         logger,
+		metrics:        newRequestMetrics(now),
+		aiTTL:          8 * time.Second,
+		predictionsTTL: 8 * time.Second,
 		buildInfo: model.BuildInfo{
 			Version: "dev",
 			Commit:  "local",
@@ -150,6 +169,7 @@ func (s *Server) Router(distDir string) http.Handler {
 		api.Get("/stats", s.handleStats)
 		api.Get("/diagnostics", s.handleDiagnostics)
 		api.Get("/predictions", s.handlePredictions)
+		api.Get("/predictive-incidents", s.handlePredictions) // Backward-compatible alias for older frontend builds.
 		api.Post("/assistant", s.handleAssistant)
 		api.Post("/terminal/exec", s.handleTerminalExec)
 	})

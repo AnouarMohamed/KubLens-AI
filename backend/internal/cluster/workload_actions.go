@@ -95,6 +95,7 @@ func (s *Service) ApplyResourceYAML(ctx context.Context, kind, namespace, name, 
 		if _, err := s.client.AppsV1().Deployments(namespace).Update(callCtx, desired, metav1.UpdateOptions{}); err != nil {
 			return model.ActionResult{}, toActionError(err, "update deployment")
 		}
+		s.invalidateCache()
 		return model.ActionResult{Success: true, Message: fmt.Sprintf("Updated deployment %s/%s", namespace, name)}, nil
 	case "statefulsets":
 		current, err := s.client.AppsV1().StatefulSets(namespace).Get(callCtx, name, metav1.GetOptions{})
@@ -113,6 +114,7 @@ func (s *Service) ApplyResourceYAML(ctx context.Context, kind, namespace, name, 
 		if _, err := s.client.AppsV1().StatefulSets(namespace).Update(callCtx, desired, metav1.UpdateOptions{}); err != nil {
 			return model.ActionResult{}, toActionError(err, "update statefulset")
 		}
+		s.invalidateCache()
 		return model.ActionResult{Success: true, Message: fmt.Sprintf("Updated statefulset %s/%s", namespace, name)}, nil
 	case "jobs":
 		current, err := s.client.BatchV1().Jobs(namespace).Get(callCtx, name, metav1.GetOptions{})
@@ -131,6 +133,7 @@ func (s *Service) ApplyResourceYAML(ctx context.Context, kind, namespace, name, 
 		if _, err := s.client.BatchV1().Jobs(namespace).Update(callCtx, desired, metav1.UpdateOptions{}); err != nil {
 			return model.ActionResult{}, toActionError(err, "update job")
 		}
+		s.invalidateCache()
 		return model.ActionResult{Success: true, Message: fmt.Sprintf("Updated job %s/%s", namespace, name)}, nil
 	default:
 		return model.ActionResult{}, errUnsupportedWorkloadKind
@@ -189,6 +192,7 @@ func (s *Service) ScaleResource(ctx context.Context, kind, namespace, name strin
 		return model.ActionResult{}, errUnsupportedWorkloadKind
 	}
 
+	s.invalidateCache()
 	return model.ActionResult{Success: true, Message: fmt.Sprintf("Scaled %s %s/%s to %d", kind, namespace, name, replicas)}, nil
 }
 
@@ -255,11 +259,13 @@ func (s *Service) RestartResource(ctx context.Context, kind, namespace, name str
 		if _, err := s.client.BatchV1().Jobs(namespace).Create(callCtx, rerun, metav1.CreateOptions{}); err != nil {
 			return model.ActionResult{}, toActionError(err, "rerun job")
 		}
+		s.invalidateCache()
 		return model.ActionResult{Success: true, Message: fmt.Sprintf("Created rerun job %s/%s", namespace, rerunName)}, nil
 	default:
 		return model.ActionResult{}, errUnsupportedWorkloadKind
 	}
 
+	s.invalidateCache()
 	return model.ActionResult{Success: true, Message: fmt.Sprintf("Restart triggered for %s %s/%s", kind, namespace, name)}, nil
 }
 
@@ -313,6 +319,7 @@ func (s *Service) RollbackResource(ctx context.Context, kind, namespace, name st
 	if _, err := s.client.AppsV1().Deployments(namespace).Update(callCtx, deployment, metav1.UpdateOptions{}); err != nil {
 		return model.ActionResult{}, toActionError(err, "rollback deployment")
 	}
+	s.invalidateCache()
 
 	return model.ActionResult{Success: true, Message: fmt.Sprintf("Rolled back deployment %s/%s to revision %d", namespace, name, target.Revision)}, nil
 }

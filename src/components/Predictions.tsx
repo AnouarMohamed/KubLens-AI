@@ -8,10 +8,10 @@ export default function Predictions() {
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (force = false) => {
     setIsLoading(true);
     try {
-      const response = await api.getPredictions();
+      const response = await api.getPredictions(force);
       setPayload(response);
       setError(null);
     } catch (err) {
@@ -35,7 +35,7 @@ export default function Predictions() {
       return;
     }
 
-    const timer = window.setInterval(() => void load(), 20000);
+    const timer = window.setInterval(() => void load(false), 20000);
     return () => window.clearInterval(timer);
   }, [autoRefresh, load]);
 
@@ -57,7 +57,7 @@ export default function Predictions() {
               <span className="ml-2">Auto refresh</span>
             </label>
             <button
-              onClick={() => void load()}
+              onClick={() => void load(true)}
               disabled={isLoading}
               className="h-10 rounded-xl border border-zinc-700 px-4 text-sm font-medium text-zinc-200 hover:bg-zinc-800 disabled:opacity-50"
             >

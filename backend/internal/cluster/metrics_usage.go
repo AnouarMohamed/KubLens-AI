@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"sync"
 
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -20,8 +21,28 @@ func (s *Service) fetchUsage(ctx context.Context) (map[string]resourceUsage, map
 		return nil, nil
 	}
 
-	podList, podErr := s.metricsClient.MetricsV1beta1().PodMetricses("").List(ctx, metav1.ListOptions{})
-	nodeList, nodeErr := s.metricsClient.MetricsV1beta1().NodeMetricses().List(ctx, metav1.ListOptions{})
+	var (
+		podList  *metricsv1beta1.PodMetricsList
+		nodeList *metricsv1beta1.NodeMetricsList
+		podErr   error
+		nodeErr  error
+	)
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	go func() {
+		defer wg.Done()
+		podList, podErr = s.metricsClient.MetricsV1beta1().PodMetricses("").List(ctx, metav1.ListOptions{})
+	}()
+
+	go func() {
+		defer wg.Done()
+		nodeList, nodeErr = s.metricsClient.MetricsV1beta1().NodeMetricses().List(ctx, metav1.ListOptions{})
+	}()
+
+	wg.Wait()
+
 	if podErr != nil && nodeErr != nil {
 		return nil, nil
 	}

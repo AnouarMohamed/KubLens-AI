@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/sync/singleflight"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -50,6 +51,7 @@ type Service struct {
 
 	mu    sync.RWMutex
 	cache cachedSlices
+	group singleflight.Group
 
 	mockMu         sync.RWMutex
 	mockPods       []model.PodSummary
@@ -113,24 +115,41 @@ func (s *Service) Snapshot(ctx context.Context) ([]model.PodSummary, []model.Nod
 		return s.mockSnapshot()
 	}
 
-	data, ok := s.cached()
+	data, ok := s.cachedFresh()
 	if ok {
 		return append([]model.PodSummary(nil), data.pods...), cloneNodeSummaries(data.nodes)
 	}
 
-	pods, nodes, err := s.fetchPodsAndNodes(ctx)
-	if err != nil || len(pods) == 0 || len(nodes) == 0 {
-		// Preserve previous behavior: return mock data if real API is unavailable.
-		return mockPods(), mockNodes()
+	result, err, _ := s.group.Do("snapshot", func() (any, error) {
+		// Another request may have refreshed the cache while this call waited.
+		if fresh, ok := s.cachedFresh(); ok {
+			return fresh, nil
+		}
+
+		pods, nodes, fetchErr := s.fetchPodsAndNodes(context.WithoutCancel(ctx))
+		if fetchErr != nil {
+			return nil, fetchErr
+		}
+
+		refreshed := cachedSlices{
+			pods:      append([]model.PodSummary(nil), pods...),
+			nodes:     cloneNodeSummaries(nodes),
+			expiresAt: time.Now().Add(s.cacheTTL),
+		}
+		s.storeCache(refreshed)
+		return refreshed, nil
+	})
+	if err == nil {
+		refreshed := result.(cachedSlices)
+		return append([]model.PodSummary(nil), refreshed.pods...), cloneNodeSummaries(refreshed.nodes)
 	}
 
-	s.storeCache(cachedSlices{
-		pods:      append([]model.PodSummary(nil), pods...),
-		nodes:     cloneNodeSummaries(nodes),
-		expiresAt: time.Now().Add(s.cacheTTL),
-	})
+	if stale, ok := s.cachedAny(); ok && len(stale.pods) > 0 && len(stale.nodes) > 0 {
+		return append([]model.PodSummary(nil), stale.pods...), cloneNodeSummaries(stale.nodes)
+	}
 
-	return pods, nodes
+	// Preserve previous behavior as final fallback when real API is unavailable.
+	return mockPods(), mockNodes()
 }
 
 func (s *Service) ListNamespaces(ctx context.Context) []string {
@@ -138,34 +157,48 @@ func (s *Service) ListNamespaces(ctx context.Context) []string {
 		return s.mockNamespaceList()
 	}
 
-	data, ok := s.cached()
+	data, ok := s.cachedFresh()
 	if ok && len(data.namespaces) > 0 {
 		return append([]string(nil), data.namespaces...)
 	}
 
-	callCtx, cancel := s.withTimeout(ctx)
-	defer cancel()
+	result, err, _ := s.group.Do("namespaces", func() (any, error) {
+		if fresh, ok := s.cachedFresh(); ok && len(fresh.namespaces) > 0 {
+			return append([]string(nil), fresh.namespaces...), nil
+		}
 
-	list, err := s.client.CoreV1().Namespaces().List(callCtx, metav1.ListOptions{})
-	if err != nil {
-		return mockNamespaces()
-	}
+		callCtx, cancel := s.withTimeout(context.WithoutCancel(ctx))
+		defer cancel()
 
-	names := make([]string, 0, len(list.Items))
-	for _, item := range list.Items {
-		names = append(names, item.Name)
-	}
+		list, fetchErr := s.client.CoreV1().Namespaces().List(callCtx, metav1.ListOptions{})
+		if fetchErr != nil {
+			return nil, fetchErr
+		}
 
-	if len(names) == 0 {
-		return mockNamespaces()
-	}
+		names := make([]string, 0, len(list.Items))
+		for _, item := range list.Items {
+			names = append(names, item.Name)
+		}
+		if len(names) == 0 {
+			return nil, errors.New("no namespaces returned")
+		}
 
-	s.mergeCache(func(data *cachedSlices) {
-		data.namespaces = append([]string(nil), names...)
-		data.expiresAt = time.Now().Add(s.cacheTTL)
+		s.mergeCache(func(current *cachedSlices) {
+			current.namespaces = append([]string(nil), names...)
+			current.expiresAt = time.Now().Add(s.cacheTTL)
+		})
+
+		return names, nil
 	})
+	if err == nil {
+		return result.([]string)
+	}
 
-	return names
+	if stale, ok := s.cachedAny(); ok && len(stale.namespaces) > 0 {
+		return append([]string(nil), stale.namespaces...)
+	}
+
+	return mockNamespaces()
 }
 
 func (s *Service) ListPods(ctx context.Context) []model.PodSummary {
@@ -329,17 +362,41 @@ func (s *Service) fetchPodsAndNodes(ctx context.Context) ([]model.PodSummary, []
 	callCtx, cancel := s.withTimeout(ctx)
 	defer cancel()
 
-	podList, err := s.client.CoreV1().Pods("").List(callCtx, metav1.ListOptions{})
-	if err != nil {
-		return nil, nil, err
-	}
+	var (
+		podList   *corev1.PodList
+		nodeList  *corev1.NodeList
+		podErr    error
+		nodeErr   error
+		podUsage  map[string]resourceUsage
+		nodeUsage map[string]resourceUsage
+	)
 
-	nodeList, err := s.client.CoreV1().Nodes().List(callCtx, metav1.ListOptions{})
-	if err != nil {
-		return nil, nil, err
-	}
+	var wg sync.WaitGroup
+	wg.Add(3)
 
-	podUsage, nodeUsage := s.fetchUsage(callCtx)
+	go func() {
+		defer wg.Done()
+		podList, podErr = s.client.CoreV1().Pods("").List(callCtx, metav1.ListOptions{})
+	}()
+
+	go func() {
+		defer wg.Done()
+		nodeList, nodeErr = s.client.CoreV1().Nodes().List(callCtx, metav1.ListOptions{})
+	}()
+
+	go func() {
+		defer wg.Done()
+		podUsage, nodeUsage = s.fetchUsage(callCtx)
+	}()
+
+	wg.Wait()
+
+	if podErr != nil {
+		return nil, nil, podErr
+	}
+	if nodeErr != nil {
+		return nil, nil, nodeErr
+	}
 
 	pods := make([]model.PodSummary, 0, len(podList.Items))
 	for _, pod := range podList.Items {
@@ -372,11 +429,22 @@ func (s *Service) inMockMode() bool {
 	return !s.isReal || s.client == nil
 }
 
-func (s *Service) cached() (cachedSlices, bool) {
+func (s *Service) cachedFresh() (cachedSlices, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	if time.Now().After(s.cache.expiresAt) {
+		return cachedSlices{}, false
+	}
+	return s.cache, true
+}
+
+func (s *Service) cachedAny() (cachedSlices, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	hasData := len(s.cache.pods) > 0 || len(s.cache.nodes) > 0 || len(s.cache.namespaces) > 0
+	if !hasData {
 		return cachedSlices{}, false
 	}
 	return s.cache, true
@@ -392,6 +460,12 @@ func (s *Service) mergeCache(mutator func(*cachedSlices)) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	mutator(&s.cache)
+}
+
+func (s *Service) invalidateCache() {
+	s.mu.Lock()
+	s.cache = cachedSlices{}
+	s.mu.Unlock()
 }
 
 func (s *Service) ListResources(ctx context.Context, kind string) ([]model.ResourceRecord, error) {
@@ -485,6 +559,7 @@ func (s *Service) CreatePod(ctx context.Context, req model.PodCreateRequest) (mo
 	if _, err := s.client.CoreV1().Pods(namespace).Create(callCtx, pod, metav1.CreateOptions{}); err != nil {
 		return model.ActionResult{}, fmt.Errorf("create pod: %w", err)
 	}
+	s.invalidateCache()
 
 	return model.ActionResult{
 		Success: true,
@@ -517,6 +592,7 @@ func (s *Service) RestartPod(ctx context.Context, namespace, name string) (model
 		}
 		return model.ActionResult{}, fmt.Errorf("restart pod: %w", err)
 	}
+	s.invalidateCache()
 
 	return model.ActionResult{
 		Success: true,
@@ -544,6 +620,7 @@ func (s *Service) DeletePod(ctx context.Context, namespace, name string) (model.
 		}
 		return model.ActionResult{}, fmt.Errorf("delete pod: %w", err)
 	}
+	s.invalidateCache()
 
 	return model.ActionResult{
 		Success: true,
@@ -576,6 +653,7 @@ func (s *Service) CordonNode(ctx context.Context, name string) (model.ActionResu
 		}
 		return model.ActionResult{}, fmt.Errorf("cordon node: %w", err)
 	}
+	s.invalidateCache()
 
 	return model.ActionResult{
 		Success: true,

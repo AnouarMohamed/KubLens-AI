@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"kubelens-backend/internal/ai"
 	"kubelens-backend/internal/model"
@@ -332,6 +333,131 @@ func TestPredictionsEndpointUsesFallback(t *testing.T) {
 	}
 }
 
+func TestPredictionsEndpointUsesCache(t *testing.T) {
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	server := newServer(testClusterReader{}, nil, logger, WithPredictionsTTL(time.Minute))
+	provider := &testPredictionProvider{
+		response: model.PredictionsResult{
+			Source:      "test-provider",
+			GeneratedAt: "2026-03-07T00:00:00Z",
+			Items: []model.IncidentPrediction{
+				{ID: "pod-1", ResourceKind: "Pod", Resource: "payment-gateway-1", RiskScore: 90, Confidence: 85, Summary: "high risk", Recommendation: "check logs"},
+			},
+		},
+	}
+	server.predictor = provider
+	router := server.Router("")
+
+	first := httptest.NewRequest(http.MethodGet, "/api/predictions", nil)
+	firstResp := httptest.NewRecorder()
+	router.ServeHTTP(firstResp, first)
+	if firstResp.Code != http.StatusOK {
+		t.Fatalf("first status code = %d, want 200", firstResp.Code)
+	}
+
+	second := httptest.NewRequest(http.MethodGet, "/api/predictions", nil)
+	secondResp := httptest.NewRecorder()
+	router.ServeHTTP(secondResp, second)
+	if secondResp.Code != http.StatusOK {
+		t.Fatalf("second status code = %d, want 200", secondResp.Code)
+	}
+
+	if provider.calls != 1 {
+		t.Fatalf("provider calls = %d, want 1", provider.calls)
+	}
+}
+
+func TestPredictionsEndpointForceRefreshBypassesCache(t *testing.T) {
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	server := newServer(testClusterReader{}, nil, logger, WithPredictionsTTL(time.Minute))
+	provider := &testPredictionProvider{
+		response: model.PredictionsResult{
+			Source:      "test-provider",
+			GeneratedAt: "2026-03-07T00:00:00Z",
+			Items: []model.IncidentPrediction{
+				{ID: "pod-1", ResourceKind: "Pod", Resource: "payment-gateway-1", RiskScore: 90, Confidence: 85, Summary: "high risk", Recommendation: "check logs"},
+			},
+		},
+	}
+	server.predictor = provider
+	router := server.Router("")
+
+	first := httptest.NewRequest(http.MethodGet, "/api/predictions", nil)
+	firstResp := httptest.NewRecorder()
+	router.ServeHTTP(firstResp, first)
+	if firstResp.Code != http.StatusOK {
+		t.Fatalf("first status code = %d, want 200", firstResp.Code)
+	}
+
+	forced := httptest.NewRequest(http.MethodGet, "/api/predictions?force=1", nil)
+	forcedResp := httptest.NewRecorder()
+	router.ServeHTTP(forcedResp, forced)
+	if forcedResp.Code != http.StatusOK {
+		t.Fatalf("forced status code = %d, want 200", forcedResp.Code)
+	}
+
+	if provider.calls != 2 {
+		t.Fatalf("provider calls = %d, want 2", provider.calls)
+	}
+}
+
+func TestPredictionsEndpointSupportsCompatibilityAlias(t *testing.T) {
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	server := newServer(testClusterReader{}, nil, logger)
+	router := server.Router("")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/predictive-incidents", nil)
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status code = %d, want 200", rr.Code)
+	}
+}
+
+func TestMutationsInvalidatePredictionsCache(t *testing.T) {
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	server := newServer(testClusterReader{}, nil, logger, WithPredictionsTTL(time.Minute))
+	provider := &testPredictionProvider{
+		response: model.PredictionsResult{
+			Source:      "test-provider",
+			GeneratedAt: "2026-03-07T00:00:00Z",
+			Items: []model.IncidentPrediction{
+				{ID: "pod-1", ResourceKind: "Pod", Resource: "payment-gateway-1", RiskScore: 90, Confidence: 85, Summary: "high risk", Recommendation: "check logs"},
+			},
+		},
+	}
+	server.predictor = provider
+	router := server.Router("")
+
+	first := httptest.NewRequest(http.MethodGet, "/api/predictions", nil)
+	firstResp := httptest.NewRecorder()
+	router.ServeHTTP(firstResp, first)
+	if firstResp.Code != http.StatusOK {
+		t.Fatalf("first status code = %d, want 200", firstResp.Code)
+	}
+	if provider.calls != 1 {
+		t.Fatalf("provider calls after first fetch = %d, want 1", provider.calls)
+	}
+
+	mutation := httptest.NewRequest(http.MethodPost, "/api/pods", strings.NewReader(`{"namespace":"default","name":"cache-bust","image":"nginx:latest"}`))
+	mutation.Header.Set("Content-Type", "application/json")
+	mutationResp := httptest.NewRecorder()
+	router.ServeHTTP(mutationResp, mutation)
+	if mutationResp.Code != http.StatusOK {
+		t.Fatalf("mutation status code = %d, want 200", mutationResp.Code)
+	}
+
+	second := httptest.NewRequest(http.MethodGet, "/api/predictions", nil)
+	secondResp := httptest.NewRecorder()
+	router.ServeHTTP(secondResp, second)
+	if secondResp.Code != http.StatusOK {
+		t.Fatalf("second status code = %d, want 200", secondResp.Code)
+	}
+	if provider.calls != 2 {
+		t.Fatalf("provider calls after cache invalidation = %d, want 2", provider.calls)
+	}
+}
+
 type testClusterReader struct{}
 
 func (testClusterReader) IsRealCluster() bool { return true }
@@ -420,4 +546,18 @@ func (p testAIProvider) Generate(context.Context, ai.Input) (string, error) {
 		return "", p.err
 	}
 	return p.answer, nil
+}
+
+type testPredictionProvider struct {
+	response model.PredictionsResult
+	err      error
+	calls    int
+}
+
+func (p *testPredictionProvider) Predict(context.Context, predictorRequest) (model.PredictionsResult, error) {
+	p.calls++
+	if p.err != nil {
+		return model.PredictionsResult{}, p.err
+	}
+	return p.response, nil
 }

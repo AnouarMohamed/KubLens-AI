@@ -79,6 +79,18 @@ async function requestText(url: string): Promise<string> {
   return response.text();
 }
 
+async function requestPredictions(force = false): Promise<PredictionsResult> {
+  const suffix = force ? "?force=1" : "";
+  try {
+    return await requestJson<PredictionsResult>(`${apiPath("predictions")}${suffix}`);
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 404) {
+      return requestJson<PredictionsResult>(`${apiPath("predictive-incidents")}${suffix}`);
+    }
+    throw err;
+  }
+}
+
 export const api = {
   getVersion: () => requestJson<BuildInfo>(apiPath("version")),
   getClusterInfo: () => requestJson<ClusterInfo>(apiPath("cluster-info")),
@@ -131,7 +143,7 @@ export const api = {
     }),
   getStats: () => requestJson<ClusterStats>(apiPath("stats")),
   getDiagnostics: () => requestJson<DiagnosticsResult>(apiPath("diagnostics")),
-  getPredictions: () => requestJson<PredictionsResult>(apiPath("predictions")),
+  getPredictions: (force = false) => requestPredictions(force),
   askAssistant: (message: string) =>
     requestJson<AssistantResponse>(apiPath("assistant"), {
       method: "POST",

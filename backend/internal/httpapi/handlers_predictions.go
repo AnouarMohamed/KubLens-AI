@@ -84,6 +84,14 @@ func (p *predictorClient) Predict(ctx context.Context, input predictorRequest) (
 }
 
 func (s *Server) handlePredictions(w http.ResponseWriter, r *http.Request) {
+	forceRefresh := queryBool(r, "force")
+	if !forceRefresh {
+		if cached, ok := s.predictionsFromCache(); ok {
+			writeJSON(w, http.StatusOK, cached)
+			return
+		}
+	}
+
 	pods, nodes := s.cluster.Snapshot(r.Context())
 	events := s.cluster.ListClusterEvents(r.Context())
 	request := predictorRequest{
@@ -96,13 +104,35 @@ func (s *Server) handlePredictions(w http.ResponseWriter, r *http.Request) {
 	if s.predictor != nil {
 		predictions, err := s.predictor.Predict(r.Context(), request)
 		if err == nil {
+			s.storePredictions(predictions)
 			writeJSON(w, http.StatusOK, predictions)
 			return
 		}
 		s.logger.Warn("predictor service unavailable, using local fallback", "error", err.Error())
 	}
 
-	writeJSON(w, http.StatusOK, buildLocalPredictions(pods, nodes, events, s.now()))
+	fallback := buildLocalPredictions(pods, nodes, events, s.now())
+	s.storePredictions(fallback)
+	writeJSON(w, http.StatusOK, fallback)
+}
+
+func queryBool(r *http.Request, key string) bool {
+	switch strings.ToLower(strings.TrimSpace(r.URL.Query().Get(key))) {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
+	}
+}
+
+func (s *Server) invalidatePredictionsCache() {
+	if s.predictionsTTL <= 0 {
+		return
+	}
+
+	s.predictionsMu.Lock()
+	s.predictionsCache = predictionsCacheEntry{}
+	s.predictionsMu.Unlock()
 }
 
 func buildLocalPredictions(pods []model.PodSummary, nodes []model.NodeSummary, events []model.K8sEvent, now time.Time) model.PredictionsResult {
@@ -321,4 +351,44 @@ func minInt(a, b int) int {
 		return a
 	}
 	return b
+}
+
+func (s *Server) predictionsFromCache() (model.PredictionsResult, bool) {
+	if s.predictionsTTL <= 0 {
+		return model.PredictionsResult{}, false
+	}
+
+	now := s.now()
+
+	s.predictionsMu.RLock()
+	defer s.predictionsMu.RUnlock()
+
+	if now.After(s.predictionsCache.expiresAt) {
+		return model.PredictionsResult{}, false
+	}
+
+	return clonePredictionsResult(s.predictionsCache.data), true
+}
+
+func (s *Server) storePredictions(result model.PredictionsResult) {
+	if s.predictionsTTL <= 0 {
+		return
+	}
+
+	s.predictionsMu.Lock()
+	s.predictionsCache = predictionsCacheEntry{
+		data:      clonePredictionsResult(result),
+		expiresAt: s.now().Add(s.predictionsTTL),
+	}
+	s.predictionsMu.Unlock()
+}
+
+func clonePredictionsResult(in model.PredictionsResult) model.PredictionsResult {
+	out := in
+	out.Items = make([]model.IncidentPrediction, len(in.Items))
+	for i := range in.Items {
+		out.Items[i] = in.Items[i]
+		out.Items[i].Signals = append([]model.PredictionSignal(nil), in.Items[i].Signals...)
+	}
+	return out
 }
