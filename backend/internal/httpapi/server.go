@@ -36,12 +36,13 @@ type clusterReader interface {
 }
 
 type Server struct {
-	cluster clusterReader
-	now     func() time.Time
-	logger  *slog.Logger
-	metrics *requestMetrics
-	ai      ai.Provider
-	aiTTL   time.Duration
+	cluster   clusterReader
+	now       func() time.Time
+	logger    *slog.Logger
+	metrics   *requestMetrics
+	ai        ai.Provider
+	aiTTL     time.Duration
+	predictor predictionProvider
 }
 
 type Option func(*Server)
@@ -57,6 +58,15 @@ func WithAITimeout(timeout time.Duration) Option {
 		if timeout > 0 {
 			s.aiTTL = timeout
 		}
+	}
+}
+
+func WithPredictor(baseURL string, timeout time.Duration) Option {
+	return func(s *Server) {
+		if baseURL == "" {
+			return
+		}
+		s.predictor = newPredictorClient(baseURL, timeout)
 	}
 }
 
@@ -118,6 +128,7 @@ func (s *Server) Router(distDir string) http.Handler {
 		api.Get("/nodes/{name}", s.handleNodeDetail)
 		api.Get("/stats", s.handleStats)
 		api.Get("/diagnostics", s.handleDiagnostics)
+		api.Get("/predictions", s.handlePredictions)
 		api.Post("/assistant", s.handleAssistant)
 		api.Post("/terminal/exec", s.handleTerminalExec)
 	})

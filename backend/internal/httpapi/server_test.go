@@ -275,6 +275,33 @@ func TestActionEndpoints(t *testing.T) {
 	}
 }
 
+func TestPredictionsEndpointUsesFallback(t *testing.T) {
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	server := newServer(testClusterReader{}, nil, logger)
+	router := server.Router("")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/predictions", nil)
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status code = %d, want 200", rr.Code)
+	}
+
+	var payload model.PredictionsResult
+	if err := json.NewDecoder(rr.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if payload.Source == "" {
+		t.Fatal("prediction source should be set")
+	}
+	if payload.GeneratedAt == "" {
+		t.Fatal("prediction timestamp should be set")
+	}
+	if len(payload.Items) == 0 {
+		t.Fatal("expected at least one prediction")
+	}
+}
+
 type testClusterReader struct{}
 
 func (testClusterReader) IsRealCluster() bool { return true }

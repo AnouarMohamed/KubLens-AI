@@ -11,3 +11,5 @@ k8s/secret.yaml
 .gomodcache/
 .tmp-go/
 backend/server.exe
+predictor/.venv/
+predictor/__pycache__/

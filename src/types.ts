@@ -103,6 +103,29 @@ export interface DiagnosticsResult {
   issues: DiagnosticIssue[];
 }
 
+export interface PredictionSignal {
+  key: string;
+  value: string;
+}
+
+export interface IncidentPrediction {
+  id: string;
+  resourceKind: string;
+  resource: string;
+  namespace?: string;
+  riskScore: number;
+  confidence: number;
+  summary: string;
+  recommendation: string;
+  signals?: PredictionSignal[];
+}
+
+export interface PredictionsResult {
+  source: string;
+  generatedAt: string;
+  items: IncidentPrediction[];
+}
+
 export interface AssistantResponse {
   answer: string;
   hints: string[];
@@ -206,6 +229,7 @@ export type View =
   | "serviceaccounts"
   | "rbac"
   | "metrics"
+  | "predictions"
   | "diagnostics"
   | "assistant"
   | "terminal";

@@ -46,6 +46,7 @@ If missing, install Metrics Server in your cluster.
 - `Pods`: list, detail, events, logs, restart, delete
 - `Nodes`: status, detail, cordon
 - `Metrics`: circular telemetry views
+- `Predictions`: incident-risk forecast from Python predictor (with local fallback)
 - `Diagnostics`: health score and issue recommendations
 - `Terminal`: execute shell commands on backend host
 - `Assistant`: operator Q&A with deterministic fallback
@@ -64,6 +65,7 @@ curl http://localhost:3000/api/cluster-info
 curl http://localhost:3000/api/stats
 curl http://localhost:3000/api/pods
 curl http://localhost:3000/api/nodes
+curl http://localhost:3000/api/predictions
 ```
 
 ## 9. Build For Deployment
@@ -101,14 +103,18 @@ npm run docker:down
 
 ## 11. Deploy To Kubernetes
 
-1. Build and push image:
+1. Build and push images:
 
 ```bash
 docker build -t <registry>/kubernetes-operations-dashboard:<tag> .
+docker build -t <registry>/k8s-ops-predictor:<tag> ./predictor
 docker push <registry>/kubernetes-operations-dashboard:<tag>
+docker push <registry>/k8s-ops-predictor:<tag>
 ```
 
-2. Update image in `k8s/deployment.yaml`.
+2. Update images in:
+   - `k8s/deployment.yaml`
+   - `k8s/predictor-deployment.yaml`
 3. Create secret from template:
 
 ```bash
@@ -133,4 +139,5 @@ kubectl -n kubernetes-operations-dashboard port-forward svc/kubernetes-operation
 
 - `isRealCluster=false`: invalid or missing `KUBECONFIG_DATA`
 - Pod/node usage is `N/A`: Metrics Server unavailable or RBAC denies access
+- `source=local-fallback` in predictions: predictor service unavailable or misconfigured
 - Terminal command fails: invalid cwd, command timeout, or shell error

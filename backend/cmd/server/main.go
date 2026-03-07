@@ -32,11 +32,14 @@ func main() {
 	if providerErr != nil {
 		log.Printf("assistant provider warning: %v", providerErr)
 	}
+	predictorURL := strings.TrimSpace(os.Getenv("PREDICTOR_BASE_URL"))
+	predictorTimeout := parseSecondsAsDuration(os.Getenv("PREDICTOR_TIMEOUT_SECONDS"), 4*time.Second)
 
 	serverHandler := httpapi.New(
 		clusterSvc,
 		httpapi.WithAIProvider(aiProvider),
 		httpapi.WithAITimeout(aiTimeout),
+		httpapi.WithPredictor(predictorURL, predictorTimeout),
 	)
 
 	server := &http.Server{
@@ -53,6 +56,11 @@ func main() {
 		log.Printf("Assistant provider enabled (%s, timeout=%s)", aiProvider.Name(), aiTimeout)
 	} else {
 		log.Printf("Assistant provider disabled (deterministic local mode)")
+	}
+	if predictorURL != "" {
+		log.Printf("Predictor service enabled (%s, timeout=%s)", predictorURL, predictorTimeout)
+	} else {
+		log.Printf("Predictor service disabled (local fallback mode)")
 	}
 
 	go func() {

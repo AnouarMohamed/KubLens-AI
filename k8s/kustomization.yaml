@@ -5,3 +5,5 @@ resources:
   - configmap.yaml
   - deployment.yaml
   - service.yaml
+  - predictor-deployment.yaml
+  - predictor-service.yaml

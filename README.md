@@ -12,6 +12,7 @@ This project combines:
 
 - A React + Vite frontend for operational workflows.
 - A Go backend API for Kubernetes integration and diagnostics.
+- A Python FastAPI predictor microservice for incident-risk inference.
 - A lightweight assistant layer with deterministic fallback.
 - A terminal execution endpoint for controlled runtime commands.
 
@@ -26,6 +27,7 @@ The application also exposes structured API metrics and supports real pod/node u
 - Cluster overview with health indicators and issue prioritization.
 - Resource management views for pods, nodes, deployments, services, and more.
 - Diagnostics engine with severity-based findings and recommendations.
+- Predictive Incidents view with risk scoring and confidence by resource.
 - Assistant interface for operational Q&A with deterministic fallback.
 - Integrated black-themed terminal UI for direct command execution.
 - Real usage metrics (CPU/memory) for pods and nodes when Metrics Server is available.
@@ -45,6 +47,13 @@ The application also exposes structured API metrics and supports real pod/node u
 - HTTP stack: `net/http` + `chi`
 - Location: `backend/`
 - Responsibility: Kubernetes connectivity, diagnostics logic, assistant orchestration, and transport APIs
+
+### Predictor Service
+
+- Language: Python
+- Framework: FastAPI
+- Location: `predictor/`
+- Responsibility: infer incident risk for pods/nodes and return ranked predictions to the Go API
 
 ### Kubernetes Integration
 
@@ -88,8 +97,14 @@ I made the following engineering decisions to keep the system maintainable:
 |   +-- configmap.yaml
 |   +-- deployment.yaml
 |   +-- service.yaml
+|   +-- predictor-deployment.yaml
+|   +-- predictor-service.yaml
 |   +-- secret.example.yaml
 |   +-- kustomization.yaml
++-- predictor/
+|   +-- app/main.py
+|   +-- requirements.txt
+|   +-- Dockerfile
 +-- Dockerfile
 +-- docker-compose.yml
 +-- RUN_AND_USE.md
@@ -158,11 +173,11 @@ If metrics are unavailable, the app remains functional and shows `N/A` for usage
 
 ## Full Dockerization
 
-This project is fully containerized with a multi-stage Docker build:
+This project is fully containerized:
 
-1. Build frontend assets with Node.
-2. Build backend binary with Go.
-3. Run a minimal Alpine runtime image serving API + static frontend.
+1. Main application image (Node build stage + Go build stage + Alpine runtime).
+2. Python predictor image (FastAPI + uvicorn).
+3. Unified orchestration through `docker-compose.yml`.
 
 ### Build image
 
@@ -204,15 +219,21 @@ To make this repository complete for cluster deployment, I included first-class 
 - `k8s/configmap.yaml`
 - `k8s/deployment.yaml`
 - `k8s/service.yaml`
+- `k8s/predictor-deployment.yaml`
+- `k8s/predictor-service.yaml`
 - `k8s/secret.example.yaml`
 - `k8s/kustomization.yaml`
 
 ### Deploy workflow
 
-1. Build and publish image:
+1. Build and publish images:
    - `docker build -t <registry>/kubernetes-operations-dashboard:<tag> .`
+   - `docker build -t <registry>/k8s-ops-predictor:<tag> ./predictor`
    - `docker push <registry>/kubernetes-operations-dashboard:<tag>`
-2. Update `k8s/deployment.yaml` image field to the published tag.
+   - `docker push <registry>/k8s-ops-predictor:<tag>`
+2. Update image fields in:
+   - `k8s/deployment.yaml`
+   - `k8s/predictor-deployment.yaml`
 3. Create a real secret file from template:
    - `cp k8s/secret.example.yaml k8s/secret.yaml`
    - set `KUBECONFIG_DATA` and optional `ASSISTANT_API_KEY`
@@ -235,6 +256,8 @@ Then open `http://localhost:3000`.
 - `KUBECONFIG_DATA`: base64 kubeconfig payload
 - `PORT`: backend port (`3000` by default)
 - `DIST_DIR`: static assets directory (`dist` by default)
+- `PREDICTOR_BASE_URL`: predictor endpoint (for example `http://k8s-ops-predictor:8001`)
+- `PREDICTOR_TIMEOUT_SECONDS`: predictor request timeout
 - `ASSISTANT_PROVIDER`: `none` or `openai_compatible`
 - `ASSISTANT_TIMEOUT_SECONDS`: assistant timeout
 - `ASSISTANT_API_BASE_URL`: provider base URL
@@ -251,6 +274,7 @@ curl http://localhost:3000/api/stats
 curl http://localhost:3000/api/pods
 curl http://localhost:3000/api/nodes
 curl http://localhost:3000/api/diagnostics
+curl http://localhost:3000/api/predictions
 ```
 
 ## Screenshots

@@ -8,6 +8,8 @@ metadata:
 data:
   PORT: "3000"
   DIST_DIR: "dist"
+  PREDICTOR_BASE_URL: "http://k8s-ops-predictor:8001"
+  PREDICTOR_TIMEOUT_SECONDS: "4"
   ASSISTANT_PROVIDER: "none"
   ASSISTANT_TIMEOUT_SECONDS: "8"
   ASSISTANT_API_BASE_URL: "https://api.openai.com/v1"

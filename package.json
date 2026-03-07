@@ -15,6 +15,8 @@
     "tidy:go": "node scripts/go-task.mjs -C backend mod tidy",
     "docker:build": "docker build -t kubernetes-operations-dashboard:latest .",
     "docker:run": "docker run --rm -p 3000:3000 kubernetes-operations-dashboard:latest",
+    "docker:build:predictor": "docker build -t k8s-ops-predictor:latest ./predictor",
+    "docker:run:predictor": "docker run --rm -p 8001:8001 k8s-ops-predictor:latest",
     "docker:up": "docker compose up --build -d",
     "docker:down": "docker compose down",
     "clean": "node -e \"require('fs').rmSync('dist', { recursive: true, force: true })\"",

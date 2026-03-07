@@ -4,6 +4,7 @@ import Dashboard from "./components/Dashboard";
 import Pods from "./components/Pods";
 import Nodes from "./components/Nodes";
 import Diagnostics from "./components/Diagnostics";
+import Predictions from "./components/Predictions";
 import OpsAssistant from "./components/OpsAssistant";
 import Terminal from "./components/Terminal";
 import ResourceCatalog from "./components/ResourceCatalog";
@@ -22,6 +23,7 @@ const PRIMARY_VIEWS: Partial<Record<View, ReactElement>> = {
       <Metrics />
     </Suspense>
   ),
+  predictions: <Predictions />,
   diagnostics: <Diagnostics />,
   terminal: <Terminal />,
   assistant: <OpsAssistant />,
@@ -88,6 +90,7 @@ function loadLastView(): View {
       "serviceaccounts",
       "rbac",
       "metrics",
+      "predictions",
       "diagnostics",
       "terminal",
       "assistant",

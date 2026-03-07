@@ -11,6 +11,8 @@ services:
       PORT: "3000"
       DIST_DIR: "dist"
       KUBECONFIG_DATA: ${KUBECONFIG_DATA:-}
+      PREDICTOR_BASE_URL: ${PREDICTOR_BASE_URL:-http://k8s-ops-predictor:8001}
+      PREDICTOR_TIMEOUT_SECONDS: ${PREDICTOR_TIMEOUT_SECONDS:-4}
       ASSISTANT_PROVIDER: ${ASSISTANT_PROVIDER:-none}
       ASSISTANT_TIMEOUT_SECONDS: ${ASSISTANT_TIMEOUT_SECONDS:-8}
       ASSISTANT_API_BASE_URL: ${ASSISTANT_API_BASE_URL:-https://api.openai.com/v1}
@@ -18,4 +20,16 @@ services:
       ASSISTANT_MODEL: ${ASSISTANT_MODEL:-}
       ASSISTANT_TEMPERATURE: ${ASSISTANT_TEMPERATURE:-0.2}
       ASSISTANT_MAX_TOKENS: ${ASSISTANT_MAX_TOKENS:-700}
+    depends_on:
+      - k8s-ops-predictor
+    restart: unless-stopped
+
+  k8s-ops-predictor:
+    build:
+      context: ./predictor
+      dockerfile: Dockerfile
+    image: k8s-ops-predictor:latest
+    container_name: k8s-ops-predictor
+    ports:
+      - "8001:8001"
     restart: unless-stopped

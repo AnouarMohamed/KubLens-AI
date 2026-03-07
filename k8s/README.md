@@ -9,11 +9,15 @@ This folder contains first-class Kubernetes deployment manifests for the dashboa
 - `secret.example.yaml`: template for sensitive values
 - `deployment.yaml`: workload definition
 - `service.yaml`: ClusterIP service
+- `predictor-deployment.yaml`: Python predictor microservice
+- `predictor-service.yaml`: predictor internal service
 - `kustomization.yaml`: apply all base resources
 
 ## Quick Deploy
 
-1. Build and push image, then update `deployment.yaml` image field.
+1. Build and push both images, then update:
+   - `deployment.yaml` (dashboard image)
+   - `predictor-deployment.yaml` (predictor image)
 2. Create secret from template:
    - `cp k8s/secret.example.yaml k8s/secret.yaml`
    - fill values

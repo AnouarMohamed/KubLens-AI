@@ -11,6 +11,7 @@ import type {
   Pod,
   PodCreateRequest,
   PodDetail,
+  PredictionsResult,
   ResourceManifest,
   ResourceList,
   ScaleRequest,
@@ -128,6 +129,7 @@ export const api = {
     }),
   getStats: () => requestJson<ClusterStats>(apiPath("stats")),
   getDiagnostics: () => requestJson<DiagnosticsResult>(apiPath("diagnostics")),
+  getPredictions: () => requestJson<PredictionsResult>(apiPath("predictions")),
   askAssistant: (message: string) =>
     requestJson<AssistantResponse>(apiPath("assistant"), {
       method: "POST",

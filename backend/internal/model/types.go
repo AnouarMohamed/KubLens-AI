@@ -180,6 +180,29 @@ type DiagnosticsResult struct {
 	Issues         []DiagnosticIssue `json:"issues"`
 }
 
+type PredictionSignal struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}
+
+type IncidentPrediction struct {
+	ID             string             `json:"id"`
+	ResourceKind   string             `json:"resourceKind"`
+	Resource       string             `json:"resource"`
+	Namespace      string             `json:"namespace,omitempty"`
+	RiskScore      int                `json:"riskScore"`
+	Confidence     int                `json:"confidence"`
+	Summary        string             `json:"summary"`
+	Recommendation string             `json:"recommendation"`
+	Signals        []PredictionSignal `json:"signals,omitempty"`
+}
+
+type PredictionsResult struct {
+	Source      string               `json:"source"`
+	GeneratedAt string               `json:"generatedAt"`
+	Items       []IncidentPrediction `json:"items"`
+}
+
 type AssistantResponse struct {
 	Answer              string   `json:"answer"`
 	Hints               []string `json:"hints"`

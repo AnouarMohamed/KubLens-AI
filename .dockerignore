@@ -10,3 +10,4 @@ coverage
 .env
 backend/server.exe
 screenshots
+predictor/__pycache__
