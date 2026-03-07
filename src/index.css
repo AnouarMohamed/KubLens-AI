@@ -1,0 +1,70 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Space Grotesk", "IBM Plex Sans", "Segoe UI", "Helvetica Neue", sans-serif;
+  --font-mono: "IBM Plex Mono", "Consolas", "Menlo", monospace;
+}
+
+@layer base {
+  :root {
+    color-scheme: light;
+    --docker-blue: #2496ed;
+    --docker-blue-deep: #1d63ed;
+    --docker-navy: #0f1b2b;
+    --docker-graphite: #0a1019;
+
+    /* Neutral light palette mapped onto zinc utilities */
+    --color-zinc-950: #e8ebf0;
+    --color-zinc-900: #ffffff;
+    --color-zinc-800: #f3f5f8;
+    --color-zinc-700: #d8dde6;
+    --color-zinc-600: #c8ced9;
+    --color-zinc-500: #7a8392;
+    --color-zinc-400: #5d6674;
+    --color-zinc-300: #3f4856;
+    --color-zinc-200: #2b3442;
+    --color-zinc-100: #18202d;
+  }
+
+  body {
+    @apply antialiased text-zinc-100;
+    background: #eef1f5;
+    min-height: 100vh;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    @apply outline-none;
+  }
+}
+
+@layer components {
+  .surface {
+    @apply rounded-xl border border-zinc-700 bg-zinc-900 shadow-[0_8px_20px_rgba(16,24,40,0.08)];
+  }
+
+  .surface-strong {
+    @apply rounded-xl border border-zinc-700 bg-zinc-900 shadow-[0_10px_24px_rgba(16,24,40,0.10)];
+  }
+
+  .kpi {
+    @apply rounded-xl border border-zinc-700 bg-zinc-900 p-4 shadow-[0_6px_16px_rgba(16,24,40,0.08)] transition-transform duration-200 hover:-translate-y-0.5;
+  }
+}
+
+@layer utilities {
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .bg-grid {
+    background: #eef1f5;
+  }
+}

@@ -1,0 +1,5 @@
+{
+  "name": "KubeLens",
+  "description": "A professional Kubernetes dashboard with built-in diagnostics and operations tooling.",
+  "requestFramePermissions": []
+}
