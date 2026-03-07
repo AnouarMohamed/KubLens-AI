@@ -99,7 +99,37 @@ Stop Compose:
 npm run docker:down
 ```
 
-## 11. Troubleshooting
+## 11. Deploy To Kubernetes
+
+1. Build and push image:
+
+```bash
+docker build -t <registry>/kubernetes-operations-dashboard:<tag> .
+docker push <registry>/kubernetes-operations-dashboard:<tag>
+```
+
+2. Update image in `k8s/deployment.yaml`.
+3. Create secret from template:
+
+```bash
+cp k8s/secret.example.yaml k8s/secret.yaml
+kubectl apply -f k8s/secret.yaml
+```
+
+4. Apply manifests:
+
+```bash
+kubectl apply -k k8s/
+kubectl -n kubernetes-operations-dashboard get pods,svc
+```
+
+5. Port-forward and use:
+
+```bash
+kubectl -n kubernetes-operations-dashboard port-forward svc/kubernetes-operations-dashboard 3000:80
+```
+
+## 12. Troubleshooting
 
 - `isRealCluster=false`: invalid or missing `KUBECONFIG_DATA`
 - Pod/node usage is `N/A`: Metrics Server unavailable or RBAC denies access

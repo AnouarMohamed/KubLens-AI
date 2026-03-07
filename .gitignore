@@ -6,6 +6,7 @@ coverage/
 *.log
 .env*
 !.env.example
+k8s/secret.yaml
 .gocache/
 .gomodcache/
 .tmp-go/

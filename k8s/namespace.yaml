@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kubernetes-operations-dashboard
+  labels:
+    app.kubernetes.io/name: kubernetes-operations-dashboard
+    app.kubernetes.io/part-of: kubernetes-operations-dashboard

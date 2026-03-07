@@ -69,23 +69,31 @@ I made the following engineering decisions to keep the system maintainable:
 
 ```text
 .
-├─ backend/
-│  ├─ cmd/server/
-│  └─ internal/
-│     ├─ ai/
-│     ├─ apperrors/
-│     ├─ cluster/
-│     ├─ diagnostics/
-│     ├─ httpapi/
-│     └─ model/
-├─ src/
-│  ├─ components/
-│  ├─ features/
-│  ├─ lib/
-│  └─ types.ts
-├─ Dockerfile
-├─ docker-compose.yml
-└─ README.md
++-- backend/
+|   +-- cmd/server/
+|   +-- internal/
+|       +-- ai/
+|       +-- apperrors/
+|       +-- cluster/
+|       +-- diagnostics/
+|       +-- httpapi/
+|       +-- model/
++-- src/
+|   +-- components/
+|   +-- features/
+|   +-- lib/
+|   +-- types.ts
++-- k8s/
+|   +-- namespace.yaml
+|   +-- configmap.yaml
+|   +-- deployment.yaml
+|   +-- service.yaml
+|   +-- secret.example.yaml
+|   +-- kustomization.yaml
++-- Dockerfile
++-- docker-compose.yml
++-- RUN_AND_USE.md
++-- README.md
 ```
 
 ## Local Development
@@ -185,6 +193,42 @@ npm run docker:down
 ```
 
 Compose reads variables from your shell or `.env` file.
+
+## Kubernetes Deployment Manifests
+
+To make this repository complete for cluster deployment, I included first-class manifests in `k8s/`.
+
+### Included resources
+
+- `k8s/namespace.yaml`
+- `k8s/configmap.yaml`
+- `k8s/deployment.yaml`
+- `k8s/service.yaml`
+- `k8s/secret.example.yaml`
+- `k8s/kustomization.yaml`
+
+### Deploy workflow
+
+1. Build and publish image:
+   - `docker build -t <registry>/kubernetes-operations-dashboard:<tag> .`
+   - `docker push <registry>/kubernetes-operations-dashboard:<tag>`
+2. Update `k8s/deployment.yaml` image field to the published tag.
+3. Create a real secret file from template:
+   - `cp k8s/secret.example.yaml k8s/secret.yaml`
+   - set `KUBECONFIG_DATA` and optional `ASSISTANT_API_KEY`
+   - `kubectl apply -f k8s/secret.yaml`
+4. Apply manifests:
+   - `kubectl apply -k k8s/`
+5. Validate:
+   - `kubectl -n kubernetes-operations-dashboard get pods,svc`
+
+### Access the dashboard
+
+```bash
+kubectl -n kubernetes-operations-dashboard port-forward svc/kubernetes-operations-dashboard 3000:80
+```
+
+Then open `http://localhost:3000`.
 
 ## Environment Variables
 

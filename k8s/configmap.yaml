@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: k8s-ops-config
+  namespace: kubernetes-operations-dashboard
+  labels:
+    app.kubernetes.io/name: kubernetes-operations-dashboard
+data:
+  PORT: "3000"
+  DIST_DIR: "dist"
+  ASSISTANT_PROVIDER: "none"
+  ASSISTANT_TIMEOUT_SECONDS: "8"
+  ASSISTANT_API_BASE_URL: "https://api.openai.com/v1"
+  ASSISTANT_MODEL: ""
+  ASSISTANT_TEMPERATURE: "0.2"
+  ASSISTANT_MAX_TOKENS: "700"
