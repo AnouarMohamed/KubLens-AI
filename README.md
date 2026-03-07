@@ -90,11 +90,9 @@ npm run docker:run:predictor
 Set:
 - `PREDICTOR_URL=http://localhost:8001/predict`
 
-### 3.1) Assistant RAG toggle
-- Default: enabled
-- Env: `ASSISTANT_RAG_ENABLED=true|false`
+## Docker
+Run full stack with compose:
 
-### 4) Docker full stack
 ```bash
 npm run docker:up
 npm run docker:down
@@ -119,97 +117,8 @@ See:
   - human-readable summary
 
 ### Predictions
-- Backend endpoint: `/api/predictions`
-- Tries Python predictor service first
-- If predictor is unavailable, backend returns local fallback predictions
-- Frontend handles legacy route fallback (`/api/predictive-incidents`) if needed
+![Predictions](screenshots/Screenshot%202026-03-07%20134415.png)
 
-### Assistant
-- Endpoint: `/api/assistant`
-- Intent-based local response path (diagnose/health/manifest/priority)
-- RAG grounding from Kubernetes + Docker documentation
-- Optional AI provider enhancement if configured
-- Safe fallback to deterministic answer if provider fails
-- Returns documentation references with links and excerpts in the UI
-
-### Terminal
-- Endpoint: `/api/terminal/exec`
-- Executes command in shell (`powershell` on Windows, `sh -lc` on Unix)
-- Guardrails:
-  - command required
-  - max length: 2000 chars
-  - timeout clamped (default 10s, max 30s)
-  - captures stdout/stderr and exit code
-
-## Error handling and troubleshooting
-
-Common cases and what to do:
-- `404` on predictions page:
-  - restart backend and ensure latest API routes are running
-- CPU/memory shows `N/A`:
-  - Metrics Server missing or unavailable
-  - check `kubectl top nodes` and `kubectl top pods -A`
-- Assistant output is generic:
-  - provider may be unavailable; app is using deterministic fallback
-  - enable RAG (`ASSISTANT_RAG_ENABLED=true`) and check docs links in responses
-  - check provider env config and backend logs
-- Terminal command fails:
-  - inspect returned `stderr`, `exitCode`, and `durationMs`
-  - verify working directory and command syntax
-
-## Implementation guide (extend the project)
-
-### Frontend structure
-- Views are feature folders: `src/views/<view>/index.tsx`
-- Each view can own:
-  - `components/`
-  - `hooks/`
-  - `api/`
-- Shared modules:
-  - `src/components/`
-  - `src/lib/api.ts`
-  - `src/types.ts`
-
-### Backend structure
-- `backend/internal/cluster/`
-  - `query_*` read paths
-  - `command_*` write/action paths
-  - `mapper_*` normalization
-  - `service_*` runtime/cache setup
-  - `support_*` helper utilities
-- `backend/internal/diagnostics/`
-  - `analysis_*` diagnosis logic
-  - `present_*` narrative formatting
-
-### Recommended workflow for a new feature
-1. Add backend model in `backend/internal/model/types.go` if needed
-2. Add cluster/query/command logic in matching `query_*` or `command_*` files
-3. Expose endpoint in `backend/internal/httpapi/*`
-4. Add typed frontend API call in `src/lib/api.ts`
-5. Implement UI in `src/views/<feature>/`
-6. Add tests and run quality gates
-
-## Quality gates
-- `npm run lint` (TypeScript + structure/import rules)
-- `npm run test:go`
-- `npm run build`
-
-CI is configured in:
-- `.github/workflows/ci.yml`
-
-## Screenshots
-
-![Screenshot 1](screenshots/Screenshot%202026-03-07%20133914.png)
-![Screenshot 2](screenshots/Screenshot%202026-03-07%20133928.png)
-![Screenshot 3](screenshots/Screenshot%202026-03-07%20134004.png)
-![Screenshot 4](screenshots/Screenshot%202026-03-07%20134029.png)
-![Screenshot 5](screenshots/Screenshot%202026-03-07%20134040.png)
-![Screenshot 6](screenshots/Screenshot%202026-03-07%20134107.png)
-![Screenshot 7](screenshots/Screenshot%202026-03-07%20134152.png)
-![Screenshot 8](screenshots/Screenshot%202026-03-07%20134252.png)
-![Screenshot 9](screenshots/Screenshot%202026-03-07%20134328.png)
-![Screenshot 10](screenshots/Screenshot%202026-03-07%20134342.png)
-![Screenshot 11](screenshots/Screenshot%202026-03-07%20134356.png)
-![Screenshot 12](screenshots/Screenshot%202026-03-07%20134415.png)
-![Screenshot 13](screenshots/Screenshot%202026-03-07%20134428.png)
-![Screenshot 14](screenshots/Screenshot%202026-03-07%20134458.png)
+## Notes
+- If predictions return 404, restart backend and confirm you are running the latest code.
+- If CPU/memory show `N/A`, verify Metrics Server and `kubectl top` first.
