@@ -312,3 +312,40 @@ type StreamEvent struct {
 	Timestamp string `json:"timestamp"`
 	Payload   any    `json:"payload"`
 }
+
+type ClusterContext struct {
+	Name          string `json:"name"`
+	IsRealCluster bool   `json:"isRealCluster"`
+}
+
+type ClusterContextList struct {
+	Selected string           `json:"selected"`
+	Items    []ClusterContext `json:"items"`
+}
+
+type ClusterSelectRequest struct {
+	Name string `json:"name"`
+}
+
+type ClusterSelectResponse struct {
+	Selected string `json:"selected"`
+}
+
+type AlertChannelResult struct {
+	Channel string `json:"channel"`
+	Success bool   `json:"success"`
+	Error   string `json:"error,omitempty"`
+}
+
+type AlertDispatchRequest struct {
+	Title    string   `json:"title"`
+	Message  string   `json:"message"`
+	Severity string   `json:"severity,omitempty"`
+	Source   string   `json:"source,omitempty"`
+	Tags     []string `json:"tags,omitempty"`
+}
+
+type AlertDispatchResponse struct {
+	Success bool                 `json:"success"`
+	Results []AlertChannelResult `json:"results"`
+}

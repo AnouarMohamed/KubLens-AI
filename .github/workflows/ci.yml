@@ -33,5 +33,8 @@ jobs:
       - name: Go tests
         run: npm run test:go
 
+      - name: Frontend tests
+        run: npm run test:web
+
       - name: Build frontend
         run: npm run build

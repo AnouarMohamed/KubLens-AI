@@ -37,6 +37,8 @@ It is designed to run in two modes:
 - Auth + RBAC: token-based viewer/operator/admin roles for API and UI actions.
 - Audit trail: structured request/action history with operator attribution.
 - Real-time stream: server-sent events (SSE) for live audit + cluster stats updates.
+- Multi-cluster context switching through backend session context.
+- Alert dispatch starter for Alertmanager, Slack, and PagerDuty webhooks.
 - Terminal execution: run shell commands from UI with timeout and output capture.
 - Operational actions: create/restart/delete pod, cordon node, scale/restart/rollback workloads, edit/apply resource YAML.
 - Specialized detail pages: pods, nodes, and deployments (with deployment-specific rollout controls).
@@ -111,6 +113,23 @@ Request flow:
   - `audit` events for request/activity changes
   - `stats` events for periodic cluster summary updates
   - `cluster_events` events for live notifications feed
+
+### Multi-cluster context
+- Endpoints:
+  - `GET /api/clusters`
+  - `POST /api/clusters/select`
+- Context is stored in secure cookie and applied across all `/api/*` calls.
+- Configure additional contexts via `KUBECONFIG_CONTEXTS`.
+
+### Alert integrations
+- Endpoints:
+  - `POST /api/alerts/dispatch`
+  - `POST /api/alerts/test`
+- Diagnostics UI can send test alert or alert for top prioritized issue.
+- Supported webhooks:
+  - Alertmanager
+  - Slack Incoming Webhook
+  - PagerDuty Events API v2
 
 ---
 
@@ -209,6 +228,7 @@ If provider fails/unavailable, assistant falls back safely to deterministic loca
 | Variable | Default | Description |
 |---|---|---|
 | `KUBECONFIG_DATA` | `""` | Base64 kubeconfig payload for real cluster mode |
+| `KUBECONFIG_CONTEXTS` | `""` | Additional contexts as `name:base64,name:base64` |
 | `PORT` | `3000` | Backend port |
 | `DIST_DIR` | `dist` | Frontend static build directory |
 | `PREDICTOR_BASE_URL` | `""` | Predictor service base URL |
@@ -230,6 +250,11 @@ If provider fails/unavailable, assistant falls back safely to deterministic loca
 | `TERMINAL_ALLOWED_PREFIXES` | `kubectl,helm,kustomize,echo,pwd,ls,dir` | Allowed command prefixes for terminal |
 | `AUDIT_LOG_FILE` | `""` | Optional JSONL file path for persistent audit history |
 | `AUDIT_MAX_ITEMS` | `500` | In-memory retained audit entries |
+| `ALERT_TIMEOUT_SECONDS` | `5` | Alert webhook request timeout |
+| `ALERTMANAGER_WEBHOOK_URL` | `""` | Alertmanager receiver webhook URL |
+| `SLACK_WEBHOOK_URL` | `""` | Slack incoming webhook URL |
+| `PAGERDUTY_EVENTS_URL` | `https://events.pagerduty.com/v2/enqueue` | PagerDuty events endpoint |
+| `PAGERDUTY_ROUTING_KEY` | `""` | PagerDuty integration routing key |
 | `APP_VERSION` | `dev` | Build metadata |
 | `APP_COMMIT` | `local` | Build metadata |
 | `APP_BUILT_AT` | current UTC | Build metadata |
@@ -247,11 +272,15 @@ Core endpoints:
 - `GET /api/auth/session`
 - `POST /api/auth/login`
 - `POST /api/auth/logout`
+- `GET /api/clusters`
+- `POST /api/clusters/select`
 - `GET /api/pods`
 - `GET /api/nodes`
 - `GET /api/events`
 - `GET /api/audit`
 - `GET /api/stream` (SSE)
+- `POST /api/alerts/dispatch`
+- `POST /api/alerts/test`
 - `GET /api/resources/{kind}`
 - `GET /api/resources/{kind}/{namespace}/{name}/yaml`
 - `PUT /api/resources/{kind}/{namespace}/{name}/yaml`

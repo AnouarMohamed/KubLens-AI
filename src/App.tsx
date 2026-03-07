@@ -4,7 +4,7 @@ import Dashboard from "./views/dashboard";
 import { findViewByQuery, getViewItem } from "./features/viewCatalog";
 import { api } from "./lib/api";
 import { useAuthSession } from "./context/AuthSessionContext";
-import type { K8sEvent, View } from "./types";
+import type { ClusterContextList, K8sEvent, View } from "./types";
 
 const Metrics = lazy(() => import("./views/metrics"));
 const Audit = lazy(() => import("./views/audit"));
@@ -155,6 +155,9 @@ export default function App() {
   const [settings, setSettings] = useState<UserSettings>(loadSettings);
   const [authToken, setAuthToken] = useState("");
   const [authMessage, setAuthMessage] = useState<string | null>(null);
+  const [clusterContexts, setClusterContexts] = useState<ClusterContextList | null>(null);
+  const [clusterRefreshKey, setClusterRefreshKey] = useState(0);
+  const [isSwitchingCluster, setIsSwitchingCluster] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
   const currentViewMeta = getViewItem(currentView);
@@ -260,6 +263,34 @@ export default function App() {
   }, [authLoading, can, panel]);
 
   useEffect(() => {
+    let cancelled = false;
+    if (authLoading) {
+      return;
+    }
+    if (!can("read")) {
+      setClusterContexts(null);
+      return;
+    }
+
+    api
+      .getClusters()
+      .then((response) => {
+        if (!cancelled) {
+          setClusterContexts(response);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setClusterContexts(null);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, can]);
+
+  useEffect(() => {
     if (authLoading) {
       return;
     }
@@ -291,7 +322,7 @@ export default function App() {
 
   return (
     <div className={`flex h-screen text-zinc-100 ${settings.denseMode ? "text-[13px]" : "text-sm"}`}>
-      <Sidebar currentView={currentView} onViewChange={setCurrentView} />
+      <Sidebar key={`sidebar-${clusterRefreshKey}`} currentView={currentView} onViewChange={setCurrentView} />
 
       <main className="flex-1 flex flex-col overflow-hidden p-4 pl-0">
         <div className="app-shell flex-1 flex flex-col overflow-hidden">
@@ -302,6 +333,45 @@ export default function App() {
             </div>
 
             <div className="flex items-center gap-2">
+              {clusterContexts && clusterContexts.items.length > 1 && (
+                <select
+                  value={clusterContexts.selected}
+                  disabled={isSwitchingCluster}
+                  onChange={async (event) => {
+                    const nextCluster = event.target.value;
+                    if (nextCluster === clusterContexts.selected) {
+                      return;
+                    }
+                    setIsSwitchingCluster(true);
+                    try {
+                      const response = await api.selectCluster(nextCluster);
+                      setClusterContexts((current) =>
+                        current
+                          ? {
+                              ...current,
+                              selected: response.selected,
+                            }
+                          : current,
+                      );
+                      setClusterRefreshKey((value) => value + 1);
+                      setSearchMessage(`Switched to cluster: ${response.selected}`);
+                      window.setTimeout(() => setSearchMessage(null), 1500);
+                    } catch (err) {
+                      setSearchMessage(err instanceof Error ? err.message : "Failed to switch cluster");
+                      window.setTimeout(() => setSearchMessage(null), 1800);
+                    } finally {
+                      setIsSwitchingCluster(false);
+                    }
+                  }}
+                  className="field h-10 min-w-44"
+                >
+                  {clusterContexts.items.map((item) => (
+                    <option key={item.name} value={item.name}>
+                      {item.name} {item.isRealCluster ? "(real)" : "(mock)"}
+                    </option>
+                  ))}
+                </select>
+              )}
               <input
                 ref={searchRef}
                 type="text"
@@ -320,7 +390,9 @@ export default function App() {
 
           {searchMessage && <div className="px-6 py-2 bg-[#2496ed]/16 text-zinc-100 text-xs tracking-wide border-b border-[#2496ed]/30">{searchMessage}</div>}
 
-          <div className="flex-1 overflow-y-auto p-6 bg-grid">{renderedView}</div>
+          <div key={`view-${clusterRefreshKey}`} className="flex-1 overflow-y-auto p-6 bg-grid">
+            {renderedView}
+          </div>
 
           {panel !== "none" && (
             <aside className="absolute top-20 right-4 h-[calc(100%-6rem)] w-[30rem] app-shell overflow-hidden">

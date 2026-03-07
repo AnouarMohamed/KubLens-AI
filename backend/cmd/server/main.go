@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"kubelens-backend/internal/ai"
+	"kubelens-backend/internal/alerts"
 	"kubelens-backend/internal/cluster"
 	"kubelens-backend/internal/httpapi"
 	"kubelens-backend/internal/model"
@@ -29,6 +30,13 @@ func main() {
 	if initErr != nil {
 		log.Printf("cluster initialization warning: %v", initErr)
 	}
+	clusterContexts, clusterWarnings := parseClusterContextsFromEnv()
+	for _, warning := range clusterWarnings {
+		log.Printf("cluster context warning: %s", warning)
+	}
+	if _, exists := clusterContexts["default"]; !exists {
+		clusterContexts["default"] = clusterSvc
+	}
 
 	aiProvider, aiTimeout, providerErr := buildAIProviderFromEnv()
 	if providerErr != nil {
@@ -42,6 +50,8 @@ func main() {
 	rateLimitConfig := parseRateLimitConfigFromEnv()
 	terminalPolicy := parseTerminalPolicyFromEnv()
 	auditConfig := parseAuditConfigFromEnv()
+	alertConfig := parseAlertConfigFromEnv()
+	alertDispatcher := alerts.New(alertConfig)
 	predictorURL := strings.TrimSpace(os.Getenv("PREDICTOR_BASE_URL"))
 	predictorTimeout := parseSecondsAsDuration(os.Getenv("PREDICTOR_TIMEOUT_SECONDS"), 4*time.Second)
 	buildInfo := model.BuildInfo{
@@ -60,6 +70,11 @@ func main() {
 		httpapi.WithRateLimit(rateLimitConfig),
 		httpapi.WithTerminalPolicy(terminalPolicy),
 		httpapi.WithAuditConfig(auditConfig),
+		httpapi.WithAlertDispatcher(alertDispatcher),
+		httpapi.WithClusterContexts(httpapi.ClusterContextsConfig{
+			Default: "default",
+			Readers: clusterContexts,
+		}),
 		httpapi.WithBuildInfo(buildInfo),
 	)
 
@@ -109,6 +124,12 @@ func main() {
 	} else {
 		log.Printf("Audit persistence disabled (in-memory only)")
 	}
+	if alertDispatcher.Enabled() {
+		log.Printf("Alert integrations enabled")
+	} else {
+		log.Printf("Alert integrations disabled")
+	}
+	log.Printf("Cluster contexts loaded: %d", len(clusterContexts))
 
 	go func() {
 		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -317,4 +338,55 @@ func parseCSV(raw string) []string {
 		out = append(out, value)
 	}
 	return out
+}
+
+func parseAlertConfigFromEnv() alerts.Config {
+	return alerts.Config{
+		AlertmanagerURL:     strings.TrimSpace(os.Getenv("ALERTMANAGER_WEBHOOK_URL")),
+		SlackWebhookURL:     strings.TrimSpace(os.Getenv("SLACK_WEBHOOK_URL")),
+		PagerDutyEventsURL:  strings.TrimSpace(os.Getenv("PAGERDUTY_EVENTS_URL")),
+		PagerDutyRoutingKey: strings.TrimSpace(os.Getenv("PAGERDUTY_ROUTING_KEY")),
+		Timeout:             parseSecondsAsDuration(os.Getenv("ALERT_TIMEOUT_SECONDS"), 5*time.Second),
+	}
+}
+
+func parseClusterContextsFromEnv() (map[string]httpapi.ClusterReader, []string) {
+	raw := strings.TrimSpace(os.Getenv("KUBECONFIG_CONTEXTS"))
+	if raw == "" {
+		return map[string]httpapi.ClusterReader{}, nil
+	}
+
+	entries := strings.Split(raw, ",")
+	contexts := make(map[string]httpapi.ClusterReader, len(entries))
+	warnings := make([]string, 0)
+
+	for _, entry := range entries {
+		item := strings.TrimSpace(entry)
+		if item == "" {
+			continue
+		}
+
+		parts := strings.SplitN(item, ":", 2)
+		if len(parts) != 2 {
+			warnings = append(warnings, "invalid KUBECONFIG_CONTEXTS entry: "+item)
+			continue
+		}
+
+		name := strings.TrimSpace(parts[0])
+		encoded := strings.TrimSpace(parts[1])
+		if name == "" || encoded == "" {
+			warnings = append(warnings, "invalid KUBECONFIG_CONTEXTS entry: "+item)
+			continue
+		}
+
+		svc, err := cluster.NewService(encoded)
+		if err != nil {
+			warnings = append(warnings, "failed to load context "+name+": "+err.Error())
+			continue
+		}
+
+		contexts[name] = svc
+	}
+
+	return contexts, warnings
 }

@@ -263,6 +263,8 @@ func requiredRole(method, path string) authRole {
 	switch {
 	case cleanMethod == http.MethodPost && path == "/api/assistant":
 		return roleViewer
+	case cleanMethod == http.MethodPost && path == "/api/clusters/select":
+		return roleViewer
 	case cleanMethod == http.MethodPost && path == "/api/terminal/exec":
 		return roleAdmin
 	case cleanMethod == http.MethodGet || cleanMethod == http.MethodHead:

@@ -80,6 +80,20 @@ export interface ClusterInfo {
   isRealCluster: boolean;
 }
 
+export interface ClusterContext {
+  name: string;
+  isRealCluster: boolean;
+}
+
+export interface ClusterContextList {
+  selected: string;
+  items: ClusterContext[];
+}
+
+export interface ClusterSelectResponse {
+  selected: string;
+}
+
 export interface BuildInfo {
   version: string;
   commit: string;
@@ -188,6 +202,25 @@ export interface ResourceManifest {
 export interface ActionResult {
   success: boolean;
   message: string;
+}
+
+export interface AlertDispatchRequest {
+  title: string;
+  message: string;
+  severity?: string;
+  source?: string;
+  tags?: string[];
+}
+
+export interface AlertChannelResult {
+  channel: string;
+  success: boolean;
+  error?: string;
+}
+
+export interface AlertDispatchResponse {
+  success: boolean;
+  results: AlertChannelResult[];
 }
 
 export interface ApiRouteMetrics {

@@ -8,6 +8,7 @@ metadata:
 data:
   PORT: "3000"
   DIST_DIR: "dist"
+  KUBECONFIG_CONTEXTS: ""
   PREDICTOR_BASE_URL: "http://k8s-ops-predictor:8001"
   PREDICTOR_TIMEOUT_SECONDS: "4"
   ASSISTANT_PROVIDER: "none"
@@ -25,3 +26,7 @@ data:
   TERMINAL_ALLOWED_PREFIXES: "kubectl,helm,kustomize,echo,pwd,ls,dir"
   AUDIT_LOG_FILE: ""
   AUDIT_MAX_ITEMS: "500"
+  ALERT_TIMEOUT_SECONDS: "5"
+  ALERTMANAGER_WEBHOOK_URL: ""
+  SLACK_WEBHOOK_URL: ""
+  PAGERDUTY_EVENTS_URL: "https://events.pagerduty.com/v2/enqueue"

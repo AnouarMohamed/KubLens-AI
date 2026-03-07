@@ -14,7 +14,15 @@ import (
 	"kubelens-backend/internal/model"
 )
 
-func (s *Server) handleClusterInfo(w http.ResponseWriter, _ *http.Request) {
+func (s *Server) handleClusterInfo(w http.ResponseWriter, r *http.Request) {
+	if selector, ok := s.cluster.(clusterSelector); ok {
+		name := selector.ClusterName(r.Context())
+		if info, found := selector.ClusterInfo(name); found {
+			writeJSON(w, http.StatusOK, model.ClusterInfo{IsRealCluster: info.IsRealCluster})
+			return
+		}
+	}
+
 	writeJSON(w, http.StatusOK, model.ClusterInfo{IsRealCluster: s.cluster.IsRealCluster()})
 }
 

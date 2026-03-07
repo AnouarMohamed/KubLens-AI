@@ -15,7 +15,7 @@ import (
 	"kubelens-backend/internal/model"
 )
 
-type clusterReader interface {
+type ClusterReader interface {
 	IsRealCluster() bool
 	Snapshot(ctx context.Context) ([]model.PodSummary, []model.NodeSummary)
 	ListNamespaces(ctx context.Context) []string
@@ -37,7 +37,7 @@ type clusterReader interface {
 }
 
 type Server struct {
-	cluster   clusterReader
+	cluster   ClusterReader
 	now       func() time.Time
 	logger    *slog.Logger
 	metrics   *requestMetrics
@@ -46,6 +46,7 @@ type Server struct {
 	terminal  terminalRuntimePolicy
 	audit     *auditLog
 	stream    *streamHub
+	alerts    alertDispatcher
 	ai        ai.Provider
 	aiTTL     time.Duration
 	docs      docsRetriever
@@ -65,6 +66,11 @@ type predictionsCacheEntry struct {
 type docsRetriever interface {
 	Enabled() bool
 	Retrieve(ctx context.Context, query string, limit int) []model.DocumentationReference
+}
+
+type alertDispatcher interface {
+	Dispatch(ctx context.Context, req model.AlertDispatchRequest) model.AlertDispatchResponse
+	Enabled() bool
 }
 
 type Option func(*Server)
@@ -98,6 +104,12 @@ func WithPredictor(baseURL string, timeout time.Duration) Option {
 	}
 }
 
+func WithAlertDispatcher(dispatcher alertDispatcher) Option {
+	return func(s *Server) {
+		s.alerts = dispatcher
+	}
+}
+
 func WithPredictionsTTL(ttl time.Duration) Option {
 	return func(s *Server) {
 		if ttl > 0 {
@@ -120,11 +132,11 @@ func WithBuildInfo(info model.BuildInfo) Option {
 	}
 }
 
-func New(clusterSvc clusterReader, opts ...Option) *Server {
+func New(clusterSvc ClusterReader, opts ...Option) *Server {
 	return newServer(clusterSvc, time.Now, slog.New(slog.NewJSONHandler(os.Stdout, nil)), opts...)
 }
 
-func newServer(clusterSvc clusterReader, now func() time.Time, logger *slog.Logger, opts ...Option) *Server {
+func newServer(clusterSvc ClusterReader, now func() time.Time, logger *slog.Logger, opts ...Option) *Server {
 	if now == nil {
 		now = time.Now
 	}
@@ -172,15 +184,20 @@ func (s *Server) Router(distDir string) http.Handler {
 	r.Use(s.limiter.middleware(s.now))
 	r.Use(s.metrics.middleware(s.logger))
 	r.Use(s.authMiddleware)
+	r.Use(s.clusterMiddleware)
 	r.Use(s.auditMiddleware)
 
 	r.Route("/api", func(api chi.Router) {
 		api.Get("/auth/session", s.handleAuthSession)
 		api.Post("/auth/login", s.handleAuthLogin)
 		api.Post("/auth/logout", s.handleAuthLogout)
+		api.Get("/clusters", s.handleClusters)
+		api.Post("/clusters/select", s.handleSelectCluster)
 		api.Get("/version", s.handleVersion)
 		api.Get("/cluster-info", s.handleClusterInfo)
 		api.Get("/metrics", s.handleMetrics)
+		api.Post("/alerts/dispatch", s.handleAlertDispatch)
+		api.Post("/alerts/test", s.handleAlertTest)
 		api.Get("/audit", s.handleAuditLog)
 		api.Get("/stream", s.handleStream)
 		api.Get("/namespaces", s.handleNamespaces)

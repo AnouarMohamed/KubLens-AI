@@ -1,11 +1,15 @@
 import type {
   ActionResult,
+  AlertDispatchRequest,
+  AlertDispatchResponse,
   AuditLogResponse,
   ApiMetricsSnapshot,
   AuthSession,
   AssistantResponse,
   BuildInfo,
+  ClusterContextList,
   ClusterInfo,
+  ClusterSelectResponse,
   ClusterStats,
   DiagnosticsResult,
   K8sEvent,
@@ -109,9 +113,25 @@ export const api = {
     }),
   getStreamURL: () => buildStreamURL(),
   getAuthSession: () => requestJson<AuthSession>(apiPath("auth", "session")),
+  getClusters: () => requestJson<ClusterContextList>(apiPath("clusters")),
+  selectCluster: (name: string) =>
+    requestJson<ClusterSelectResponse>(apiPath("clusters", "select"), {
+      method: "POST",
+      body: JSON.stringify({ name }),
+    }),
   getVersion: () => requestJson<BuildInfo>(apiPath("version")),
   getClusterInfo: () => requestJson<ClusterInfo>(apiPath("cluster-info")),
   getApiMetrics: () => requestJson<ApiMetricsSnapshot>(apiPath("metrics")),
+  dispatchAlert: (payload: AlertDispatchRequest) =>
+    requestJson<AlertDispatchResponse>(apiPath("alerts", "dispatch"), {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  sendTestAlert: () =>
+    requestJson<AlertDispatchResponse>(apiPath("alerts", "test"), {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
   getAuditLog: (limit = 120) => requestJson<AuditLogResponse>(`${apiPath("audit")}?limit=${limit}`),
   getNamespaces: () => requestJson<string[]>(apiPath("namespaces")),
   getResources: (kind: string) => requestJson<ResourceList>(apiPath("resources", kind)),

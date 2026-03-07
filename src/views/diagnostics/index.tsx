@@ -1,11 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useAuthSession } from "../../context/AuthSessionContext";
 import { api } from "../../lib/api";
 import type { DiagnosticSeverity, DiagnosticsResult } from "../../types";
 
 export default function Diagnostics() {
+  const { can } = useAuthSession();
   const [diagnostics, setDiagnostics] = useState<DiagnosticsResult | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isAlerting, setIsAlerting] = useState(false);
+  const [alertMessage, setAlertMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const canWrite = can("write");
 
   const refresh = useCallback(async () => {
     setIsLoading(true);
@@ -27,6 +32,45 @@ export default function Diagnostics() {
   const prioritizedIssues = useMemo(() => buildPrioritizedIssues(diagnostics), [diagnostics]);
   const summaryHighlights = useMemo(() => extractSummaryHighlights(diagnostics?.summary ?? ""), [diagnostics?.summary]);
 
+  const dispatchTopIssue = useCallback(async () => {
+    if (!canWrite || !diagnostics || prioritizedIssues.length === 0) {
+      return;
+    }
+
+    const top = prioritizedIssues[0];
+    setIsAlerting(true);
+    try {
+      const response = await api.dispatchAlert({
+        title: `Diagnostics: ${top.title}`,
+        message: `${top.details}\nRecommended action: ${top.recommendation}`,
+        severity: top.severity,
+        source: "diagnostics",
+        tags: [top.resource ?? "cluster", top.severity],
+      });
+      setAlertMessage(response.success ? "Alert dispatched to configured channels." : "Alert dispatch partially failed.");
+    } catch (err) {
+      setAlertMessage(err instanceof Error ? err.message : "Failed to dispatch alert");
+    } finally {
+      setIsAlerting(false);
+    }
+  }, [canWrite, diagnostics, prioritizedIssues]);
+
+  const sendTestAlert = useCallback(async () => {
+    if (!canWrite) {
+      return;
+    }
+
+    setIsAlerting(true);
+    try {
+      const response = await api.sendTestAlert();
+      setAlertMessage(response.success ? "Test alert sent." : "Test alert partially failed.");
+    } catch (err) {
+      setAlertMessage(err instanceof Error ? err.message : "Failed to send test alert");
+    } finally {
+      setIsAlerting(false);
+    }
+  }, [canWrite]);
+
   return (
     <div className="space-y-5">
       <header className="panel-head">
@@ -41,9 +85,18 @@ export default function Diagnostics() {
         >
           {isLoading ? "Loading" : "Refresh"}
         </button>
+        <div className="flex gap-2">
+          <button onClick={() => void sendTestAlert()} disabled={!canWrite || isAlerting} className="btn">
+            {isAlerting ? "Sending" : "Test Alert"}
+          </button>
+          <button onClick={() => void dispatchTopIssue()} disabled={!canWrite || isAlerting || prioritizedIssues.length === 0} className="btn">
+            Alert Top Issue
+          </button>
+        </div>
       </header>
 
       {error && <div className="rounded-md border border-zinc-700 bg-zinc-900/80 px-3 py-2 text-sm text-zinc-200">{error}</div>}
+      {alertMessage && <div className="rounded-md border border-zinc-700 bg-zinc-900/80 px-3 py-2 text-sm text-zinc-200">{alertMessage}</div>}
 
       {diagnostics && (
         <>
