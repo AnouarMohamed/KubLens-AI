@@ -1,85 +1,224 @@
 # Kubernetes Operations Dashboard
 
-A full-stack Kubernetes dashboard for daily ops work:
+## Academic Project Statement
 
-- React + Vite frontend (`src/`)
-- Go API backend (`backend/`)
-- Real cluster mode via `client-go` + `metrics.k8s.io`
-- Deterministic mock fallback when no kubeconfig is provided
-- Built-in terminal execution endpoint for cluster diagnostics
+In this academic project, I designed and implemented a full-stack Kubernetes Operations Dashboard focused on observability, diagnostics, and operator productivity.  
+My objective was to produce a practical system that can run in two modes:
 
-## What Is Working
+1. Live mode against a real Kubernetes cluster.
+2. Deterministic mock mode for reproducible testing and demonstrations.
 
-- Live pods, nodes, namespaces, events, resource catalog, and diagnostics
-- Real pod and node usage (CPU/memory) when Metrics Server is installed
-- Cluster stats API computed from real node usage in live mode
-- Assistant panel with deterministic fallback behavior
-- Terminal screen in black console style for operational commands
+This project combines:
 
-## Quick Start
+- A React + Vite frontend for operational workflows.
+- A Go backend API for Kubernetes integration and diagnostics.
+- A lightweight assistant layer with deterministic fallback.
+- A terminal execution endpoint for controlled runtime commands.
 
-1. Install dependencies:
+## Abstract
+
+I built this platform to study how cluster data can be transformed into actionable operator insights.  
+Instead of showing raw Kubernetes objects only, the system computes summaries, health signals, and prioritized recommendations.  
+The application also exposes structured API metrics and supports real pod/node usage collection via `metrics.k8s.io`.
+
+## Core Features
+
+- Cluster overview with health indicators and issue prioritization.
+- Resource management views for pods, nodes, deployments, services, and more.
+- Diagnostics engine with severity-based findings and recommendations.
+- Assistant interface for operational Q&A with deterministic fallback.
+- Integrated black-themed terminal UI for direct command execution.
+- Real usage metrics (CPU/memory) for pods and nodes when Metrics Server is available.
+- Mock fallback mode when kubeconfig is missing or invalid.
+
+## Architecture
+
+### Frontend
+
+- Framework: React + TypeScript + Vite
+- Location: `src/`
+- Responsibility: UI composition, feature views, and typed API integration
+
+### Backend
+
+- Language: Go
+- HTTP stack: `net/http` + `chi`
+- Location: `backend/`
+- Responsibility: Kubernetes connectivity, diagnostics logic, assistant orchestration, and transport APIs
+
+### Kubernetes Integration
+
+- Primary SDK: `client-go`
+- Metrics SDK: `k8s.io/metrics`
+- Real usage path:
+  - Pod usage from `metrics.k8s.io` pod metrics.
+  - Node usage from `metrics.k8s.io` node metrics.
+  - Cluster CPU/memory derived from aggregated node usage percentages.
+
+## Methodology and Design Decisions
+
+I made the following engineering decisions to keep the system maintainable:
+
+- Separated domain logic by concern (`cluster`, `diagnostics`, `httpapi`, `ai`).
+- Implemented short-lived backend caching to reduce API pressure.
+- Added deterministic mock stores so the project remains runnable without infrastructure dependencies.
+- Chose explicit typed models between backend and frontend for contract stability.
+- Preserved deterministic assistant behavior when external providers fail.
+
+## Project Structure
+
+```text
+.
+├─ backend/
+│  ├─ cmd/server/
+│  └─ internal/
+│     ├─ ai/
+│     ├─ apperrors/
+│     ├─ cluster/
+│     ├─ diagnostics/
+│     ├─ httpapi/
+│     └─ model/
+├─ src/
+│  ├─ components/
+│  ├─ features/
+│  ├─ lib/
+│  └─ types.ts
+├─ Dockerfile
+├─ docker-compose.yml
+└─ README.md
+```
+
+## Local Development
+
+### Prerequisites
+
+- Node.js 20+
+- Go 1.25+
+
+### Install
+
 ```bash
 npm install
 ```
 
-2. Start app (API + frontend):
+### Run (frontend + backend)
+
 ```bash
 npm run dev
 ```
 
-3. Open:
 - Frontend: `http://localhost:5173`
-- Backend API: `http://localhost:3000`
+- Backend: `http://localhost:3000`
 
-## Enable Real Cluster + Real Metrics
+### Useful Commands
 
-1. Ensure your Kubernetes cluster has Metrics Server:
+- `npm run test:go` -> run backend tests
+- `npm run lint` -> TypeScript type-check
+- `npm run build` -> build frontend
+- `npm run start` -> run backend server
+
+## Live Cluster Setup
+
+The backend expects a base64 kubeconfig payload in `KUBECONFIG_DATA`.
+
+PowerShell:
+
+```powershell
+$bytes = [System.IO.File]::ReadAllBytes("$HOME\.kube\config")
+$env:KUBECONFIG_DATA = [Convert]::ToBase64String($bytes)
+```
+
+Then start:
+
+```bash
+npm run dev
+```
+
+## Real Metrics Requirements
+
+To populate pod/node usage from real data, the cluster must expose:
+
+- `metrics.k8s.io` API (typically via Metrics Server)
+
+Validation:
+
 ```bash
 kubectl get apiservices | grep metrics.k8s.io
 ```
 
-2. Base64-encode kubeconfig and set `KUBECONFIG_DATA`.
+If metrics are unavailable, the app remains functional and shows `N/A` for usage fields.
 
-PowerShell:
-```powershell
-$bytes = [System.IO.File]::ReadAllBytes("$HOME\.kube\config")
-$env:KUBECONFIG_DATA = [Convert]::ToBase64String($bytes)
-npm run dev
+## Full Dockerization
+
+This project is fully containerized with a multi-stage Docker build:
+
+1. Build frontend assets with Node.
+2. Build backend binary with Go.
+3. Run a minimal Alpine runtime image serving API + static frontend.
+
+### Build image
+
+```bash
+npm run docker:build
 ```
 
-3. Verify:
-- `GET /api/cluster-info` => `isRealCluster: true`
-- `GET /api/nodes` => `cpuUsage` and `memUsage` no longer `N/A`
-- `GET /api/pods` => `cpu` and `memory` populated from metrics API
+### Run container
 
-If Metrics Server is missing or blocked by RBAC, the app still runs, but usage fields remain `N/A`.
+```bash
+npm run docker:run
+```
 
-## Run Modes
+Open:
 
-- `npm run dev`: frontend + backend in dev mode
-- `npm run start`: run backend only (serves built frontend from `dist/` if present)
-- `npm run build`: build frontend
-- `npm run test:go`: run backend tests
+- `http://localhost:3000`
+
+### Run with Docker Compose
+
+```bash
+npm run docker:up
+```
+
+Stop:
+
+```bash
+npm run docker:down
+```
+
+Compose reads variables from your shell or `.env` file.
 
 ## Environment Variables
 
 - `KUBECONFIG_DATA`: base64 kubeconfig payload
-- `PORT`: backend port (default `3000`)
-- `DIST_DIR`: static files dir (default `dist`)
+- `PORT`: backend port (`3000` by default)
+- `DIST_DIR`: static assets directory (`dist` by default)
 - `ASSISTANT_PROVIDER`: `none` or `openai_compatible`
-- `ASSISTANT_TIMEOUT_SECONDS`: provider timeout
-- `ASSISTANT_API_BASE_URL`: OpenAI-compatible endpoint
+- `ASSISTANT_TIMEOUT_SECONDS`: assistant timeout
+- `ASSISTANT_API_BASE_URL`: provider base URL
 - `ASSISTANT_API_KEY`: API key
 - `ASSISTANT_MODEL`: model id
-- `ASSISTANT_TEMPERATURE`: optional float
-- `ASSISTANT_MAX_TOKENS`: optional int
+- `ASSISTANT_TEMPERATURE`: generation temperature
+- `ASSISTANT_MAX_TOKENS`: output token cap
+
+## API Verification
+
+```bash
+curl http://localhost:3000/api/cluster-info
+curl http://localhost:3000/api/stats
+curl http://localhost:3000/api/pods
+curl http://localhost:3000/api/nodes
+curl http://localhost:3000/api/diagnostics
+```
 
 ## Screenshots
 
-Use the [`screenshots`](./screenshots) folder for UI captures.  
-Guidance and naming conventions are in [`screenshots/README.md`](./screenshots/README.md).
+I keep image assets under [`screenshots`](./screenshots).  
+Conventions are documented in [`screenshots/README.md`](./screenshots/README.md).
 
-## Additional Docs
+## Additional Documentation
 
-- Run + usage guide: [RUN_AND_USE.md](./RUN_AND_USE.md)
+- Detailed run guide: [RUN_AND_USE.md](./RUN_AND_USE.md)
+
+## Conclusion
+
+Through this project, I implemented a production-oriented Kubernetes dashboard with clear separation of concerns, reproducible execution modes, and containerized deployment support.  
+The final system is designed to be demonstrable in academic settings and directly useful in practical operations workflows.

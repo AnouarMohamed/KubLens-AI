@@ -1,0 +1,21 @@
+services:
+  kubernetes-operations-dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: kubernetes-operations-dashboard:latest
+    container_name: kubernetes-operations-dashboard
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: "3000"
+      DIST_DIR: "dist"
+      KUBECONFIG_DATA: ${KUBECONFIG_DATA:-}
+      ASSISTANT_PROVIDER: ${ASSISTANT_PROVIDER:-none}
+      ASSISTANT_TIMEOUT_SECONDS: ${ASSISTANT_TIMEOUT_SECONDS:-8}
+      ASSISTANT_API_BASE_URL: ${ASSISTANT_API_BASE_URL:-https://api.openai.com/v1}
+      ASSISTANT_API_KEY: ${ASSISTANT_API_KEY:-}
+      ASSISTANT_MODEL: ${ASSISTANT_MODEL:-}
+      ASSISTANT_TEMPERATURE: ${ASSISTANT_TEMPERATURE:-0.2}
+      ASSISTANT_MAX_TOKENS: ${ASSISTANT_MAX_TOKENS:-700}
+    restart: unless-stopped

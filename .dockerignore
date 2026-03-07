@@ -1,0 +1,12 @@
+.git
+.gitignore
+node_modules
+dist
+.gocache
+.gomodcache
+.tmp-go
+coverage
+*.log
+.env
+backend/server.exe
+screenshots

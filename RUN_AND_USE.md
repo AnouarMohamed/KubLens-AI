@@ -73,7 +73,33 @@ npm run build
 npm run start
 ```
 
-## 10. Troubleshooting
+## 10. Run With Docker
+
+Build image:
+
+```bash
+npm run docker:build
+```
+
+Run container:
+
+```bash
+npm run docker:run
+```
+
+Run with Compose:
+
+```bash
+npm run docker:up
+```
+
+Stop Compose:
+
+```bash
+npm run docker:down
+```
+
+## 11. Troubleshooting
 
 - `isRealCluster=false`: invalid or missing `KUBECONFIG_DATA`
 - Pod/node usage is `N/A`: Metrics Server unavailable or RBAC denies access

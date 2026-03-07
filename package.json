@@ -13,6 +13,10 @@
     "test:go": "node scripts/go-task.mjs -C backend test ./...",
     "fmt:go": "gofmt -w backend/cmd backend/internal",
     "tidy:go": "node scripts/go-task.mjs -C backend mod tidy",
+    "docker:build": "docker build -t kubernetes-operations-dashboard:latest .",
+    "docker:run": "docker run --rm -p 3000:3000 kubernetes-operations-dashboard:latest",
+    "docker:up": "docker compose up --build -d",
+    "docker:down": "docker compose down",
     "clean": "node -e \"require('fs').rmSync('dist', { recursive: true, force: true })\"",
     "lint": "tsc --noEmit"
   },
