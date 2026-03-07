@@ -1,0 +1,7 @@
+Flask==2.3.3
+Flask-SocketIO==5.3.6
+eventlet==0.33.3
+flask-limiter==3.5.0
+flask-cors==4.0.0
+prometheus-client==0.20.0
+gunicorn==21.2.0

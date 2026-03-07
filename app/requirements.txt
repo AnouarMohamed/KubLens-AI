@@ -1,0 +1,2 @@
+pytest==7.4.0
+debugpy==1.8.0

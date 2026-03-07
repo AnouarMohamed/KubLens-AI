@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: k8s-dashboard
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: k8s-dashboard
+  template:
+    metadata:
+      labels:
+        app: k8s-dashboard
+    spec:
+      containers:
+      - name: dashboard
+        image: k8s-dashboard
+        imagePullPolicy: Never  # Correct for local/minikube images
+        workingDir: /app/app    # Critical for finding app.py
+        ports:
+        - containerPort: 5000
+        command: ["gunicorn"]
+        args: [
+          "--bind", "0.0.0.0:5000",
+          "--worker-class", "gevent",
+          "--timeout", "120",    # Prevents worker timeouts
+          "--access-logfile", "-",  # Logs to stdout
+          "app:application"      # Matches your WSGI declaration
+        ]
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "128Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 5000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 5000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+

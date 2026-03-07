@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  dashboard:
+    build: .
+    ports:
+      - "5000:5000"
+      - "5001:5001"  # For websockets
+    volumes:
+      - ./app:/app
+      - kubeconfig:/root/.kube
+    environment:
+      - FLASK_ENV=development
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+
+volumes: kubeconfig:
