@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { api } from "../lib/api";
+import { api } from "../../lib/api";
 
 interface Message {
   role: "user" | "assistant";
@@ -132,3 +132,4 @@ function StatusPill({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
+

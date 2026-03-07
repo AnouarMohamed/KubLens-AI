@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { getViewItem } from "../features/viewCatalog";
-import { api } from "../lib/api";
-import type { ResourceRecord, View } from "../types";
+import { getViewItem } from "../../features/viewCatalog";
+import { api } from "../../lib/api";
+import type { ResourceRecord, View } from "../../types";
 
 const SCALEABLE_VIEWS = new Set<View>(["deployments", "statefulsets", "jobs"]);
 const RESTARTABLE_VIEWS = new Set<View>(["deployments", "statefulsets", "jobs"]);
@@ -344,3 +344,4 @@ function extractReplicas(status: string): number {
 
   return 1;
 }
+

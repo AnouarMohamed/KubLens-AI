@@ -20,7 +20,9 @@
     "docker:up": "docker compose up --build -d",
     "docker:down": "docker compose down",
     "clean": "node -e \"require('fs').rmSync('dist', { recursive: true, force: true })\"",
-    "lint": "tsc --noEmit"
+    "lint:types": "tsc --noEmit",
+    "lint:structure": "node scripts/structure-lint.mjs",
+    "lint": "npm run lint:types && npm run lint:structure"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.14",

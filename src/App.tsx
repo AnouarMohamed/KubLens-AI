@@ -1,18 +1,18 @@
 import { Suspense, lazy, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import Sidebar from "./components/Sidebar";
-import Dashboard from "./components/Dashboard";
+import Dashboard from "./views/dashboard";
 import { findViewByQuery, getViewItem } from "./features/viewCatalog";
 import { api } from "./lib/api";
 import type { K8sEvent, View } from "./types";
 
-const Metrics = lazy(() => import("./components/Metrics"));
-const Pods = lazy(() => import("./components/Pods"));
-const Nodes = lazy(() => import("./components/Nodes"));
-const Diagnostics = lazy(() => import("./components/Diagnostics"));
-const Predictions = lazy(() => import("./components/Predictions"));
-const OpsAssistant = lazy(() => import("./components/OpsAssistant"));
-const Terminal = lazy(() => import("./components/Terminal"));
-const ResourceCatalog = lazy(() => import("./components/ResourceCatalog"));
+const Metrics = lazy(() => import("./views/metrics"));
+const Pods = lazy(() => import("./views/pods"));
+const Nodes = lazy(() => import("./views/nodes"));
+const Diagnostics = lazy(() => import("./views/diagnostics"));
+const Predictions = lazy(() => import("./views/predictions"));
+const OpsAssistant = lazy(() => import("./views/opsassistant"));
+const Terminal = lazy(() => import("./views/terminal"));
+const ResourceCatalog = lazy(() => import("./views/resourcecatalog"));
 
 const PRIMARY_VIEWS: Partial<Record<View, ReactElement>> = {
   overview: <Dashboard />,

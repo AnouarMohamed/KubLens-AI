@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ApiError, api } from "../lib/api";
-import type { IncidentPrediction, PredictionsResult } from "../types";
+import { ApiError, api } from "../../lib/api";
+import type { IncidentPrediction, PredictionsResult } from "../../types";
 
 export default function Predictions() {
   const [payload, setPayload] = useState<PredictionsResult | null>(null);
@@ -240,3 +240,4 @@ function sourceBadge(source?: string): { text: string; className: string } | und
   }
   return { text: "custom", className: "border-zinc-600 bg-zinc-800/70 text-zinc-100" };
 }
+

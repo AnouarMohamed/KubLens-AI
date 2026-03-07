@@ -13,8 +13,8 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { api } from "../lib/api";
-import type { ApiMetricsSnapshot, ClusterStats, Node, Pod } from "../types";
+import { api } from "../../lib/api";
+import type { ApiMetricsSnapshot, ClusterStats, Node, Pod } from "../../types";
 
 const DOCKER_BLUE = "#2496ed";
 const CHART_BLUE = "#4f7bff";
@@ -691,3 +691,4 @@ function formatBytes(bytes: number): string {
   }
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
 }
+

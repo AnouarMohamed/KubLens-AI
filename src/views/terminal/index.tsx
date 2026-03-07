@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEventHandler } from "react";
-import { api } from "../lib/api";
-import type { TerminalExecResponse } from "../types";
+import { api } from "../../lib/api";
+import type { TerminalExecResponse } from "../../types";
 
 interface TerminalEntry {
   id: number;
@@ -222,3 +222,4 @@ export default function Terminal() {
     </div>
   );
 }
+

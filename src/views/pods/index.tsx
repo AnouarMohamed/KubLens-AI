@@ -1,8 +1,8 @@
-﻿import { useCallback, useEffect, useMemo, useState } from "react";
-import { api } from "../lib/api";
-import type { Pod, PodDetail, PodCreateRequest } from "../types";
-import PodDetailModal from "./pods/PodDetailModal";
-import PodStatusBadge from "./pods/PodStatusBadge";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { api } from "../../lib/api";
+import type { Pod, PodDetail, PodCreateRequest } from "../../types";
+import PodDetailModal from "../../components/pods/PodDetailModal";
+import PodStatusBadge from "../../components/pods/PodStatusBadge";
 
 type PodDetailTab = "specs" | "events";
 
@@ -326,5 +326,6 @@ export default function Pods() {
     </div>
   );
 }
+
 
 

@@ -13,8 +13,8 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { api } from "../lib/api";
-import type { ApiMetricsSnapshot, ClusterStats, DiagnosticsResult, K8sEvent, Node, Pod } from "../types";
+import { api } from "../../lib/api";
+import type { ApiMetricsSnapshot, ClusterStats, DiagnosticsResult, K8sEvent, Node, Pod } from "../../types";
 
 const DOCKER_BLUE = "#2496ed";
 const CHART_BLUE = "#4f7bff";
@@ -621,3 +621,4 @@ function formatTimestamp(value: string): string {
   }
   return date.toLocaleString();
 }
+

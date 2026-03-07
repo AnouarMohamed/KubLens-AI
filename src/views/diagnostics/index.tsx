@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { api } from "../lib/api";
-import type { DiagnosticSeverity, DiagnosticsResult } from "../types";
+import { api } from "../../lib/api";
+import type { DiagnosticSeverity, DiagnosticsResult } from "../../types";
 
 export default function Diagnostics() {
   const [diagnostics, setDiagnostics] = useState<DiagnosticsResult | null>(null);
@@ -235,3 +235,4 @@ function formatTimestamp(value: string): string {
   }
   return date.toLocaleString();
 }
+

@@ -1,7 +1,7 @@
-﻿import { useCallback, useEffect, useMemo, useState } from "react";
-import { api } from "../lib/api";
-import type { Node, NodeDetail } from "../types";
-import NodeDetailModal from "./nodes/NodeDetailModal";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { api } from "../../lib/api";
+import type { Node, NodeDetail } from "../../types";
+import NodeDetailModal from "../../components/nodes/NodeDetailModal";
 
 export default function Nodes() {
   const [nodes, setNodes] = useState<Node[]>([]);
@@ -143,5 +143,6 @@ export default function Nodes() {
     </div>
   );
 }
+
 
 
