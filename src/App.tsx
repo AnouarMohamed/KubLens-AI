@@ -3,11 +3,13 @@ import Sidebar from "./components/Sidebar";
 import Dashboard from "./views/dashboard";
 import { findViewByQuery, getViewItem } from "./features/viewCatalog";
 import { api } from "./lib/api";
-import type { AuthSession, K8sEvent, View } from "./types";
+import { useAuthSession } from "./context/AuthSessionContext";
+import type { K8sEvent, View } from "./types";
 
 const Metrics = lazy(() => import("./views/metrics"));
 const Audit = lazy(() => import("./views/audit"));
 const Pods = lazy(() => import("./views/pods"));
+const Deployments = lazy(() => import("./views/deployments"));
 const Nodes = lazy(() => import("./views/nodes"));
 const Diagnostics = lazy(() => import("./views/diagnostics"));
 const Predictions = lazy(() => import("./views/predictions"));
@@ -20,6 +22,11 @@ const PRIMARY_VIEWS: Partial<Record<View, ReactElement>> = {
   pods: (
     <Suspense fallback={<ViewLoadingState label="Loading pods..." />}>
       <Pods />
+    </Suspense>
+  ),
+  deployments: (
+    <Suspense fallback={<ViewLoadingState label="Loading deployments..." />}>
+      <Deployments />
     </Suspense>
   ),
   nodes: (
@@ -138,6 +145,7 @@ function loadLastView(): View {
 }
 
 export default function App() {
+  const { session: authSession, isLoading: authLoading, can, login, logout, refresh: refreshSession } = useAuthSession();
   const [currentView, setCurrentView] = useState<View>(loadLastView);
   const [search, setSearch] = useState("");
   const [searchMessage, setSearchMessage] = useState<string | null>(null);
@@ -146,7 +154,6 @@ export default function App() {
   const [notificationError, setNotificationError] = useState<string | null>(null);
   const [settings, setSettings] = useState<UserSettings>(loadSettings);
   const [authToken, setAuthToken] = useState("");
-  const [authSession, setAuthSession] = useState<AuthSession | null>(null);
   const [authMessage, setAuthMessage] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
@@ -188,48 +195,85 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
-    api
-      .getAuthSession()
-      .then((session) => {
-        if (!cancelled) {
-          setAuthSession(session);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setAuthSession(null);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
     if (panel !== "notifications") {
+      return;
+    }
+    if (authLoading) {
+      return;
+    }
+    if (!can("read")) {
+      setNotifications([]);
+      setNotificationError("Authenticate first to access notifications.");
       return;
     }
 
     let cancelled = false;
-    api
-      .getEvents()
-      .then((rows) => {
+
+    const loadSnapshot = () => {
+      api
+        .getEvents()
+        .then((rows) => {
+          if (!cancelled) {
+            setNotifications(rows.slice(0, 14));
+            setNotificationError(null);
+          }
+        })
+        .catch((err) => {
+          if (!cancelled) {
+            setNotificationError(err instanceof Error ? err.message : "Failed to load notifications");
+          }
+        });
+    };
+
+    if (can("stream")) {
+      const source = new EventSource(api.getStreamURL());
+      source.addEventListener("connected", () => {
         if (!cancelled) {
-          setNotifications(rows.slice(0, 14));
           setNotificationError(null);
         }
-      })
-      .catch((err) => {
+      });
+      source.addEventListener("cluster_events", (event) => {
         if (!cancelled) {
-          setNotificationError(err instanceof Error ? err.message : "Failed to load notifications");
+          const payload = parseStreamPayload<K8sEvent[]>(event);
+          if (payload?.payload) {
+            setNotifications(payload.payload.slice(0, 14));
+          }
         }
       });
+      source.onerror = () => {
+        if (!cancelled) {
+          setNotificationError("Live stream disconnected. Showing snapshot.");
+        }
+        loadSnapshot();
+      };
 
+      return () => {
+        cancelled = true;
+        source.close();
+      };
+    }
+
+    loadSnapshot();
     return () => {
       cancelled = true;
     };
-  }, [panel]);
+  }, [authLoading, can, panel]);
+
+  useEffect(() => {
+    if (authLoading) {
+      return;
+    }
+    if (currentView === "terminal" && !can("terminal")) {
+      setCurrentView("overview");
+      setSearchMessage("Terminal access requires admin permission.");
+      window.setTimeout(() => setSearchMessage(null), 1800);
+    }
+    if (currentView === "assistant" && !can("assist")) {
+      setCurrentView("overview");
+      setSearchMessage("Assistant access requires an authenticated session.");
+      window.setTimeout(() => setSearchMessage(null), 1800);
+    }
+  }, [authLoading, can, currentView]);
 
   const handleSearchSubmit = () => {
     const found = findViewByQuery(search);
@@ -328,7 +372,7 @@ export default function App() {
               {panel === "profile" && (
                 <PanelShell title="Profile" subtitle="Current operator identity">
                   <InfoRow label="Auth Mode" value={authSession?.enabled ? "Token protected" : "Local trusted mode"} />
-                  <InfoRow label="Session" value={authSession?.authenticated ? "Authenticated" : "Not authenticated"} />
+                  <InfoRow label="Session" value={authLoading ? "Checking..." : authSession?.authenticated ? "Authenticated" : "Not authenticated"} />
                   <InfoRow label="User" value={authSession?.user?.name ?? "N/A"} />
                   <InfoRow label="Role" value={authSession?.user?.role ?? "N/A"} />
                   <div className="rounded-xl border border-zinc-700 bg-zinc-800/60 px-3 py-2">
@@ -347,12 +391,11 @@ export default function App() {
                   <button
                     onClick={async () => {
                       try {
-                        const next = await api.login(authToken);
-                        setAuthSession(next);
+                        await login(authToken);
+                        await refreshSession();
                         setAuthToken("");
                         setAuthMessage("Session authenticated.");
                       } catch (err) {
-                        setAuthSession(null);
                         setAuthMessage(err instanceof Error ? err.message : "Failed to authenticate");
                       }
                     }}
@@ -363,8 +406,8 @@ export default function App() {
                   <button
                     onClick={async () => {
                       try {
-                        const next = await api.logout();
-                        setAuthSession(next);
+                        await logout();
+                        await refreshSession();
                         setAuthMessage("Session logged out.");
                       } catch (err) {
                         setAuthMessage(err instanceof Error ? err.message : "Logout failed");
@@ -389,6 +432,17 @@ export default function App() {
       </main>
     </div>
   );
+}
+
+function parseStreamPayload<T>(event: Event): { type: string; timestamp: string; payload: T } | null {
+  try {
+    if (!(event instanceof MessageEvent)) {
+      return null;
+    }
+    return JSON.parse(event.data) as { type: string; timestamp: string; payload: T };
+  } catch {
+    return null;
+  }
 }
 
 function ViewLoadingState({ label }: { label: string }) {

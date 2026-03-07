@@ -17,8 +17,10 @@ Current views:
 
 - `dashboard/` -> overview page
 - `pods/` -> pod operations view
+- `deployments/` -> deployment-specific detail and rollout controls
 - `nodes/` -> node operations view
 - `metrics/` -> telemetry/analytics view
+- `audit/` -> live audit and activity stream view
 - `predictions/` -> incident forecast view
 - `diagnostics/` -> issue analysis view
 - `terminal/` -> shell execution view

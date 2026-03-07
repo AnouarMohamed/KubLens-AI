@@ -110,6 +110,15 @@ func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
 			}); err != nil {
 				return
 			}
+
+			clusterEvents := trimEvents(s.cluster.ListClusterEvents(r.Context()), 24)
+			if err := writeSSE(w, "cluster_events", model.StreamEvent{
+				Type:      "cluster_events",
+				Timestamp: s.now().UTC().Format(time.RFC3339),
+				Payload:   clusterEvents,
+			}); err != nil {
+				return
+			}
 			flusher.Flush()
 		}
 	}
@@ -136,6 +145,13 @@ func sanitizeSSEField(value string) string {
 		return "message"
 	}
 	return strings.ReplaceAll(trimmed, "\n", " ")
+}
+
+func trimEvents(items []model.K8sEvent, limit int) []model.K8sEvent {
+	if limit <= 0 || len(items) <= limit {
+		return append([]model.K8sEvent(nil), items...)
+	}
+	return append([]model.K8sEvent(nil), items[:limit]...)
 }
 
 func timeoutUnlessPath(timeout time.Duration, skipPrefix string) func(http.Handler) http.Handler {

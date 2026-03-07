@@ -1,17 +1,28 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "../../lib/api";
+import { useAuthSession } from "../../context/AuthSessionContext";
 import type { Node, NodeDetail } from "../../types";
 import NodeDetailModal from "../../components/nodes/NodeDetailModal";
 
 export default function Nodes() {
+  const { can, isLoading: authLoading } = useAuthSession();
   const [nodes, setNodes] = useState<Node[]>([]);
   const [selectedNode, setSelectedNode] = useState<NodeDetail | null>(null);
   const [search, setSearch] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const canRead = can("read");
+  const canWrite = can("write");
 
   const load = useCallback(async () => {
+    if (!canRead) {
+      setNodes([]);
+      setError("Authenticate to view node data.");
+      setIsLoading(false);
+      return;
+    }
+
     setIsLoading(true);
     try {
       const response = await api.getNodes();
@@ -22,11 +33,14 @@ export default function Nodes() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [canRead]);
 
   useEffect(() => {
+    if (authLoading) {
+      return;
+    }
     void load();
-  }, [load]);
+  }, [authLoading, load]);
 
   const filteredNodes = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -38,6 +52,11 @@ export default function Nodes() {
   }, [nodes, search]);
 
   const openDetail = useCallback(async (name: string) => {
+    if (!canRead) {
+      setError("Authenticate to view node details.");
+      return;
+    }
+
     setIsBusy(true);
     try {
       const response = await api.getNodeDetail(name);
@@ -48,10 +67,14 @@ export default function Nodes() {
     } finally {
       setIsBusy(false);
     }
-  }, []);
+  }, [canRead]);
 
   const cordon = useCallback(
     async (name: string) => {
+      if (!canWrite) {
+        setError("Your role does not allow node cordon actions.");
+        return;
+      }
       if (!window.confirm(`Cordon node ${name}?`)) {
         return;
       }
@@ -67,7 +90,7 @@ export default function Nodes() {
         setIsBusy(false);
       }
     },
-    [load],
+    [canWrite, load],
   );
 
   return (
@@ -86,7 +109,7 @@ export default function Nodes() {
           />
           <button
             onClick={() => void load()}
-            disabled={isLoading || isBusy}
+            disabled={isLoading || isBusy || !canRead}
             className="btn"
           >
             {isLoading ? "Loading" : "Refresh"}
@@ -122,10 +145,10 @@ export default function Nodes() {
                 <td className="px-4 py-3 text-zinc-400">{node.age}</td>
                 <td className="px-4 py-3">
                   <div className="flex gap-2">
-                    <button onClick={() => void cordon(node.name)} className="btn-sm">
+                    <button onClick={() => void cordon(node.name)} className="btn-sm" disabled={!canWrite}>
                       Cordon
                     </button>
-                    <button onClick={() => void openDetail(node.name)} className="btn-sm">
+                    <button onClick={() => void openDetail(node.name)} className="btn-sm" disabled={!canRead}>
                       Details
                     </button>
                   </div>

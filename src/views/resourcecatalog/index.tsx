@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getViewItem } from "../../features/viewCatalog";
 import { api } from "../../lib/api";
+import { useAuthSession } from "../../context/AuthSessionContext";
 import type { ResourceRecord, View } from "../../types";
 
 const SCALEABLE_VIEWS = new Set<View>(["deployments", "statefulsets", "jobs"]);
@@ -8,6 +9,7 @@ const RESTARTABLE_VIEWS = new Set<View>(["deployments", "statefulsets", "jobs"])
 const ROLLBACK_VIEWS = new Set<View>(["deployments"]);
 
 export default function ResourceCatalog({ view }: { view: View }) {
+  const { can, isLoading: authLoading } = useAuthSession();
   const meta = getViewItem(view);
   const [resources, setResources] = useState<ResourceRecord[]>([]);
   const [search, setSearch] = useState("");
@@ -15,6 +17,8 @@ export default function ResourceCatalog({ view }: { view: View }) {
   const [isActing, setIsActing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const canRead = can("read");
+  const canWrite = can("write");
 
   const [yamlTarget, setYAMLTarget] = useState<ResourceRecord | null>(null);
   const [yamlText, setYAMLText] = useState("");
@@ -23,6 +27,13 @@ export default function ResourceCatalog({ view }: { view: View }) {
   const [scaleReplicas, setScaleReplicas] = useState("1");
 
   const load = useCallback(async () => {
+    if (!canRead) {
+      setResources([]);
+      setError("Authenticate to view resource data.");
+      setIsLoading(false);
+      return;
+    }
+
     setIsLoading(true);
     try {
       const response = await api.getResources(view);
@@ -33,11 +44,14 @@ export default function ResourceCatalog({ view }: { view: View }) {
     } finally {
       setIsLoading(false);
     }
-  }, [view]);
+  }, [canRead, view]);
 
   useEffect(() => {
+    if (authLoading) {
+      return;
+    }
     void load();
-  }, [load]);
+  }, [authLoading, load]);
 
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -55,6 +69,10 @@ export default function ResourceCatalog({ view }: { view: View }) {
 
   const openYAMLEditor = useCallback(
     async (resource: ResourceRecord) => {
+      if (!canWrite) {
+        setError("Your role does not allow YAML actions.");
+        return;
+      }
       if (!resource.namespace) {
         setError("YAML actions require a namespaced resource");
         return;
@@ -72,10 +90,14 @@ export default function ResourceCatalog({ view }: { view: View }) {
         setIsActing(false);
       }
     },
-    [view],
+    [canWrite, view],
   );
 
   const applyYAML = useCallback(async () => {
+    if (!canWrite) {
+      setError("Your role does not allow YAML actions.");
+      return;
+    }
     if (!yamlTarget || !yamlTarget.namespace) {
       return;
     }
@@ -93,18 +115,26 @@ export default function ResourceCatalog({ view }: { view: View }) {
     } finally {
       setIsActing(false);
     }
-  }, [load, view, yamlTarget, yamlText]);
+  }, [canWrite, load, view, yamlTarget, yamlText]);
 
   const openScaleEditor = useCallback((resource: ResourceRecord) => {
+    if (!canWrite) {
+      setError("Your role does not allow scaling actions.");
+      return;
+    }
     if (!resource.namespace) {
       return;
     }
 
     setScaleTarget(resource);
     setScaleReplicas(String(extractReplicas(resource.status)));
-  }, []);
+  }, [canWrite]);
 
   const applyScale = useCallback(async () => {
+    if (!canWrite) {
+      setError("Your role does not allow scaling actions.");
+      return;
+    }
     if (!scaleTarget || !scaleTarget.namespace) {
       return;
     }
@@ -127,10 +157,14 @@ export default function ResourceCatalog({ view }: { view: View }) {
     } finally {
       setIsActing(false);
     }
-  }, [load, scaleReplicas, scaleTarget, view]);
+  }, [canWrite, load, scaleReplicas, scaleTarget, view]);
 
   const restartResource = useCallback(
     async (resource: ResourceRecord) => {
+      if (!canWrite) {
+        setError("Your role does not allow restart actions.");
+        return;
+      }
       if (!resource.namespace) {
         return;
       }
@@ -150,11 +184,15 @@ export default function ResourceCatalog({ view }: { view: View }) {
         setIsActing(false);
       }
     },
-    [load, view],
+    [canWrite, load, view],
   );
 
   const rollbackResource = useCallback(
     async (resource: ResourceRecord) => {
+      if (!canWrite) {
+        setError("Your role does not allow rollback actions.");
+        return;
+      }
       if (!resource.namespace) {
         return;
       }
@@ -174,7 +212,7 @@ export default function ResourceCatalog({ view }: { view: View }) {
         setIsActing(false);
       }
     },
-    [load, view],
+    [canWrite, load, view],
   );
 
   return (
@@ -193,7 +231,7 @@ export default function ResourceCatalog({ view }: { view: View }) {
           />
           <button
             onClick={() => void load()}
-            disabled={isLoading || isActing}
+            disabled={isLoading || isActing || !canRead}
             className="btn"
           >
             {isLoading ? "Loading" : "Refresh"}
@@ -228,13 +266,13 @@ export default function ResourceCatalog({ view }: { view: View }) {
                   <td className="px-4 py-3">
                     {resource.namespace ? (
                       <div className="flex flex-wrap gap-2">
-                        <ActionButton onClick={() => void openYAMLEditor(resource)} disabled={isActing} label="Edit YAML" />
-                        {SCALEABLE_VIEWS.has(view) && <ActionButton onClick={() => openScaleEditor(resource)} disabled={isActing} label="Scale" />}
-                        {RESTARTABLE_VIEWS.has(view) && <ActionButton onClick={() => void restartResource(resource)} disabled={isActing} label="Restart" />}
+                        <ActionButton onClick={() => void openYAMLEditor(resource)} disabled={isActing || !canWrite} label="Edit YAML" />
+                        {SCALEABLE_VIEWS.has(view) && <ActionButton onClick={() => openScaleEditor(resource)} disabled={isActing || !canWrite} label="Scale" />}
+                        {RESTARTABLE_VIEWS.has(view) && <ActionButton onClick={() => void restartResource(resource)} disabled={isActing || !canWrite} label="Restart" />}
                         {ROLLBACK_VIEWS.has(view) && (
                           <button
                             onClick={() => void rollbackResource(resource)}
-                            disabled={isActing}
+                            disabled={isActing || !canWrite}
                             className="btn-sm border-zinc-600"
                           >
                             Rollback
@@ -278,7 +316,7 @@ export default function ResourceCatalog({ view }: { view: View }) {
                 <button onClick={() => setYAMLTarget(null)} className="btn-sm border-zinc-600">
                   Cancel
                 </button>
-                <button onClick={() => void applyYAML()} disabled={isActing} className="btn-primary h-auto py-1.5 text-xs">
+                <button onClick={() => void applyYAML()} disabled={isActing || !canWrite} className="btn-primary h-auto py-1.5 text-xs">
                   {isActing ? "Applying" : "Apply"}
                 </button>
               </div>
@@ -311,7 +349,7 @@ export default function ResourceCatalog({ view }: { view: View }) {
                 <button onClick={() => setScaleTarget(null)} className="btn-sm border-zinc-600">
                   Cancel
                 </button>
-                <button onClick={() => void applyScale()} disabled={isActing} className="btn-primary h-auto py-1.5 text-xs">
+                <button onClick={() => void applyScale()} disabled={isActing || !canWrite} className="btn-primary h-auto py-1.5 text-xs">
                   {isActing ? "Scaling" : "Scale"}
                 </button>
               </div>

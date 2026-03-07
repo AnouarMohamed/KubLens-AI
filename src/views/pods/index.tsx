@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "../../lib/api";
+import { useAuthSession } from "../../context/AuthSessionContext";
 import type { Pod, PodDetail, PodCreateRequest } from "../../types";
 import PodDetailModal from "../../components/pods/PodDetailModal";
 import PodStatusBadge from "../../components/pods/PodStatusBadge";
@@ -15,6 +16,7 @@ const defaultCreateForm: PodCreateRequest = {
 };
 
 export default function Pods() {
+  const { can, isLoading: authLoading } = useAuthSession();
   const [pods, setPods] = useState<Pod[]>([]);
   const [namespaces, setNamespaces] = useState<string[]>([]);
   const [search, setSearch] = useState("");
@@ -29,8 +31,18 @@ export default function Pods() {
   const [isBusy, setIsBusy] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const canRead = can("read");
+  const canWrite = can("write");
 
   const load = useCallback(async () => {
+    if (!canRead) {
+      setPods([]);
+      setNamespaces([]);
+      setError("Authenticate to view pod data.");
+      setIsLoading(false);
+      return;
+    }
+
     setIsLoading(true);
     try {
       const [podRows, namespaceRows] = await Promise.all([api.getPods(), api.getNamespaces()]);
@@ -42,11 +54,14 @@ export default function Pods() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [canRead]);
 
   useEffect(() => {
+    if (authLoading) {
+      return;
+    }
     void load();
-  }, [load]);
+  }, [authLoading, load]);
 
   const filteredPods = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -59,6 +74,11 @@ export default function Pods() {
   }, [namespaceFilter, pods, search, statusFilter]);
 
   const openDetail = useCallback(async (namespace: string, podName: string) => {
+    if (!canRead) {
+      setError("Authenticate to view pod details.");
+      return;
+    }
+
     setIsBusy(true);
     try {
       const [detail, events] = await Promise.all([api.getPodDetail(namespace, podName), api.getPodEvents(namespace, podName)]);
@@ -70,9 +90,14 @@ export default function Pods() {
     } finally {
       setIsBusy(false);
     }
-  }, []);
+  }, [canRead]);
 
   const openLogs = useCallback(async (namespace: string, podName: string) => {
+    if (!canRead) {
+      setError("Authenticate to view pod logs.");
+      return;
+    }
+
     setIsBusy(true);
     try {
       const logs = await api.getPodLogs(namespace, podName);
@@ -84,9 +109,13 @@ export default function Pods() {
     } finally {
       setIsBusy(false);
     }
-  }, []);
+  }, [canRead]);
 
   const createPod = useCallback(async () => {
+    if (!canWrite) {
+      setError("Your role does not allow pod creation.");
+      return;
+    }
     if (createForm.name.trim() === "") {
       setError("Pod name is required");
       return;
@@ -108,10 +137,14 @@ export default function Pods() {
     } finally {
       setIsBusy(false);
     }
-  }, [createForm.image, createForm.name, createForm.namespace, load]);
+  }, [canWrite, createForm.image, createForm.name, createForm.namespace, load]);
 
   const restartPod = useCallback(
     async (namespace: string, podName: string) => {
+      if (!canWrite) {
+        setError("Your role does not allow pod restart.");
+        return;
+      }
       if (!window.confirm(`Restart pod ${namespace}/${podName}?`)) {
         return;
       }
@@ -127,11 +160,15 @@ export default function Pods() {
         setIsBusy(false);
       }
     },
-    [load],
+    [canWrite, load],
   );
 
   const deletePod = useCallback(
     async (namespace: string, podName: string) => {
+      if (!canWrite) {
+        setError("Your role does not allow pod deletion.");
+        return;
+      }
       if (!window.confirm(`Delete pod ${namespace}/${podName}?`)) {
         return;
       }
@@ -147,7 +184,7 @@ export default function Pods() {
         setIsBusy(false);
       }
     },
-    [load],
+    [canWrite, load],
   );
 
   return (
@@ -158,15 +195,17 @@ export default function Pods() {
           <p className="text-sm text-zinc-400 mt-1">Workload inventory with operational actions.</p>
         </div>
         <div className="flex gap-2">
-          <button
-            onClick={() => setShowCreateForm((value) => !value)}
-            className="btn"
-          >
-            {showCreateForm ? "Close Create" : "Create Pod"}
-          </button>
+          {canWrite && (
+            <button
+              onClick={() => setShowCreateForm((value) => !value)}
+              className="btn"
+            >
+              {showCreateForm ? "Close Create" : "Create Pod"}
+            </button>
+          )}
           <button
             onClick={() => void load()}
-            disabled={isLoading || isBusy}
+            disabled={isLoading || isBusy || !canRead}
             className="btn"
           >
             {isLoading ? "Loading" : "Refresh"}
@@ -174,7 +213,7 @@ export default function Pods() {
         </div>
       </header>
 
-      {showCreateForm && (
+      {showCreateForm && canWrite && (
         <div className="surface p-4">
           <p className="text-sm font-semibold text-zinc-100">Create Pod</p>
           <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -282,14 +321,15 @@ export default function Pods() {
                 <td className="px-4 py-3 text-zinc-400">{pod.restarts}</td>
                 <td className="px-4 py-3">
                   <div className="flex gap-2">
-                    <button onClick={() => void openLogs(pod.namespace, pod.name)} className="btn-sm">
+                    <button onClick={() => void openLogs(pod.namespace, pod.name)} className="btn-sm" disabled={!canRead}>
                       Logs
                     </button>
-                    <button onClick={() => void restartPod(pod.namespace, pod.name)} className="btn-sm">
+                    <button onClick={() => void restartPod(pod.namespace, pod.name)} className="btn-sm" disabled={!canWrite}>
                       Restart
                     </button>
                     <button
                       onClick={() => void deletePod(pod.namespace, pod.name)}
+                      disabled={!canWrite}
                       className="btn-sm border-zinc-600"
                     >
                       Delete

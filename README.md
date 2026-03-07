@@ -39,6 +39,7 @@ It is designed to run in two modes:
 - Real-time stream: server-sent events (SSE) for live audit + cluster stats updates.
 - Terminal execution: run shell commands from UI with timeout and output capture.
 - Operational actions: create/restart/delete pod, cordon node, scale/restart/rollback workloads, edit/apply resource YAML.
+- Specialized detail pages: pods, nodes, and deployments (with deployment-specific rollout controls).
 
 ---
 
@@ -109,6 +110,7 @@ Request flow:
 - Stream emits:
   - `audit` events for request/activity changes
   - `stats` events for periodic cluster summary updates
+  - `cluster_events` events for live notifications feed
 
 ---
 

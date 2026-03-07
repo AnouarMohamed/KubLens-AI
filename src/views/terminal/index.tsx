@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEventHandler } from "react";
 import { api } from "../../lib/api";
+import { useAuthSession } from "../../context/AuthSessionContext";
 import type { TerminalExecResponse } from "../../types";
 
 interface TerminalEntry {
@@ -19,6 +20,7 @@ const QUICK_COMMANDS = [
 ];
 
 export default function Terminal() {
+  const { can, isLoading: authLoading } = useAuthSession();
   const [cwd, setCwd] = useState("");
   const [command, setCommand] = useState("");
   const [timeoutSeconds, setTimeoutSeconds] = useState(10);
@@ -28,6 +30,7 @@ export default function Terminal() {
   const [historyIndex, setHistoryIndex] = useState<number | null>(null);
   const [counter, setCounter] = useState(1);
   const outputRef = useRef<HTMLDivElement>(null);
+  const canTerminal = can("terminal");
 
   useEffect(() => {
     if (!outputRef.current) {
@@ -44,6 +47,9 @@ export default function Terminal() {
   }, [cwd]);
 
   const runCommand = async (value?: string) => {
+    if (!canTerminal) {
+      return;
+    }
     const runValue = (value ?? command).trim();
     if (runValue === "" || isRunning) {
       return;
@@ -121,6 +127,13 @@ export default function Terminal() {
 
   return (
     <div className="space-y-4">
+      {!authLoading && !canTerminal && (
+        <section className="surface p-4">
+          <h3 className="text-base font-semibold text-zinc-100">Terminal Access Restricted</h3>
+          <p className="mt-1 text-sm text-zinc-400">This feature requires an authenticated `admin` session.</p>
+        </section>
+      )}
+
       <header className="panel-head">
         <div>
           <h2 className="text-2xl font-semibold text-zinc-100 tracking-tight">Cluster Terminal</h2>
@@ -140,6 +153,7 @@ export default function Terminal() {
           </label>
           <button
             onClick={() => setEntries([])}
+            disabled={!canTerminal}
             className="btn h-9"
           >
             Clear
@@ -156,7 +170,7 @@ export default function Terminal() {
                 setCommand(item);
                 void runCommand(item);
               }}
-              disabled={isRunning}
+              disabled={isRunning || !canTerminal}
               className="btn-sm bg-zinc-950"
             >
               {item}
@@ -169,6 +183,7 @@ export default function Terminal() {
             value={cwd}
             onChange={(event) => setCwd(event.target.value)}
             placeholder="Working directory (optional)"
+            disabled={!canTerminal}
             className="field"
           />
           <input
@@ -176,11 +191,12 @@ export default function Terminal() {
             onChange={(event) => setCommand(event.target.value)}
             onKeyDown={onCommandKeyDown}
             placeholder="Type command and press Enter"
+            disabled={!canTerminal}
             className="field"
           />
           <button
             onClick={() => void runCommand()}
-            disabled={isRunning || command.trim() === ""}
+            disabled={isRunning || command.trim() === "" || !canTerminal}
             className="btn-primary"
           >
             {isRunning ? "Running..." : "Run"}
