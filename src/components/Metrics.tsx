@@ -1,13 +1,17 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
+  CartesianGrid,
   Cell,
-  Legend,
-  Pie,
-  PieChart,
-  RadialBar,
-  RadialBarChart,
+  ComposedChart,
+  Line,
   ResponsiveContainer,
   Tooltip,
+  XAxis,
+  YAxis,
 } from "recharts";
 import { api } from "../lib/api";
 import type { ApiMetricsSnapshot, ClusterStats, Node, Pod } from "../types";
@@ -20,7 +24,7 @@ const CHART_MAGENTA = "#d946ef";
 const CHART_SLATE = "#a9b4cc";
 const CHART_COLORS = [CHART_BLUE, CHART_GREEN, CHART_AMBER, CHART_MAGENTA, CHART_SLATE, DOCKER_BLUE];
 const TOOLTIP_STYLE = { background: "#ffffff", border: "1px solid #d8dde6", color: "#1f2937" };
-const LEGEND_STYLE = { color: "#c7d2e8" };
+const GRID_STROKE = "#d8dde6";
 
 type AnalyticsTab = "cluster" | "workloads" | "api";
 
@@ -101,16 +105,15 @@ export default function Metrics() {
     return percentage(stats.pods.running + succeeded, stats.pods.total);
   }, [stats]);
 
-  const apiSuccess = useMemo(() => {
-    return percentage(apiStatusTotals.ok + apiStatusTotals.redirect, apiStatusTotals.total);
-  }, [apiStatusTotals]);
+  const apiSuccess = useMemo(() => percentage(apiStatusTotals.ok + apiStatusTotals.redirect, apiStatusTotals.total), [apiStatusTotals]);
 
-  const podDistribution = useMemo(() => buildPodDistribution(stats), [stats]);
-  const nodeUsageCircular = useMemo(() => buildNodeUsageCircular(nodes), [nodes]);
+  const podLifecycleBars = useMemo(() => buildPodLifecycleBars(stats), [stats]);
+  const nodeUtilizationBars = useMemo(() => buildNodeUtilizationBars(nodes), [nodes]);
+  const nodeCPUTrend = useMemo(() => buildNodeCPUTrend(nodes), [nodes]);
   const restartBands = useMemo(() => buildRestartBands(pods), [pods]);
-  const resourcePressure = useMemo(() => buildResourcePressure(pods), [pods]);
-  const apiStatusMix = useMemo(() => buildAPIStatusMix(apiStatusTotals), [apiStatusTotals]);
-  const routeLatencyCircle = useMemo(() => buildRouteLatencyCircle(apiMetrics), [apiMetrics]);
+  const podPressureBars = useMemo(() => buildTopPodPressure(pods), [pods]);
+  const apiStatusStack = useMemo(() => buildAPIStatusStack(apiStatusTotals), [apiStatusTotals]);
+  const routePerformance = useMemo(() => buildRoutePerformance(apiMetrics), [apiMetrics]);
   const slowRoutes = useMemo(() => buildSlowRoutes(apiMetrics), [apiMetrics]);
 
   return (
@@ -118,10 +121,10 @@ export default function Metrics() {
       <header className="surface p-6 text-zinc-100">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <p className="text-[11px] uppercase tracking-[0.22em] text-zinc-400">Docker Metrics Deck</p>
+            <p className="text-[11px] uppercase tracking-[0.22em] text-zinc-400">Operations Metrics</p>
             <h2 className="mt-2 text-3xl font-semibold tracking-tight">Cluster Telemetry</h2>
             <p className="text-sm text-zinc-300 mt-2 max-w-2xl">
-              Focused operational view with circular analytics and clean signal cards.
+              Charts are selected by data semantics: trends use lines, comparisons use grouped bars, and composition uses stacked bars.
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -185,131 +188,143 @@ export default function Metrics() {
 
         {tab === "cluster" && (
           <div className="mt-4 grid grid-cols-1 xl:grid-cols-2 gap-4">
-            <ChartCard title="Pod Lifecycle Mix">
-              {podDistribution.length > 0 ? (
+            <ChartCard title="Node Utilization by Node (CPU vs Memory)">
+              {nodeUtilizationBars.length > 0 ? (
                 <ResponsiveContainer width="100%" height={340}>
-                  <PieChart>
-                    <Pie
-                      data={podDistribution}
-                      dataKey="value"
-                      nameKey="name"
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={74}
-                      outerRadius={122}
-                      paddingAngle={1}
-                      stroke="#d8dde6"
-                      strokeWidth={2}
-                      labelLine={false}
-                      label={renderCompactLabel}
-                    >
-                      {podDistribution.map((entry, index) => (
-                        <Cell key={`${entry.name}-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip contentStyle={TOOLTIP_STYLE} />
-                    <Legend wrapperStyle={LEGEND_STYLE} />
-                  </PieChart>
+                  <BarChart data={nodeUtilizationBars} margin={{ top: 6, right: 10, left: 0, bottom: 0 }}>
+                    <CartesianGrid stroke={GRID_STROKE} strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="name" tick={{ fill: "#5d6674", fontSize: 12 }} interval={0} angle={-20} textAnchor="end" height={52} />
+                    <YAxis domain={[0, 100]} tick={{ fill: "#5d6674", fontSize: 12 }} unit="%" />
+                    <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(value: number, name: string) => [`${value.toFixed(1)}%`, name === "cpu" ? "CPU" : "Memory"]} />
+                    <Bar dataKey="cpu" name="CPU" fill={CHART_BLUE} radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="memory" name="Memory" fill={CHART_GREEN} radius={[4, 4, 0, 0]} />
+                  </BarChart>
                 </ResponsiveContainer>
               ) : (
-                <EmptyChart message="No pod lifecycle data available." />
+                <EmptyChart message="No node utilization data available." />
               )}
             </ChartCard>
 
-            <ChartCard title="Node CPU Circular Bars">
-              {nodeUsageCircular.length > 0 ? (
+            <ChartCard title="Average Node CPU Trend">
+              {nodeCPUTrend.length > 0 ? (
                 <ResponsiveContainer width="100%" height={340}>
-                  <RadialBarChart innerRadius="20%" outerRadius="95%" data={nodeUsageCircular} startAngle={180} endAngle={-180}>
-                    <RadialBar background={{ fill: "#eef1f5" }} dataKey="cpu" cornerRadius={8} />
-                    <Legend iconSize={10} layout="vertical" verticalAlign="middle" align="right" wrapperStyle={LEGEND_STYLE} />
-                    <Tooltip contentStyle={TOOLTIP_STYLE} />
-                  </RadialBarChart>
+                  <AreaChart data={nodeCPUTrend} margin={{ top: 6, right: 10, left: 0, bottom: 0 }}>
+                    <CartesianGrid stroke={GRID_STROKE} strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="time" tick={{ fill: "#5d6674", fontSize: 12 }} />
+                    <YAxis domain={[0, 100]} tick={{ fill: "#5d6674", fontSize: 12 }} unit="%" />
+                    <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(value: number) => [`${value.toFixed(1)}%`, "Avg CPU"]} />
+                    <Area type="monotone" dataKey="value" stroke={DOCKER_BLUE} fill={CHART_BLUE} fillOpacity={0.22} strokeWidth={2} />
+                  </AreaChart>
                 </ResponsiveContainer>
               ) : (
-                <EmptyChart message="No node utilization history available." />
+                <EmptyChart message="No node CPU trend data available." />
               )}
             </ChartCard>
           </div>
         )}
 
         {tab === "workloads" && (
-          <div className="mt-4 grid grid-cols-1 xl:grid-cols-2 gap-4">
-            <ChartCard title="Restart Pressure Distribution">
+          <div className="mt-4 grid grid-cols-1 xl:grid-cols-3 gap-4">
+            <ChartCard title="Pod Lifecycle Distribution">
+              {podLifecycleBars.length > 0 ? (
+                <ResponsiveContainer width="100%" height={340}>
+                  <BarChart data={podLifecycleBars} margin={{ top: 6, right: 10, left: 0, bottom: 0 }}>
+                    <CartesianGrid stroke={GRID_STROKE} strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="name" tick={{ fill: "#5d6674", fontSize: 12 }} />
+                    <YAxis allowDecimals={false} tick={{ fill: "#5d6674", fontSize: 12 }} />
+                    <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(value: number) => [value, "Pods"]} />
+                    <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                      {podLifecycleBars.map((row) => (
+                        <Cell key={row.name} fill={row.color} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <EmptyChart message="No pod lifecycle data available." />
+              )}
+            </ChartCard>
+
+            <ChartCard title="Restart Pressure Bands">
               <ResponsiveContainer width="100%" height={340}>
-                <PieChart>
-                  <Pie
-                    data={restartBands}
-                    dataKey="value"
-                    nameKey="name"
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={74}
-                    outerRadius={122}
-                    paddingAngle={1}
-                    stroke="#d8dde6"
-                    strokeWidth={2}
-                    labelLine={false}
-                    label={renderCompactLabel}
-                  >
-                    {restartBands.map((entry, index) => (
-                      <Cell key={`${entry.name}-${index}`} fill={entry.color} />
+                <BarChart data={restartBands} margin={{ top: 6, right: 10, left: 0, bottom: 0 }}>
+                  <CartesianGrid stroke={GRID_STROKE} strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="name" tick={{ fill: "#5d6674", fontSize: 12 }} interval={0} angle={-18} textAnchor="end" height={50} />
+                  <YAxis allowDecimals={false} tick={{ fill: "#5d6674", fontSize: 12 }} />
+                  <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(value: number) => [value, "Pods"]} />
+                  <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                    {restartBands.map((row) => (
+                      <Cell key={row.name} fill={row.color} />
                     ))}
-                  </Pie>
-                  <Tooltip contentStyle={TOOLTIP_STYLE} />
-                  <Legend wrapperStyle={LEGEND_STYLE} />
-                </PieChart>
+                  </Bar>
+                </BarChart>
               </ResponsiveContainer>
             </ChartCard>
 
-            <ChartCard title="Top Pod Pressure (CPU + Memory)">
-              <ResponsiveContainer width="100%" height={340}>
-                <RadialBarChart innerRadius="20%" outerRadius="96%" data={resourcePressure} startAngle={180} endAngle={-180}>
-                  <RadialBar background={{ fill: "#eef1f5" }} dataKey="score" cornerRadius={8} />
-                  <Legend iconSize={10} layout="vertical" verticalAlign="middle" align="right" wrapperStyle={LEGEND_STYLE} />
-                  <Tooltip contentStyle={TOOLTIP_STYLE} />
-                </RadialBarChart>
-              </ResponsiveContainer>
+            <ChartCard title="Top Pod Resource Pressure">
+              {podPressureBars.length > 0 ? (
+                <ResponsiveContainer width="100%" height={340}>
+                  <BarChart data={podPressureBars} layout="vertical" margin={{ top: 6, right: 10, left: 10, bottom: 0 }}>
+                    <CartesianGrid stroke={GRID_STROKE} strokeDasharray="3 3" horizontal={false} />
+                    <XAxis type="number" domain={[0, 100]} tick={{ fill: "#5d6674", fontSize: 12 }} unit="%" />
+                    <YAxis type="category" dataKey="name" width={120} tick={{ fill: "#5d6674", fontSize: 12 }} />
+                    <Tooltip
+                      contentStyle={TOOLTIP_STYLE}
+                      formatter={(value: number, name: string, item) => {
+                        const payload = item.payload as { cpuMilli: number; memMi: number };
+                        if (name === "score") {
+                          return [`${value.toFixed(1)}%`, `Pressure (CPU ${payload.cpuMilli}m | Mem ${payload.memMi}Mi)`];
+                        }
+                        return [value, name];
+                      }}
+                    />
+                    <Bar dataKey="score" fill={DOCKER_BLUE} radius={[0, 4, 4, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <EmptyChart message="No pod pressure data available." />
+              )}
             </ChartCard>
           </div>
         )}
 
         {tab === "api" && (
           <div className="mt-4 grid grid-cols-1 xl:grid-cols-2 gap-4">
-            <ChartCard title="HTTP Status Class Mix">
-              <ResponsiveContainer width="100%" height={340}>
-                <PieChart>
-                  <Pie
-                    data={apiStatusMix}
-                    dataKey="value"
-                    nameKey="name"
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={76}
-                    outerRadius={124}
-                    paddingAngle={1}
-                    stroke="#d8dde6"
-                    strokeWidth={2}
-                    labelLine={false}
-                    label={renderCompactLabel}
-                  >
-                    {apiStatusMix.map((entry, index) => (
-                      <Cell key={`${entry.name}-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip contentStyle={TOOLTIP_STYLE} />
-                  <Legend wrapperStyle={LEGEND_STYLE} />
-                </PieChart>
-              </ResponsiveContainer>
+            <ChartCard title="HTTP Status Composition (Stacked)">
+              {apiStatusStack.length > 0 ? (
+                <ResponsiveContainer width="100%" height={340}>
+                  <BarChart data={apiStatusStack} layout="vertical" margin={{ top: 6, right: 10, left: 0, bottom: 0 }}>
+                    <CartesianGrid stroke={GRID_STROKE} strokeDasharray="3 3" horizontal={false} />
+                    <XAxis type="number" tick={{ fill: "#5d6674", fontSize: 12 }} allowDecimals={false} />
+                    <YAxis type="category" dataKey="name" tick={{ fill: "#5d6674", fontSize: 12 }} width={84} />
+                    <Tooltip contentStyle={TOOLTIP_STYLE} />
+                    <Bar dataKey="ok" stackId="status" fill={CHART_GREEN} name="2xx" />
+                    <Bar dataKey="redirect" stackId="status" fill={CHART_BLUE} name="3xx" />
+                    <Bar dataKey="clientError" stackId="status" fill={CHART_AMBER} name="4xx" />
+                    <Bar dataKey="serverError" stackId="status" fill={CHART_MAGENTA} name="5xx" />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <EmptyChart message="No HTTP status data available." />
+              )}
             </ChartCard>
 
-            <ChartCard title="Route Latency (Circular)">
-              <ResponsiveContainer width="100%" height={340}>
-                <RadialBarChart innerRadius="18%" outerRadius="96%" data={routeLatencyCircle} startAngle={180} endAngle={-180}>
-                  <RadialBar background={{ fill: "#eef1f5" }} dataKey="latency" cornerRadius={8} />
-                  <Legend iconSize={10} layout="vertical" verticalAlign="middle" align="right" wrapperStyle={LEGEND_STYLE} />
-                  <Tooltip contentStyle={TOOLTIP_STYLE} />
-                </RadialBarChart>
-              </ResponsiveContainer>
+            <ChartCard title="Route Requests vs Latency">
+              {routePerformance.length > 0 ? (
+                <ResponsiveContainer width="100%" height={340}>
+                  <ComposedChart data={routePerformance} margin={{ top: 6, right: 10, left: 0, bottom: 0 }}>
+                    <CartesianGrid stroke={GRID_STROKE} strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="route" tick={{ fill: "#5d6674", fontSize: 12 }} interval={0} angle={-20} textAnchor="end" height={52} />
+                    <YAxis yAxisId="requests" tick={{ fill: "#5d6674", fontSize: 12 }} allowDecimals={false} />
+                    <YAxis yAxisId="latency" orientation="right" tick={{ fill: "#5d6674", fontSize: 12 }} />
+                    <Tooltip contentStyle={TOOLTIP_STYLE} />
+                    <Bar yAxisId="requests" dataKey="requests" fill={CHART_BLUE} radius={[4, 4, 0, 0]} name="Requests" />
+                    <Line yAxisId="latency" type="monotone" dataKey="avgLatencyMs" stroke={CHART_AMBER} strokeWidth={2} dot={{ r: 3 }} name="Avg Latency (ms)" />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              ) : (
+                <EmptyChart message="No route performance data available." />
+              )}
             </ChartCard>
           </div>
         )}
@@ -357,10 +372,10 @@ export default function Metrics() {
           <h3 className="text-sm font-semibold text-zinc-100">Slowest Routes</h3>
           <p className="text-xs text-zinc-400 mt-1">Average latency ranking.</p>
           <div className="mt-4 space-y-3">
-            {slowRoutes.map((route) => (
+            {slowRoutes.map((route, index) => (
               <div key={route.route} className="rounded-lg border border-zinc-800 bg-zinc-900/70 px-3 py-2">
                 <div className="flex items-center justify-between gap-2 text-xs">
-                  <span className="font-medium text-zinc-100 truncate">{route.route}</span>
+                  <span className="font-medium text-zinc-100 truncate">{index + 1}. {route.route}</span>
                   <span className="text-zinc-300">{route.avgLatencyMs.toFixed(2)}ms</span>
                 </div>
                 <div className="mt-2 h-2 rounded-full bg-zinc-800 overflow-hidden">
@@ -428,35 +443,62 @@ function EmptyChart({ message }: { message: string }) {
   );
 }
 
-function renderCompactLabel({ name, percent }: { name?: string | number; percent?: number }) {
-  if (!percent || percent < 0.06 || !name) {
-    return "";
-  }
-  return `${name} ${(percent * 100).toFixed(0)}%`;
-}
-
-function buildPodDistribution(stats: ClusterStats | null): Array<{ name: string; value: number }> {
+function buildPodLifecycleBars(stats: ClusterStats | null): Array<{ name: string; value: number; color: string }> {
   if (!stats) {
     return [];
   }
 
   const succeeded = Math.max(stats.pods.total - stats.pods.running - stats.pods.pending - stats.pods.failed, 0);
-  const rows = [
-    { name: "Running", value: stats.pods.running },
-    { name: "Pending", value: stats.pods.pending },
-    { name: "Failed", value: stats.pods.failed },
-    { name: "Succeeded", value: succeeded },
-  ];
-
-  return rows.filter((row) => row.value > 0);
+  return [
+    { name: "Running", value: stats.pods.running, color: CHART_GREEN },
+    { name: "Pending", value: stats.pods.pending, color: CHART_AMBER },
+    { name: "Failed", value: stats.pods.failed, color: CHART_MAGENTA },
+    { name: "Succeeded", value: succeeded, color: CHART_BLUE },
+  ].filter((row) => row.value > 0);
 }
 
-function buildNodeUsageCircular(nodes: Node[]): Array<{ name: string; cpu: number; fill: string }> {
-  return nodes.slice(0, 7).map((node, index) => ({
-    name: node.name,
+function buildNodeUtilizationBars(nodes: Node[]): Array<{ name: string; cpu: number; memory: number }> {
+  return nodes.slice(0, 8).map((node) => ({
+    name: compactRoute(node.name),
     cpu: parsePercentValue(node.cpuUsage),
-    fill: CHART_COLORS[index % CHART_COLORS.length],
+    memory: parsePercentValue(node.memUsage),
   }));
+}
+
+function buildNodeCPUTrend(nodes: Node[]): Array<{ time: string; value: number }> {
+  const maxPoints = nodes.reduce((max, node) => Math.max(max, node.cpuHistory?.length ?? 0), 0);
+  if (maxPoints === 0) {
+    return [];
+  }
+
+  const rows: Array<{ time: string; value: number }> = [];
+  for (let index = 0; index < maxPoints; index++) {
+    let total = 0;
+    let count = 0;
+    let label = "";
+
+    for (const node of nodes) {
+      const point = node.cpuHistory?.[index];
+      if (!point) {
+        continue;
+      }
+
+      if (!label && point.time) {
+        label = point.time;
+      }
+      total += Math.min(Math.max(point.value, 0), 100);
+      count++;
+    }
+
+    if (count > 0) {
+      rows.push({
+        time: label || `T${index + 1}`,
+        value: Number((total / count).toFixed(2)),
+      });
+    }
+  }
+
+  return rows;
 }
 
 function buildRestartBands(pods: Pod[]): Array<{ name: string; value: number; color: string }> {
@@ -479,25 +521,30 @@ function buildRestartBands(pods: Pod[]): Array<{ name: string; value: number; co
 
   return [
     { name: "No Restarts", value: none, color: CHART_GREEN },
-    { name: "1-4 Restarts", value: light, color: CHART_BLUE },
-    { name: "5-9 Restarts", value: medium, color: CHART_AMBER },
-    { name: "10+ Restarts", value: heavy, color: CHART_MAGENTA },
+    { name: "1-4", value: light, color: CHART_BLUE },
+    { name: "5-9", value: medium, color: CHART_AMBER },
+    { name: "10+", value: heavy, color: CHART_MAGENTA },
   ].filter((row) => row.value > 0);
 }
 
-function buildResourcePressure(pods: Pod[]): Array<{ name: string; score: number; fill: string }> {
+function buildTopPodPressure(pods: Pod[]): Array<{ name: string; score: number; cpuMilli: number; memMi: number; color: string }> {
   return pods
     .map((pod) => {
-      const cpu = parseMetric(pod.cpu);
-      const memory = parseMetric(pod.memory);
+      const cpuMilli = parseCPUMilli(pod.cpu);
+      const memMi = parseMemoryMi(pod.memory);
+      const normalizedCPU = Math.min((cpuMilli / 1000) * 100, 100);
+      const normalizedMemory = Math.min((memMi / 1024) * 100, 100);
+
       return {
-        name: pod.name,
-        score: Number((cpu * 0.6 + memory * 0.4).toFixed(2)),
+        name: compactRoute(pod.name),
+        score: Number((normalizedCPU * 0.6 + normalizedMemory * 0.4).toFixed(2)),
+        cpuMilli,
+        memMi,
       };
     })
     .sort((a, b) => b.score - a.score)
-    .slice(0, 7)
-    .map((row, index) => ({ ...row, fill: CHART_COLORS[index % CHART_COLORS.length] }));
+    .slice(0, 8)
+    .map((row, index) => ({ ...row, color: CHART_COLORS[index % CHART_COLORS.length] }));
 }
 
 function buildAPIStatusTotals(metrics: ApiMetricsSnapshot | null) {
@@ -514,26 +561,34 @@ function buildAPIStatusTotals(metrics: ApiMetricsSnapshot | null) {
   return { ok, redirect, clientError, serverError, total };
 }
 
-function buildAPIStatusMix(totals: { ok: number; redirect: number; clientError: number; serverError: number }) {
+function buildAPIStatusStack(totals: { ok: number; redirect: number; clientError: number; serverError: number }) {
+  if (totals.ok + totals.redirect + totals.clientError + totals.serverError === 0) {
+    return [];
+  }
+
   return [
-    { name: "2xx", value: totals.ok, color: CHART_GREEN },
-    { name: "3xx", value: totals.redirect, color: CHART_BLUE },
-    { name: "4xx", value: totals.clientError, color: CHART_AMBER },
-    { name: "5xx", value: totals.serverError, color: CHART_MAGENTA },
-  ].filter((row) => row.value > 0);
+    {
+      name: "Responses",
+      ok: totals.ok,
+      redirect: totals.redirect,
+      clientError: totals.clientError,
+      serverError: totals.serverError,
+    },
+  ];
 }
 
-function buildRouteLatencyCircle(metrics: ApiMetricsSnapshot | null): Array<{ name: string; latency: number; fill: string }> {
+function buildRoutePerformance(metrics: ApiMetricsSnapshot | null): Array<{ route: string; requests: number; avgLatencyMs: number }> {
   if (!metrics) {
     return [];
   }
 
-  return metrics.routes
-    .slice(0, 7)
-    .map((route, index) => ({
-      name: compactRoute(route.route),
-      latency: Number(route.avgLatencyMs.toFixed(2)),
-      fill: CHART_COLORS[index % CHART_COLORS.length],
+  return [...metrics.routes]
+    .sort((a, b) => b.requests - a.requests)
+    .slice(0, 8)
+    .map((route) => ({
+      route: compactRoute(route.route),
+      requests: route.requests,
+      avgLatencyMs: Number(route.avgLatencyMs.toFixed(2)),
     }));
 }
 
@@ -569,12 +624,52 @@ function parsePercentValue(value: string): number {
   return Math.min(Math.max(num, 0), 100);
 }
 
-function parseMetric(value: string): number {
-  const num = Number.parseFloat(value.replace(/[A-Za-z]/g, ""));
-  if (!Number.isFinite(num)) {
+function parseCPUMilli(value: string): number {
+  const normalized = value.trim().toLowerCase();
+  if (!normalized || normalized === "n/a") {
     return 0;
   }
-  return num;
+
+  if (normalized.endsWith("m")) {
+    const parsed = Number.parseFloat(normalized.slice(0, -1));
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  const parsed = Number.parseFloat(normalized);
+  if (!Number.isFinite(parsed)) {
+    return 0;
+  }
+
+  return parsed * 1000;
+}
+
+function parseMemoryMi(value: string): number {
+  const normalized = value.trim().toLowerCase();
+  if (!normalized || normalized === "n/a") {
+    return 0;
+  }
+
+  if (normalized.endsWith("mi")) {
+    const parsed = Number.parseFloat(normalized.slice(0, -2));
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  if (normalized.endsWith("gi")) {
+    const parsed = Number.parseFloat(normalized.slice(0, -2));
+    return Number.isFinite(parsed) ? parsed * 1024 : 0;
+  }
+
+  if (normalized.endsWith("ki")) {
+    const parsed = Number.parseFloat(normalized.slice(0, -2));
+    return Number.isFinite(parsed) ? parsed / 1024 : 0;
+  }
+
+  const parsed = Number.parseFloat(normalized.replace(/b$/, ""));
+  if (!Number.isFinite(parsed)) {
+    return 0;
+  }
+
+  return parsed / (1024 * 1024);
 }
 
 function percentage(part: number, whole: number): number {
