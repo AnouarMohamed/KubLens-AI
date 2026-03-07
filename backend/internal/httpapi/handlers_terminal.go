@@ -29,12 +29,16 @@ func (s *Server) handleTerminalExec(w http.ResponseWriter, r *http.Request) {
 	}
 
 	command := strings.TrimSpace(req.Command)
-	if command == "" {
-		writeError(w, http.StatusBadRequest, "command is required")
-		return
-	}
 	if len(command) > maxTerminalCommandLen {
 		writeError(w, http.StatusBadRequest, "command is too long")
+		return
+	}
+	if err := s.terminal.validateCommand(command); err != nil {
+		if err.Error() == "terminal execution is disabled" {
+			writeError(w, http.StatusForbidden, err.Error())
+			return
+		}
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 

@@ -36,8 +36,9 @@ type principal struct {
 }
 
 type authRuntime struct {
-	enabled bool
-	tokens  map[string]principal
+	enabled    bool
+	tokens     map[string]principal
+	cookieName string
 }
 
 type principalContextKey struct{}
@@ -51,6 +52,9 @@ func WithAuth(config AuthConfig) Option {
 func (a *authRuntime) configure(config AuthConfig) {
 	a.enabled = config.Enabled
 	a.tokens = make(map[string]principal, len(config.Tokens))
+	if strings.TrimSpace(a.cookieName) == "" {
+		a.cookieName = "kubelens_auth"
+	}
 
 	for _, token := range config.Tokens {
 		secret := strings.TrimSpace(token.Token)
@@ -72,6 +76,11 @@ func (a *authRuntime) configure(config AuthConfig) {
 func (s *Server) authMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !strings.HasPrefix(r.URL.Path, "/api") {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		if r.URL.Path == "/api/auth/login" || r.URL.Path == "/api/auth/logout" {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -123,8 +132,8 @@ func (s *Server) authenticate(r *http.Request) (principal, string) {
 	if token == "" {
 		token = strings.TrimSpace(r.Header.Get("X-Auth-Token"))
 	}
-	if token == "" && strings.HasPrefix(r.URL.Path, "/api/stream") {
-		token = strings.TrimSpace(r.URL.Query().Get("token"))
+	if token == "" {
+		token = strings.TrimSpace(s.readAuthCookie(r))
 	}
 	if token == "" {
 		return principal{}, "missing bearer token"
@@ -135,6 +144,100 @@ func (s *Server) authenticate(r *http.Request) (principal, string) {
 		return principal{}, "invalid bearer token"
 	}
 	return p, ""
+}
+
+type authLoginRequest struct {
+	Token string `json:"token"`
+}
+
+func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
+	if !s.auth.enabled {
+		writeError(w, http.StatusBadRequest, "auth is disabled")
+		return
+	}
+
+	var req authLoginRequest
+	if err := decodeJSONBody(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	token := strings.TrimSpace(req.Token)
+	if token == "" {
+		writeError(w, http.StatusBadRequest, "token is required")
+		return
+	}
+
+	p, ok := s.auth.tokens[token]
+	if !ok {
+		s.recordAuthFailure(r, http.StatusUnauthorized, "login_failed")
+		writeError(w, http.StatusUnauthorized, "invalid bearer token")
+		return
+	}
+
+	s.writeAuthCookie(w, r, token)
+	writeJSON(w, http.StatusOK, model.AuthSession{
+		Enabled:       true,
+		Authenticated: true,
+		User: &model.SessionUser{
+			Name: p.user,
+			Role: roleLabel(p.role),
+		},
+		Permissions: permissionsForRole(p.role),
+	})
+}
+
+func (s *Server) handleAuthLogout(w http.ResponseWriter, r *http.Request) {
+	s.clearAuthCookie(w, r)
+	writeJSON(w, http.StatusOK, model.AuthSession{
+		Enabled:       s.auth.enabled,
+		Authenticated: false,
+		Permissions:   nil,
+	})
+}
+
+func (s *Server) readAuthCookie(r *http.Request) string {
+	if strings.TrimSpace(s.auth.cookieName) == "" {
+		return ""
+	}
+
+	cookie, err := r.Cookie(s.auth.cookieName)
+	if err != nil {
+		return ""
+	}
+	return cookie.Value
+}
+
+func (s *Server) writeAuthCookie(w http.ResponseWriter, r *http.Request, token string) {
+	if strings.TrimSpace(s.auth.cookieName) == "" {
+		return
+	}
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     s.auth.cookieName,
+		Value:    token,
+		Path:     "/",
+		MaxAge:   12 * 60 * 60,
+		HttpOnly: true,
+		SameSite: http.SameSiteStrictMode,
+		Secure:   r.TLS != nil,
+	})
+}
+
+func (s *Server) clearAuthCookie(w http.ResponseWriter, r *http.Request) {
+	if strings.TrimSpace(s.auth.cookieName) == "" {
+		return
+	}
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     s.auth.cookieName,
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		SameSite: http.SameSiteStrictMode,
+		Secure:   r.TLS != nil,
+	})
 }
 
 func readBearerToken(raw string) string {

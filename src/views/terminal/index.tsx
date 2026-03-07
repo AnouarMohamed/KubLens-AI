@@ -15,7 +15,7 @@ const QUICK_COMMANDS = [
   "kubectl get pods -A",
   "kubectl get nodes",
   "kubectl top pods -A",
-  "kubectl get events -A --sort-by=.metadata.creationTimestamp | Select-Object -Last 20",
+  "kubectl get events -A --sort-by=.metadata.creationTimestamp",
 ];
 
 export default function Terminal() {

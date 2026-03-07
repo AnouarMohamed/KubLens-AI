@@ -42,6 +42,8 @@ type Server struct {
 	logger    *slog.Logger
 	metrics   *requestMetrics
 	auth      authRuntime
+	limiter   rateLimiter
+	terminal  terminalRuntimePolicy
 	audit     *auditLog
 	stream    *streamHub
 	ai        ai.Provider
@@ -135,7 +137,7 @@ func newServer(clusterSvc clusterReader, now func() time.Time, logger *slog.Logg
 		now:            now,
 		logger:         logger,
 		metrics:        newRequestMetrics(now),
-		audit:          newAuditLog(maxAuditLimit),
+		audit:          newAuditLog(maxAuditLimit, "", logger),
 		stream:         newStreamHub(),
 		aiTTL:          8 * time.Second,
 		predictionsTTL: 8 * time.Second,
@@ -145,6 +147,14 @@ func newServer(clusterSvc clusterReader, now func() time.Time, logger *slog.Logg
 			BuiltAt: now().UTC().Format(time.RFC3339),
 		},
 	}
+	server.limiter.configure(RateLimitConfig{
+		Enabled:  true,
+		Requests: 300,
+		Window:   time.Minute,
+	})
+	server.terminal.configure(TerminalPolicy{
+		Enabled: true,
+	})
 
 	for _, opt := range opts {
 		opt(server)
@@ -159,12 +169,15 @@ func (s *Server) Router(distDir string) http.Handler {
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Recoverer)
 	r.Use(timeoutUnlessPath(20*time.Second, "/api/stream"))
+	r.Use(s.limiter.middleware(s.now))
 	r.Use(s.metrics.middleware(s.logger))
 	r.Use(s.authMiddleware)
 	r.Use(s.auditMiddleware)
 
 	r.Route("/api", func(api chi.Router) {
 		api.Get("/auth/session", s.handleAuthSession)
+		api.Post("/auth/login", s.handleAuthLogin)
+		api.Post("/auth/logout", s.handleAuthLogout)
 		api.Get("/version", s.handleVersion)
 		api.Get("/cluster-info", s.handleClusterInfo)
 		api.Get("/metrics", s.handleMetrics)

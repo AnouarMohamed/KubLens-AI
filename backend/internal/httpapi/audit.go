@@ -1,7 +1,12 @@
 package httpapi
 
 import (
+	"bufio"
+	"encoding/json"
+	"log/slog"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -18,21 +23,71 @@ const (
 	maxAuditLimit     = 500
 )
 
+type AuditConfig struct {
+	MaxItems int
+	FilePath string
+}
+
 type auditLog struct {
 	maxItems int
 	counter  atomic.Uint64
+	sink     auditSink
 	mu       sync.RWMutex
 	items    []model.AuditEntry
 }
 
-func newAuditLog(maxItems int) *auditLog {
+type auditSink interface {
+	write(entry model.AuditEntry) error
+}
+
+type fileAuditSink struct {
+	mu   sync.Mutex
+	file *os.File
+}
+
+func WithAuditConfig(config AuditConfig) Option {
+	return func(s *Server) {
+		maxItems := config.MaxItems
+		if maxItems <= 0 {
+			maxItems = maxAuditLimit
+		}
+		s.audit = newAuditLog(maxItems, config.FilePath, s.logger)
+	}
+}
+
+func newAuditLog(maxItems int, filePath string, logger *slog.Logger) *auditLog {
 	if maxItems <= 0 {
 		maxItems = maxAuditLimit
 	}
-	return &auditLog{
+	log := &auditLog{
 		maxItems: maxItems,
 		items:    make([]model.AuditEntry, 0, maxItems),
 	}
+
+	trimmedPath := strings.TrimSpace(filePath)
+	if trimmedPath == "" {
+		return log
+	}
+
+	sink, err := newFileAuditSink(trimmedPath)
+	if err != nil {
+		if logger != nil {
+			logger.Warn("audit file sink disabled", "path", trimmedPath, "error", err.Error())
+		}
+		return log
+	}
+
+	log.sink = sink
+	items, maxID, err := loadAuditEntries(trimmedPath, maxItems)
+	if err != nil {
+		if logger != nil {
+			logger.Warn("audit history load failed", "path", trimmedPath, "error", err.Error())
+		}
+		return log
+	}
+	log.items = items
+	log.counter.Store(maxID)
+	return log
 }
 
 func (l *auditLog) append(entry model.AuditEntry) model.AuditEntry {
@@ -42,11 +97,15 @@ func (l *auditLog) append(entry model.AuditEntry) model.AuditEntry {
 	}
 
 	l.mu.Lock()
-	defer l.mu.Unlock()
-
 	l.items = append(l.items, entry)
 	if overflow := len(l.items) - l.maxItems; overflow > 0 {
 		l.items = append([]model.AuditEntry(nil), l.items[overflow:]...)
+	}
+	sink := l.sink
+	l.mu.Unlock()
+
+	if sink != nil {
+		_ = sink.write(entry)
 	}
 
 	return entry
@@ -141,6 +200,71 @@ func parsePositiveInt(raw string, fallback int) int {
 		return fallback
 	}
 	return n
+}
+
+func newFileAuditSink(path string) (*fileAuditSink, error) {
+	clean := filepath.Clean(path)
+	if err := os.MkdirAll(filepath.Dir(clean), 0o755); err != nil {
+		return nil, err
+	}
+	file, err := os.OpenFile(clean, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	if err != nil {
+		return nil, err
+	}
+	return &fileAuditSink{file: file}, nil
+}
+
+func (s *fileAuditSink) write(entry model.AuditEntry) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	bytes, err := json.Marshal(entry)
+	if err != nil {
+		return err
+	}
+	if _, err := s.file.Write(append(bytes, '\n')); err != nil {
+		return err
+	}
+	return s.file.Sync()
+}
+
+func loadAuditEntries(path string, maxItems int) ([]model.AuditEntry, uint64, error) {
+	file, err := os.Open(filepath.Clean(path))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, 0, nil
+		}
+		return nil, 0, err
+	}
+	defer file.Close()
+
+	entries := make([]model.AuditEntry, 0, maxItems)
+	var maxID uint64
+
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			continue
+		}
+
+		var entry model.AuditEntry
+		if err := json.Unmarshal([]byte(line), &entry); err != nil {
+			continue
+		}
+		if id, err := strconv.ParseUint(strings.TrimSpace(entry.ID), 10, 64); err == nil && id > maxID {
+			maxID = id
+		}
+		entries = append(entries, entry)
+		if overflow := len(entries) - maxItems; overflow > 0 {
+			entries = append([]model.AuditEntry(nil), entries[overflow:]...)
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, 0, err
+	}
+
+	return entries, maxID, nil
 }
 
 func actionForRequest(method, path string) string {

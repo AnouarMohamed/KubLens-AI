@@ -23,7 +23,6 @@ import type {
 } from "../types";
 
 const API_PREFIX = "/api";
-const AUTH_TOKEN_KEY = "k8s-ops.auth-token.v1";
 
 class ApiError extends Error {
   status: number;
@@ -51,13 +50,12 @@ async function parseJsonSafely(response: Response): Promise<unknown> {
 }
 
 async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
-  const authHeader = buildAuthHeader();
   const response = await fetch(url, {
+    credentials: "same-origin",
     ...init,
     headers: {
       ...(init?.headers ?? {}),
       "Content-Type": "application/json",
-      ...(authHeader ? { Authorization: authHeader } : {}),
     },
   });
 
@@ -75,9 +73,8 @@ async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
 }
 
 async function requestText(url: string): Promise<string> {
-  const authHeader = buildAuthHeader();
   const response = await fetch(url, {
-    headers: authHeader ? { Authorization: authHeader } : undefined,
+    credentials: "same-origin",
   });
 
   if (!response.ok) {
@@ -100,8 +97,16 @@ async function requestPredictions(force = false): Promise<PredictionsResult> {
 }
 
 export const api = {
-  getAuthToken: () => getAuthToken(),
-  setAuthToken: (token: string) => setAuthToken(token),
+  login: (token: string) =>
+    requestJson<AuthSession>(apiPath("auth", "login"), {
+      method: "POST",
+      body: JSON.stringify({ token }),
+    }),
+  logout: () =>
+    requestJson<AuthSession>(apiPath("auth", "logout"), {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
   getStreamURL: () => buildStreamURL(),
   getAuthSession: () => requestJson<AuthSession>(apiPath("auth", "session")),
   getVersion: () => requestJson<BuildInfo>(apiPath("version")),
@@ -171,37 +176,6 @@ export const api = {
 
 export { ApiError };
 
-function buildAuthHeader(): string {
-  const token = getAuthToken();
-  if (!token) {
-    return "";
-  }
-  return `Bearer ${token}`;
-}
-
-function getAuthToken(): string {
-  try {
-    return (window.localStorage.getItem(AUTH_TOKEN_KEY) ?? "").trim();
-  } catch {
-    return "";
-  }
-}
-
-function setAuthToken(token: string): void {
-  const value = token.trim();
-  if (value === "") {
-    window.localStorage.removeItem(AUTH_TOKEN_KEY);
-    return;
-  }
-  window.localStorage.setItem(AUTH_TOKEN_KEY, value);
-}
-
 function buildStreamURL(): string {
-  const token = getAuthToken();
-  if (token === "") {
-    return apiPath("stream");
-  }
-
-  const query = new URLSearchParams({ token });
-  return `${apiPath("stream")}?${query.toString()}`;
+  return apiPath("stream");
 }

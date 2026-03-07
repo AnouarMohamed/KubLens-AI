@@ -40,27 +40,45 @@ export default function AuditView() {
   }, []);
 
   useEffect(() => {
-    const source = new EventSource(api.getStreamURL());
+    let source: EventSource | null = null;
+    let cancelled = false;
 
-    source.addEventListener("connected", () => {
-      setConnected(true);
-      setError(null);
-    });
-
-    source.addEventListener("audit", (event) => {
-      const payload = parseStreamEvent<AuditEntry>(event);
-      if (!payload) {
-        return;
+    const connectStream = async () => {
+      try {
+        const session = await api.getAuthSession();
+        if (cancelled) {
+          return;
+        }
+        if (session.enabled && !session.authenticated) {
+          setConnected(false);
+          setError("Authenticate from Profile to enable live stream.");
+          return;
+        }
+      } catch {
+        // Keep trying to open stream in local mode.
       }
-      setRows((current) => [payload.payload, ...current].slice(0, MAX_ROWS));
-    });
 
-    source.onerror = () => {
-      setConnected(false);
+      source = new EventSource(api.getStreamURL());
+      source.addEventListener("connected", () => {
+        setConnected(true);
+        setError(null);
+      });
+      source.addEventListener("audit", (event) => {
+        const payload = parseStreamEvent<AuditEntry>(event);
+        if (!payload) {
+          return;
+        }
+        setRows((current) => [payload.payload, ...current].slice(0, MAX_ROWS));
+      });
+      source.onerror = () => {
+        setConnected(false);
+      };
     };
 
+    void connectStream();
     return () => {
-      source.close();
+      cancelled = true;
+      source?.close();
       setConnected(false);
     };
   }, []);
@@ -173,4 +191,3 @@ function formatTime(value: string): string {
   }
   return date.toLocaleString();
 }
-

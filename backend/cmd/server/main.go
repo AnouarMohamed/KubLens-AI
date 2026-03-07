@@ -39,6 +39,9 @@ func main() {
 		Enabled: ragEnabled,
 	})
 	authConfig := parseAuthConfigFromEnv()
+	rateLimitConfig := parseRateLimitConfigFromEnv()
+	terminalPolicy := parseTerminalPolicyFromEnv()
+	auditConfig := parseAuditConfigFromEnv()
 	predictorURL := strings.TrimSpace(os.Getenv("PREDICTOR_BASE_URL"))
 	predictorTimeout := parseSecondsAsDuration(os.Getenv("PREDICTOR_TIMEOUT_SECONDS"), 4*time.Second)
 	buildInfo := model.BuildInfo{
@@ -54,6 +57,9 @@ func main() {
 		httpapi.WithDocsRetriever(ragSvc),
 		httpapi.WithPredictor(predictorURL, predictorTimeout),
 		httpapi.WithAuth(authConfig),
+		httpapi.WithRateLimit(rateLimitConfig),
+		httpapi.WithTerminalPolicy(terminalPolicy),
+		httpapi.WithAuditConfig(auditConfig),
 		httpapi.WithBuildInfo(buildInfo),
 	)
 
@@ -87,6 +93,21 @@ func main() {
 		log.Printf("Auth enabled with %d token(s)", len(authConfig.Tokens))
 	} else {
 		log.Printf("Auth disabled (local trusted mode)")
+	}
+	if rateLimitConfig.Enabled {
+		log.Printf("Rate limit enabled (%d requests per %s)", rateLimitConfig.Requests, rateLimitConfig.Window)
+	} else {
+		log.Printf("Rate limit disabled")
+	}
+	if terminalPolicy.Enabled {
+		log.Printf("Terminal policy enabled (allowed prefixes: %s)", strings.Join(terminalPolicy.AllowedPrefixes, ", "))
+	} else {
+		log.Printf("Terminal execution disabled by policy")
+	}
+	if strings.TrimSpace(auditConfig.FilePath) != "" {
+		log.Printf("Audit persistence enabled (%s)", auditConfig.FilePath)
+	} else {
+		log.Printf("Audit persistence disabled (in-memory only)")
 	}
 
 	go func() {
@@ -256,5 +277,44 @@ func parseAuthTokens(raw string) []httpapi.AuthToken {
 		})
 	}
 
+	return out
+}
+
+func parseRateLimitConfigFromEnv() httpapi.RateLimitConfig {
+	return httpapi.RateLimitConfig{
+		Enabled:  parseBoolDefault(os.Getenv("RATE_LIMIT_ENABLED"), true),
+		Requests: parseIntDefault(os.Getenv("RATE_LIMIT_REQUESTS"), 300),
+		Window:   parseSecondsAsDuration(os.Getenv("RATE_LIMIT_WINDOW_SECONDS"), time.Minute),
+	}
+}
+
+func parseTerminalPolicyFromEnv() httpapi.TerminalPolicy {
+	allowed := parseCSV(os.Getenv("TERMINAL_ALLOWED_PREFIXES"))
+	if len(allowed) == 0 {
+		allowed = []string{"kubectl", "helm", "kustomize", "echo", "pwd", "ls", "dir"}
+	}
+	return httpapi.TerminalPolicy{
+		Enabled:         parseBoolDefault(os.Getenv("TERMINAL_ENABLED"), true),
+		AllowedPrefixes: allowed,
+	}
+}
+
+func parseAuditConfigFromEnv() httpapi.AuditConfig {
+	return httpapi.AuditConfig{
+		MaxItems: parseIntDefault(os.Getenv("AUDIT_MAX_ITEMS"), 500),
+		FilePath: strings.TrimSpace(os.Getenv("AUDIT_LOG_FILE")),
+	}
+}
+
+func parseCSV(raw string) []string {
+	parts := strings.Split(strings.TrimSpace(raw), ",")
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		value := strings.TrimSpace(part)
+		if value == "" {
+			continue
+		}
+		out = append(out, value)
+	}
 	return out
 }

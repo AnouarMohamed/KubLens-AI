@@ -108,6 +108,43 @@ func TestAuditEndpointIncludesAuthFailures(t *testing.T) {
 	}
 }
 
+func TestAuthLoginCreatesCookieSession(t *testing.T) {
+	router := newAuthTestServer().Router("")
+
+	loginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(`{"token":"viewer-token"}`))
+	loginReq.Header.Set("Content-Type", "application/json")
+	loginResp := httptest.NewRecorder()
+	router.ServeHTTP(loginResp, loginReq)
+	if loginResp.Code != http.StatusOK {
+		t.Fatalf("login status = %d, want 200", loginResp.Code)
+	}
+
+	cookies := loginResp.Result().Cookies()
+	if len(cookies) == 0 {
+		t.Fatal("expected auth cookie")
+	}
+
+	readReq := httptest.NewRequest(http.MethodGet, "/api/pods", nil)
+	readReq.AddCookie(cookies[0])
+	readResp := httptest.NewRecorder()
+	router.ServeHTTP(readResp, readReq)
+	if readResp.Code != http.StatusOK {
+		t.Fatalf("cookie-auth read status = %d, want 200", readResp.Code)
+	}
+}
+
+func TestStreamRejectsQueryTokenAuthentication(t *testing.T) {
+	router := newAuthTestServer().Router("")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/stream?token=viewer-token", nil)
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("status code = %d, want 401", rr.Code)
+	}
+}
+
 func newAuthTestServer() *Server {
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
 	return newServer(

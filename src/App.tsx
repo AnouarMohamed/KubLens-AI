@@ -145,7 +145,7 @@ export default function App() {
   const [notifications, setNotifications] = useState<K8sEvent[]>([]);
   const [notificationError, setNotificationError] = useState<string | null>(null);
   const [settings, setSettings] = useState<UserSettings>(loadSettings);
-  const [authToken, setAuthToken] = useState(api.getAuthToken());
+  const [authToken, setAuthToken] = useState("");
   const [authSession, setAuthSession] = useState<AuthSession | null>(null);
   const [authMessage, setAuthMessage] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -346,19 +346,33 @@ export default function App() {
                   </label>
                   <button
                     onClick={async () => {
-                      api.setAuthToken(authToken);
                       try {
-                        const next = await api.getAuthSession();
+                        const next = await api.login(authToken);
                         setAuthSession(next);
-                        setAuthMessage("Token updated.");
+                        setAuthToken("");
+                        setAuthMessage("Session authenticated.");
                       } catch (err) {
                         setAuthSession(null);
-                        setAuthMessage(err instanceof Error ? err.message : "Failed to validate token");
+                        setAuthMessage(err instanceof Error ? err.message : "Failed to authenticate");
                       }
                     }}
                     className="rounded-xl border border-zinc-600 px-3 py-2 text-sm font-medium text-zinc-200 hover:bg-zinc-800"
                   >
-                    Save Token
+                    Authenticate
+                  </button>
+                  <button
+                    onClick={async () => {
+                      try {
+                        const next = await api.logout();
+                        setAuthSession(next);
+                        setAuthMessage("Session logged out.");
+                      } catch (err) {
+                        setAuthMessage(err instanceof Error ? err.message : "Logout failed");
+                      }
+                    }}
+                    className="rounded-xl border border-zinc-600 px-3 py-2 text-sm font-medium text-zinc-200 hover:bg-zinc-800"
+                  >
+                    Logout
                   </button>
                   {authMessage && <p className="text-xs text-zinc-400">{authMessage}</p>}
                   <button

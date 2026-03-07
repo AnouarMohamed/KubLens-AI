@@ -93,7 +93,10 @@ Request flow:
 
 ### Auth and access control
 - Endpoint: `GET /api/auth/session`
+- Login endpoint: `POST /api/auth/login`
+- Logout endpoint: `POST /api/auth/logout`
 - Disabled by default (`AUTH_ENABLED=false`), enabled by setting `AUTH_ENABLED=true`.
+- On login, backend sets a strict HttpOnly session cookie used by all API calls and SSE.
 - Role model:
   - `viewer`: read-only APIs + assistant + stream
   - `operator`: viewer + operational write actions
@@ -218,6 +221,13 @@ If provider fails/unavailable, assistant falls back safely to deterministic loca
 | `ASSISTANT_RAG_ENABLED` | `true` | Enable/disable docs RAG grounding |
 | `AUTH_ENABLED` | `false` | Enable bearer-token auth and role checks |
 | `AUTH_TOKENS` | `""` | Comma-separated `user:role:token` entries |
+| `RATE_LIMIT_ENABLED` | `true` | Enable API rate limiting |
+| `RATE_LIMIT_REQUESTS` | `300` | Requests allowed per window per client IP |
+| `RATE_LIMIT_WINDOW_SECONDS` | `60` | Rate limit window duration |
+| `TERMINAL_ENABLED` | `true` | Enable/disable terminal execution endpoint |
+| `TERMINAL_ALLOWED_PREFIXES` | `kubectl,helm,kustomize,echo,pwd,ls,dir` | Allowed command prefixes for terminal |
+| `AUDIT_LOG_FILE` | `""` | Optional JSONL file path for persistent audit history |
+| `AUDIT_MAX_ITEMS` | `500` | In-memory retained audit entries |
 | `APP_VERSION` | `dev` | Build metadata |
 | `APP_COMMIT` | `local` | Build metadata |
 | `APP_BUILT_AT` | current UTC | Build metadata |
@@ -233,6 +243,8 @@ Core endpoints:
 - `GET /api/cluster-info`
 - `GET /api/stats`
 - `GET /api/auth/session`
+- `POST /api/auth/login`
+- `POST /api/auth/logout`
 - `GET /api/pods`
 - `GET /api/nodes`
 - `GET /api/events`
