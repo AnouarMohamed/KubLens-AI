@@ -275,6 +275,7 @@ curl http://localhost:3000/api/pods
 curl http://localhost:3000/api/nodes
 curl http://localhost:3000/api/diagnostics
 curl http://localhost:3000/api/predictions
+curl http://localhost:3000/api/version
 ```
 
 ## Screenshots

@@ -2,6 +2,7 @@ import type {
   ActionResult,
   ApiMetricsSnapshot,
   AssistantResponse,
+  BuildInfo,
   ClusterInfo,
   ClusterStats,
   DiagnosticsResult,
@@ -79,6 +80,7 @@ async function requestText(url: string): Promise<string> {
 }
 
 export const api = {
+  getVersion: () => requestJson<BuildInfo>(apiPath("version")),
   getClusterInfo: () => requestJson<ClusterInfo>(apiPath("cluster-info")),
   getApiMetrics: () => requestJson<ApiMetricsSnapshot>(apiPath("metrics")),
   getNamespaces: () => requestJson<string[]>(apiPath("namespaces")),

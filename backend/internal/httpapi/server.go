@@ -43,6 +43,7 @@ type Server struct {
 	ai        ai.Provider
 	aiTTL     time.Duration
 	predictor predictionProvider
+	buildInfo model.BuildInfo
 }
 
 type Option func(*Server)
@@ -70,6 +71,20 @@ func WithPredictor(baseURL string, timeout time.Duration) Option {
 	}
 }
 
+func WithBuildInfo(info model.BuildInfo) Option {
+	return func(s *Server) {
+		if info.Version != "" {
+			s.buildInfo.Version = info.Version
+		}
+		if info.Commit != "" {
+			s.buildInfo.Commit = info.Commit
+		}
+		if info.BuiltAt != "" {
+			s.buildInfo.BuiltAt = info.BuiltAt
+		}
+	}
+}
+
 func New(clusterSvc clusterReader, opts ...Option) *Server {
 	return newServer(clusterSvc, time.Now, slog.New(slog.NewJSONHandler(os.Stdout, nil)), opts...)
 }
@@ -88,6 +103,11 @@ func newServer(clusterSvc clusterReader, now func() time.Time, logger *slog.Logg
 		logger:  logger,
 		metrics: newRequestMetrics(now),
 		aiTTL:   8 * time.Second,
+		buildInfo: model.BuildInfo{
+			Version: "dev",
+			Commit:  "local",
+			BuiltAt: now().UTC().Format(time.RFC3339),
+		},
 	}
 
 	for _, opt := range opts {
@@ -106,6 +126,7 @@ func (s *Server) Router(distDir string) http.Handler {
 	r.Use(middleware.Timeout(20 * time.Second))
 
 	r.Route("/api", func(api chi.Router) {
+		api.Get("/version", s.handleVersion)
 		api.Get("/cluster-info", s.handleClusterInfo)
 		api.Get("/metrics", s.handleMetrics)
 		api.Get("/namespaces", s.handleNamespaces)

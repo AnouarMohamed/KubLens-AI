@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { VIEW_SECTIONS } from "../features/viewCatalog";
-import { api } from "../lib/api";
-import type { ClusterStats, View } from "../types";
+import { ApiError, api } from "../lib/api";
+import type { BuildInfo, ClusterStats, View } from "../types";
 
 interface SidebarProps {
   currentView: View;
@@ -11,24 +11,40 @@ interface SidebarProps {
 export default function Sidebar({ currentView, onViewChange }: SidebarProps) {
   const [isReal, setIsReal] = useState(false);
   const [stats, setStats] = useState<ClusterStats | null>(null);
+  const [build, setBuild] = useState<BuildInfo | null>(null);
+  const [backendLegacy, setBackendLegacy] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
 
-    Promise.all([api.getClusterInfo(), api.getStats()])
-      .then(([cluster, summary]) => {
-        if (cancelled) {
-          return;
-        }
-        setIsReal(cluster.isRealCluster);
-        setStats(summary);
-      })
-      .catch(() => {
-        if (cancelled) {
-          return;
-        }
+    Promise.allSettled([api.getClusterInfo(), api.getStats(), api.getVersion()]).then(([clusterResult, statsResult, versionResult]) => {
+      if (cancelled) {
+        return;
+      }
+
+      if (clusterResult.status === "fulfilled") {
+        setIsReal(clusterResult.value.isRealCluster);
+      } else {
         setIsReal(false);
-      });
+      }
+
+      if (statsResult.status === "fulfilled") {
+        setStats(statsResult.value);
+      }
+
+      if (versionResult.status === "fulfilled") {
+        setBuild(versionResult.value);
+        setBackendLegacy(false);
+      } else {
+        const err = versionResult.reason;
+        setBuild(null);
+        setBackendLegacy(err instanceof ApiError && err.status === 404);
+      }
+    }).catch(() => {
+      if (!cancelled) {
+        setIsReal(false);
+      }
+    });
 
     return () => {
       cancelled = true;
@@ -102,8 +118,28 @@ export default function Sidebar({ currentView, onViewChange }: SidebarProps) {
         <footer className="px-5 py-4 border-t border-zinc-700 bg-zinc-800/60">
           <p className="text-[11px] uppercase tracking-wide text-zinc-500">Tip</p>
           <p className="text-xs text-zinc-300 mt-1">Press <span className="font-mono font-semibold">/</span> to focus search.</p>
+          <div className="mt-3 rounded-lg border border-zinc-700 bg-zinc-900/70 px-2 py-1.5">
+            <p className="text-[10px] uppercase tracking-wide text-zinc-500">Backend Build</p>
+            {build ? (
+              <p className="mt-1 text-[11px] text-zinc-300 font-mono">
+                {build.version} @ {shortCommit(build.commit)}
+              </p>
+            ) : backendLegacy ? (
+              <p className="mt-1 text-[11px] text-[#eab308]">legacy backend detected</p>
+            ) : (
+              <p className="mt-1 text-[11px] text-zinc-500">unavailable</p>
+            )}
+          </div>
         </footer>
       </div>
     </aside>
   );
+}
+
+function shortCommit(commit: string): string {
+  const trimmed = commit.trim();
+  if (trimmed.length <= 8) {
+    return trimmed;
+  }
+  return trimmed.slice(0, 8);
 }

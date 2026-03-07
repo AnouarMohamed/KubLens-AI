@@ -138,6 +138,12 @@ type ClusterInfo struct {
 	IsRealCluster bool `json:"isRealCluster"`
 }
 
+type BuildInfo struct {
+	Version string `json:"version"`
+	Commit  string `json:"commit"`
+	BuiltAt string `json:"builtAt"`
+}
+
 type PodStats struct {
 	Total   int `json:"total"`
 	Running int `json:"running"`

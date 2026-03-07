@@ -66,6 +66,7 @@ curl http://localhost:3000/api/stats
 curl http://localhost:3000/api/pods
 curl http://localhost:3000/api/nodes
 curl http://localhost:3000/api/predictions
+curl http://localhost:3000/api/version
 ```
 
 ## 9. Build For Deployment
@@ -140,4 +141,5 @@ kubectl -n kubernetes-operations-dashboard port-forward svc/kubernetes-operation
 - `isRealCluster=false`: invalid or missing `KUBECONFIG_DATA`
 - Pod/node usage is `N/A`: Metrics Server unavailable or RBAC denies access
 - `source=local-fallback` in predictions: predictor service unavailable or misconfigured
+- `/api/predictions` returns 404: running backend is outdated, restart API process
 - Terminal command fails: invalid cwd, command timeout, or shell error

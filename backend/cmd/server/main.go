@@ -16,6 +16,7 @@ import (
 	"kubelens-backend/internal/ai"
 	"kubelens-backend/internal/cluster"
 	"kubelens-backend/internal/httpapi"
+	"kubelens-backend/internal/model"
 )
 
 func main() {
@@ -34,12 +35,18 @@ func main() {
 	}
 	predictorURL := strings.TrimSpace(os.Getenv("PREDICTOR_BASE_URL"))
 	predictorTimeout := parseSecondsAsDuration(os.Getenv("PREDICTOR_TIMEOUT_SECONDS"), 4*time.Second)
+	buildInfo := model.BuildInfo{
+		Version: getEnv("APP_VERSION", "dev"),
+		Commit:  getEnv("APP_COMMIT", "local"),
+		BuiltAt: getEnv("APP_BUILT_AT", time.Now().UTC().Format(time.RFC3339)),
+	}
 
 	serverHandler := httpapi.New(
 		clusterSvc,
 		httpapi.WithAIProvider(aiProvider),
 		httpapi.WithAITimeout(aiTimeout),
 		httpapi.WithPredictor(predictorURL, predictorTimeout),
+		httpapi.WithBuildInfo(buildInfo),
 	)
 
 	server := &http.Server{
@@ -52,6 +59,7 @@ func main() {
 	}
 
 	log.Printf("KubeLens Go backend listening on http://localhost:%d (realCluster=%t)", port, clusterSvc.IsRealCluster())
+	log.Printf("Build info: version=%s commit=%s builtAt=%s", buildInfo.Version, buildInfo.Commit, buildInfo.BuiltAt)
 	if aiProvider != nil {
 		log.Printf("Assistant provider enabled (%s, timeout=%s)", aiProvider.Name(), aiTimeout)
 	} else {

@@ -80,6 +80,12 @@ export interface ClusterInfo {
   isRealCluster: boolean;
 }
 
+export interface BuildInfo {
+  version: string;
+  commit: string;
+  builtAt: string;
+}
+
 export interface ClusterStats {
   pods: { total: number; running: number; pending: number; failed: number };
   nodes: { total: number; ready: number; notReady: number };

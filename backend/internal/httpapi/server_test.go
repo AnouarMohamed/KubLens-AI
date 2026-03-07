@@ -275,6 +275,36 @@ func TestActionEndpoints(t *testing.T) {
 	}
 }
 
+func TestVersionEndpoint(t *testing.T) {
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	server := newServer(
+		testClusterReader{},
+		nil,
+		logger,
+		WithBuildInfo(model.BuildInfo{
+			Version: "v-test",
+			Commit:  "abc1234",
+			BuiltAt: "2026-03-07T00:00:00Z",
+		}),
+	)
+	router := server.Router("")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/version", nil)
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status code = %d, want 200", rr.Code)
+	}
+
+	var payload model.BuildInfo
+	if err := json.NewDecoder(rr.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if payload.Version != "v-test" || payload.Commit != "abc1234" {
+		t.Fatalf("unexpected version payload: %+v", payload)
+	}
+}
+
 func TestPredictionsEndpointUsesFallback(t *testing.T) {
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
 	server := newServer(testClusterReader{}, nil, logger)

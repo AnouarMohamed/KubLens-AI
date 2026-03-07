@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { api } from "../lib/api";
+import { ApiError, api } from "../lib/api";
 import type { IncidentPrediction, PredictionsResult } from "../types";
 
 export default function Predictions() {
@@ -15,7 +15,12 @@ export default function Predictions() {
       setPayload(response);
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load predictions");
+      if (err instanceof ApiError && err.status === 404) {
+        setError("Predictions endpoint is missing on the running backend. Restart API to load latest code.");
+      } else {
+        setError(err instanceof Error ? err.message : "Failed to load predictions");
+      }
+      setPayload(null);
     } finally {
       setIsLoading(false);
     }
@@ -36,6 +41,7 @@ export default function Predictions() {
 
   const items = payload?.items ?? [];
   const summary = useMemo(() => summarize(items), [items]);
+  const topItems = useMemo(() => items.slice(0, 3), [items]);
 
   return (
     <div className="space-y-5">
@@ -43,7 +49,7 @@ export default function Predictions() {
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h2 className="text-2xl font-semibold text-zinc-100 tracking-tight">Predictive Incidents</h2>
-            <p className="text-sm text-zinc-400 mt-1">Risk forecasts for pods and nodes based on live cluster behavior.</p>
+            <p className="text-sm text-zinc-400 mt-1">Forecasted incidents ranked by risk and confidence.</p>
           </div>
           <div className="flex items-center gap-3">
             <label className="text-xs text-zinc-300 rounded-lg border border-zinc-700 px-3 py-2 bg-zinc-800/70">
@@ -61,21 +67,54 @@ export default function Predictions() {
         </div>
       </header>
 
-      {error && <div className="rounded-xl border border-zinc-700 bg-zinc-900/80 px-3 py-2 text-sm text-zinc-200">{error}</div>}
+      {error && <div className="rounded-xl border border-[#eab308]/45 bg-[#eab308]/12 px-3 py-2 text-sm text-zinc-100">{error}</div>}
 
-      <section className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <StatCard label="Prediction Source" value={payload?.source ?? "-"} />
+      <section className="grid grid-cols-1 md:grid-cols-5 gap-4">
+        <StatCard label="Prediction Source" value={payload?.source ?? "-"} badge={sourceBadge(payload?.source)} />
         <StatCard label="Total Predictions" value={String(summary.total)} />
         <StatCard label="High Risk (80+)" value={String(summary.high)} />
         <StatCard label="Medium Risk (60-79)" value={String(summary.medium)} />
+        <StatCard label="Generated At" value={formatTimestamp(payload?.generatedAt)} />
       </section>
 
       <section className="surface p-5">
         <div className="flex items-center justify-between gap-2">
-          <h3 className="text-sm font-semibold text-zinc-100">Risk Forecast Table</h3>
-          <p className="text-xs text-zinc-500">Generated: {formatTimestamp(payload?.generatedAt)}</p>
+          <h3 className="text-sm font-semibold text-zinc-100">Risk Distribution</h3>
+          <p className="text-xs text-zinc-500">High {summary.high} | Medium {summary.medium} | Low {summary.low}</p>
         </div>
+        <div className="mt-3 h-4 overflow-hidden rounded-lg border border-zinc-700 bg-zinc-800">
+          <div className="h-full flex">
+            <div className="bg-[#d946ef]" style={{ width: `${summary.highPct}%` }} />
+            <div className="bg-[#eab308]" style={{ width: `${summary.mediumPct}%` }} />
+            <div className="bg-[#34c759]" style={{ width: `${summary.lowPct}%` }} />
+          </div>
+        </div>
+      </section>
 
+      <section className="grid grid-cols-1 xl:grid-cols-3 gap-4">
+        {topItems.map((item) => (
+          <article key={item.id} className="surface p-4">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-sm font-semibold text-zinc-100">{item.resourceKind}: {item.resource}</p>
+              <RiskBadge score={item.riskScore} />
+            </div>
+            {item.namespace && <p className="text-xs text-zinc-500 mt-1">{item.namespace}</p>}
+            <p className="text-sm text-zinc-300 mt-3">{item.summary}</p>
+            <p className="text-sm text-zinc-200 mt-2">
+              <span className="font-semibold">Action:</span> {item.recommendation}
+            </p>
+            <p className="text-xs text-zinc-500 mt-2">Confidence: {item.confidence}%</p>
+          </article>
+        ))}
+        {topItems.length === 0 && (
+          <article className="surface p-4 xl:col-span-3">
+            <p className="text-sm text-zinc-400">No high-signal predictions yet. Generate cluster activity and refresh.</p>
+          </article>
+        )}
+      </section>
+
+      <section className="surface p-5">
+        <h3 className="text-sm font-semibold text-zinc-100">Risk Forecast Table</h3>
         <div className="mt-4 overflow-x-auto">
           <table className="min-w-full text-left text-sm">
             <thead className="bg-zinc-800/70 text-xs uppercase tracking-wide text-zinc-400">
@@ -128,11 +167,12 @@ export default function Predictions() {
   );
 }
 
-function StatCard({ label, value }: { label: string; value: string }) {
+function StatCard({ label, value, badge }: { label: string; value: string; badge?: { text: string; className: string } }) {
   return (
     <div className="kpi">
       <p className="text-[11px] uppercase tracking-wide text-zinc-500 font-semibold">{label}</p>
-      <p className="mt-2 text-2xl font-semibold text-zinc-100">{value}</p>
+      <p className="mt-2 text-xl font-semibold text-zinc-100 break-words">{value}</p>
+      {badge && <span className={`mt-2 inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${badge.className}`}>{badge.text}</span>}
     </div>
   );
 }
@@ -151,16 +191,28 @@ function RiskBadge({ score }: { score: number }) {
 function summarize(items: IncidentPrediction[]) {
   let high = 0;
   let medium = 0;
+  let low = 0;
 
   for (const item of items) {
     if (item.riskScore >= 80) {
       high++;
     } else if (item.riskScore >= 60) {
       medium++;
+    } else {
+      low++;
     }
   }
 
-  return { total: items.length, high, medium };
+  const total = items.length || 1;
+  return {
+    total: items.length,
+    high,
+    medium,
+    low,
+    highPct: (high / total) * 100,
+    mediumPct: (medium / total) * 100,
+    lowPct: (low / total) * 100,
+  };
 }
 
 function formatTimestamp(value?: string): string {
@@ -172,4 +224,19 @@ function formatTimestamp(value?: string): string {
     return value;
   }
   return parsed.toLocaleString();
+}
+
+function sourceBadge(source?: string): { text: string; className: string } | undefined {
+  if (!source) {
+    return undefined;
+  }
+
+  const normalized = source.toLowerCase();
+  if (normalized.includes("python")) {
+    return { text: "live predictor", className: "border-[#34c759]/45 bg-[#34c759]/14 text-zinc-100" };
+  }
+  if (normalized.includes("fallback")) {
+    return { text: "fallback", className: "border-[#eab308]/45 bg-[#eab308]/14 text-zinc-100" };
+  }
+  return { text: "custom", className: "border-zinc-600 bg-zinc-800/70 text-zinc-100" };
 }
