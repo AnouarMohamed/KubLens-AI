@@ -86,6 +86,18 @@ export interface BuildInfo {
   builtAt: string;
 }
 
+export interface SessionUser {
+  name: string;
+  role: "viewer" | "operator" | "admin";
+}
+
+export interface AuthSession {
+  enabled: boolean;
+  authenticated: boolean;
+  user?: SessionUser;
+  permissions: string[];
+}
+
 export interface ClusterStats {
   pods: { total: number; running: number; pending: number; failed: number };
   nodes: { total: number; ready: number; notReady: number };
@@ -202,6 +214,34 @@ export interface ApiMetricsSnapshot {
   routes: ApiRouteMetrics[];
 }
 
+export interface AuditEntry {
+  id: string;
+  timestamp: string;
+  requestId?: string;
+  method: string;
+  path: string;
+  route?: string;
+  action?: string;
+  status: number;
+  durationMs: number;
+  bytes: number;
+  clientIp?: string;
+  user?: string;
+  role?: string;
+  success: boolean;
+}
+
+export interface AuditLogResponse {
+  total: number;
+  items: AuditEntry[];
+}
+
+export interface StreamEvent<T = unknown> {
+  type: string;
+  timestamp: string;
+  payload: T;
+}
+
 export interface TerminalExecRequest {
   command: string;
   cwd?: string;
@@ -241,6 +281,7 @@ export type View =
   | "serviceaccounts"
   | "rbac"
   | "metrics"
+  | "audit"
   | "predictions"
   | "diagnostics"
   | "assistant"

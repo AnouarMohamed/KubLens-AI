@@ -38,6 +38,7 @@ func main() {
 	ragSvc := rag.NewService(rag.Config{
 		Enabled: ragEnabled,
 	})
+	authConfig := parseAuthConfigFromEnv()
 	predictorURL := strings.TrimSpace(os.Getenv("PREDICTOR_BASE_URL"))
 	predictorTimeout := parseSecondsAsDuration(os.Getenv("PREDICTOR_TIMEOUT_SECONDS"), 4*time.Second)
 	buildInfo := model.BuildInfo{
@@ -52,6 +53,7 @@ func main() {
 		httpapi.WithAITimeout(aiTimeout),
 		httpapi.WithDocsRetriever(ragSvc),
 		httpapi.WithPredictor(predictorURL, predictorTimeout),
+		httpapi.WithAuth(authConfig),
 		httpapi.WithBuildInfo(buildInfo),
 	)
 
@@ -80,6 +82,11 @@ func main() {
 		log.Printf("Predictor service enabled (%s, timeout=%s)", predictorURL, predictorTimeout)
 	} else {
 		log.Printf("Predictor service disabled (local fallback mode)")
+	}
+	if authConfig.Enabled {
+		log.Printf("Auth enabled with %d token(s)", len(authConfig.Tokens))
+	} else {
+		log.Printf("Auth disabled (local trusted mode)")
 	}
 
 	go func() {
@@ -191,4 +198,63 @@ func parseBoolDefault(raw string, fallback bool) bool {
 	default:
 		return fallback
 	}
+}
+
+func parseAuthConfigFromEnv() httpapi.AuthConfig {
+	enabled := parseBoolDefault(os.Getenv("AUTH_ENABLED"), false)
+	raw := strings.TrimSpace(os.Getenv("AUTH_TOKENS"))
+	if !enabled {
+		return httpapi.AuthConfig{Enabled: false}
+	}
+
+	tokens := parseAuthTokens(raw)
+	if len(tokens) == 0 {
+		// Deterministic fallback tokens for local development when auth is enabled.
+		tokens = []httpapi.AuthToken{
+			{Token: "kubelens-viewer", User: "viewer", Role: "viewer"},
+			{Token: "kubelens-operator", User: "operator", Role: "operator"},
+			{Token: "kubelens-admin", User: "admin", Role: "admin"},
+		}
+	}
+
+	return httpapi.AuthConfig{
+		Enabled: true,
+		Tokens:  tokens,
+	}
+}
+
+func parseAuthTokens(raw string) []httpapi.AuthToken {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+
+	entries := strings.Split(raw, ",")
+	out := make([]httpapi.AuthToken, 0, len(entries))
+	for _, entry := range entries {
+		item := strings.TrimSpace(entry)
+		if item == "" {
+			continue
+		}
+
+		parts := strings.Split(item, ":")
+		if len(parts) != 3 {
+			continue
+		}
+
+		user := strings.TrimSpace(parts[0])
+		role := strings.TrimSpace(parts[1])
+		token := strings.TrimSpace(parts[2])
+		if user == "" || role == "" || token == "" {
+			continue
+		}
+
+		out = append(out, httpapi.AuthToken{
+			Token: token,
+			User:  user,
+			Role:  role,
+		})
+	}
+
+	return out
 }

@@ -3,9 +3,10 @@ import Sidebar from "./components/Sidebar";
 import Dashboard from "./views/dashboard";
 import { findViewByQuery, getViewItem } from "./features/viewCatalog";
 import { api } from "./lib/api";
-import type { K8sEvent, View } from "./types";
+import type { AuthSession, K8sEvent, View } from "./types";
 
 const Metrics = lazy(() => import("./views/metrics"));
+const Audit = lazy(() => import("./views/audit"));
 const Pods = lazy(() => import("./views/pods"));
 const Nodes = lazy(() => import("./views/nodes"));
 const Diagnostics = lazy(() => import("./views/diagnostics"));
@@ -29,6 +30,11 @@ const PRIMARY_VIEWS: Partial<Record<View, ReactElement>> = {
   metrics: (
     <Suspense fallback={<ViewLoadingState label="Loading metrics..." />}>
       <Metrics />
+    </Suspense>
+  ),
+  audit: (
+    <Suspense fallback={<ViewLoadingState label="Loading audit trail..." />}>
+      <Audit />
     </Suspense>
   ),
   predictions: (
@@ -114,6 +120,7 @@ function loadLastView(): View {
       "serviceaccounts",
       "rbac",
       "metrics",
+      "audit",
       "predictions",
       "diagnostics",
       "terminal",
@@ -138,6 +145,9 @@ export default function App() {
   const [notifications, setNotifications] = useState<K8sEvent[]>([]);
   const [notificationError, setNotificationError] = useState<string | null>(null);
   const [settings, setSettings] = useState<UserSettings>(loadSettings);
+  const [authToken, setAuthToken] = useState(api.getAuthToken());
+  const [authSession, setAuthSession] = useState<AuthSession | null>(null);
+  const [authMessage, setAuthMessage] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
 
   const currentViewMeta = getViewItem(currentView);
@@ -175,6 +185,25 @@ export default function App() {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .getAuthSession()
+      .then((session) => {
+        if (!cancelled) {
+          setAuthSession(session);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setAuthSession(null);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -298,9 +327,40 @@ export default function App() {
 
               {panel === "profile" && (
                 <PanelShell title="Profile" subtitle="Current operator identity">
-                  <InfoRow label="User" value="Cluster Admin" />
-                  <InfoRow label="Role" value="Platform Engineering" />
-                  <InfoRow label="Session" value="Authenticated" />
+                  <InfoRow label="Auth Mode" value={authSession?.enabled ? "Token protected" : "Local trusted mode"} />
+                  <InfoRow label="Session" value={authSession?.authenticated ? "Authenticated" : "Not authenticated"} />
+                  <InfoRow label="User" value={authSession?.user?.name ?? "N/A"} />
+                  <InfoRow label="Role" value={authSession?.user?.role ?? "N/A"} />
+                  <div className="rounded-xl border border-zinc-700 bg-zinc-800/60 px-3 py-2">
+                    <p className="text-xs text-zinc-400">Permissions</p>
+                    <p className="mt-1 text-sm text-zinc-200">{authSession?.permissions?.join(", ") || "none"}</p>
+                  </div>
+                  <label className="block rounded-xl border border-zinc-700 bg-zinc-800/60 px-3 py-2 text-xs text-zinc-400">
+                    Bearer token
+                    <input
+                      value={authToken}
+                      onChange={(event) => setAuthToken(event.target.value)}
+                      placeholder="Paste API token"
+                      className="mt-2 h-10 w-full rounded-lg border border-zinc-600 bg-zinc-950 px-3 text-sm text-zinc-100"
+                    />
+                  </label>
+                  <button
+                    onClick={async () => {
+                      api.setAuthToken(authToken);
+                      try {
+                        const next = await api.getAuthSession();
+                        setAuthSession(next);
+                        setAuthMessage("Token updated.");
+                      } catch (err) {
+                        setAuthSession(null);
+                        setAuthMessage(err instanceof Error ? err.message : "Failed to validate token");
+                      }
+                    }}
+                    className="rounded-xl border border-zinc-600 px-3 py-2 text-sm font-medium text-zinc-200 hover:bg-zinc-800"
+                  >
+                    Save Token
+                  </button>
+                  {authMessage && <p className="text-xs text-zinc-400">{authMessage}</p>}
                   <button
                     onClick={() => navigator.clipboard.writeText(currentViewMeta.kubectlCommand)}
                     className="rounded-xl border border-zinc-600 px-3 py-2 text-sm font-medium text-zinc-200 hover:bg-zinc-800"

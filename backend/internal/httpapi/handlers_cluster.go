@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strconv"
@@ -253,24 +254,7 @@ func (s *Server) handleCordonNode(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
-	pods, nodes := s.cluster.Snapshot(r.Context())
-
-	stats := model.ClusterStats{
-		Pods: model.PodStats{
-			Total:   len(pods),
-			Running: countPods(pods, model.PodStatusRunning),
-			Pending: countPods(pods, model.PodStatusPending),
-			Failed:  countPods(pods, model.PodStatusFailed),
-		},
-		Nodes: model.NodeStats{
-			Total:    len(nodes),
-			Ready:    countNodes(nodes, model.NodeStatusReady),
-			NotReady: countNodesNotReady(nodes),
-		},
-		Cluster: clusterCapacityFromNodes(nodes, s.cluster.IsRealCluster()),
-	}
-
-	writeJSON(w, http.StatusOK, stats)
+	writeJSON(w, http.StatusOK, s.currentClusterStats(r.Context()))
 }
 
 func (s *Server) handleDiagnostics(w http.ResponseWriter, r *http.Request) {
@@ -286,6 +270,24 @@ func countPods(pods []model.PodSummary, status model.PodStatus) int {
 		}
 	}
 	return count
+}
+
+func (s *Server) currentClusterStats(ctx context.Context) model.ClusterStats {
+	pods, nodes := s.cluster.Snapshot(ctx)
+	return model.ClusterStats{
+		Pods: model.PodStats{
+			Total:   len(pods),
+			Running: countPods(pods, model.PodStatusRunning),
+			Pending: countPods(pods, model.PodStatusPending),
+			Failed:  countPods(pods, model.PodStatusFailed),
+		},
+		Nodes: model.NodeStats{
+			Total:    len(nodes),
+			Ready:    countNodes(nodes, model.NodeStatusReady),
+			NotReady: countNodesNotReady(nodes),
+		},
+		Cluster: clusterCapacityFromNodes(nodes, s.cluster.IsRealCluster()),
+	}
 }
 
 func countNodes(nodes []model.NodeSummary, status model.NodeStatus) int {

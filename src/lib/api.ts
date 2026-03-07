@@ -1,6 +1,8 @@
 import type {
   ActionResult,
+  AuditLogResponse,
   ApiMetricsSnapshot,
+  AuthSession,
   AssistantResponse,
   BuildInfo,
   ClusterInfo,
@@ -21,6 +23,7 @@ import type {
 } from "../types";
 
 const API_PREFIX = "/api";
+const AUTH_TOKEN_KEY = "k8s-ops.auth-token.v1";
 
 class ApiError extends Error {
   status: number;
@@ -48,11 +51,13 @@ async function parseJsonSafely(response: Response): Promise<unknown> {
 }
 
 async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
+  const authHeader = buildAuthHeader();
   const response = await fetch(url, {
     ...init,
     headers: {
       ...(init?.headers ?? {}),
       "Content-Type": "application/json",
+      ...(authHeader ? { Authorization: authHeader } : {}),
     },
   });
 
@@ -70,7 +75,10 @@ async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
 }
 
 async function requestText(url: string): Promise<string> {
-  const response = await fetch(url);
+  const authHeader = buildAuthHeader();
+  const response = await fetch(url, {
+    headers: authHeader ? { Authorization: authHeader } : undefined,
+  });
 
   if (!response.ok) {
     throw new ApiError(`Request failed with status ${response.status}`, response.status);
@@ -92,9 +100,14 @@ async function requestPredictions(force = false): Promise<PredictionsResult> {
 }
 
 export const api = {
+  getAuthToken: () => getAuthToken(),
+  setAuthToken: (token: string) => setAuthToken(token),
+  getStreamURL: () => buildStreamURL(),
+  getAuthSession: () => requestJson<AuthSession>(apiPath("auth", "session")),
   getVersion: () => requestJson<BuildInfo>(apiPath("version")),
   getClusterInfo: () => requestJson<ClusterInfo>(apiPath("cluster-info")),
   getApiMetrics: () => requestJson<ApiMetricsSnapshot>(apiPath("metrics")),
+  getAuditLog: (limit = 120) => requestJson<AuditLogResponse>(`${apiPath("audit")}?limit=${limit}`),
   getNamespaces: () => requestJson<string[]>(apiPath("namespaces")),
   getResources: (kind: string) => requestJson<ResourceList>(apiPath("resources", kind)),
   getResourceYAML: (kind: string, namespace: string, name: string) =>
@@ -157,3 +170,38 @@ export const api = {
 };
 
 export { ApiError };
+
+function buildAuthHeader(): string {
+  const token = getAuthToken();
+  if (!token) {
+    return "";
+  }
+  return `Bearer ${token}`;
+}
+
+function getAuthToken(): string {
+  try {
+    return (window.localStorage.getItem(AUTH_TOKEN_KEY) ?? "").trim();
+  } catch {
+    return "";
+  }
+}
+
+function setAuthToken(token: string): void {
+  const value = token.trim();
+  if (value === "") {
+    window.localStorage.removeItem(AUTH_TOKEN_KEY);
+    return;
+  }
+  window.localStorage.setItem(AUTH_TOKEN_KEY, value);
+}
+
+function buildStreamURL(): string {
+  const token = getAuthToken();
+  if (token === "") {
+    return apiPath("stream");
+  }
+
+  const query = new URLSearchParams({ token });
+  return `${apiPath("stream")}?${query.toString()}`;
+}

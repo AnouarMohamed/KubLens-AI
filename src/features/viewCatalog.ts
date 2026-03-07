@@ -87,6 +87,7 @@ export const VIEW_SECTIONS: ViewSection[] = [
     label: "Observability",
     items: [
       { id: "metrics", label: "Metrics", description: "Interactive analytics, graphs, trends, and API telemetry.", kubectlCommand: "kubectl top pods -A" },
+      { id: "audit", label: "Audit Trail", description: "Live request and action history with operator attribution.", kubectlCommand: "kubectl get events -A --sort-by=.metadata.creationTimestamp" },
       {
         id: "predictions",
         label: "Predictions",

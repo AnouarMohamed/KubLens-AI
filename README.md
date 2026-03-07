@@ -34,6 +34,9 @@ It is designed to run in two modes:
 - Diagnostics engine: deterministic, auditable issue detection with severity + recommendations.
 - Predictions engine: external Python predictor with local fallback for resilience.
 - Assistant: intent-aware responses, optional AI enhancement, and documentation-grounded citations (RAG).
+- Auth + RBAC: token-based viewer/operator/admin roles for API and UI actions.
+- Audit trail: structured request/action history with operator attribution.
+- Real-time stream: server-sent events (SSE) for live audit + cluster stats updates.
 - Terminal execution: run shell commands from UI with timeout and output capture.
 - Operational actions: create/restart/delete pod, cordon node, scale/restart/rollback workloads, edit/apply resource YAML.
 
@@ -87,6 +90,22 @@ Request flow:
   - max command length
   - timeout cap
   - stdout/stderr + exit code returned
+
+### Auth and access control
+- Endpoint: `GET /api/auth/session`
+- Disabled by default (`AUTH_ENABLED=false`), enabled by setting `AUTH_ENABLED=true`.
+- Role model:
+  - `viewer`: read-only APIs + assistant + stream
+  - `operator`: viewer + operational write actions
+  - `admin`: operator + terminal execution
+
+### Audit trail and live stream
+- Endpoint: `GET /api/audit?limit=150`
+- Stream endpoint: `GET /api/stream` (SSE)
+- Every API call is recorded with method/path/status/duration/user/role and exposed in the Audit view.
+- Stream emits:
+  - `audit` events for request/activity changes
+  - `stats` events for periodic cluster summary updates
 
 ---
 
@@ -197,6 +216,8 @@ If provider fails/unavailable, assistant falls back safely to deterministic loca
 | `ASSISTANT_TEMPERATURE` | `0.2` | Provider temperature |
 | `ASSISTANT_MAX_TOKENS` | `700` | Provider max output tokens |
 | `ASSISTANT_RAG_ENABLED` | `true` | Enable/disable docs RAG grounding |
+| `AUTH_ENABLED` | `false` | Enable bearer-token auth and role checks |
+| `AUTH_TOKENS` | `""` | Comma-separated `user:role:token` entries |
 | `APP_VERSION` | `dev` | Build metadata |
 | `APP_COMMIT` | `local` | Build metadata |
 | `APP_BUILT_AT` | current UTC | Build metadata |
@@ -211,9 +232,12 @@ Core endpoints:
 
 - `GET /api/cluster-info`
 - `GET /api/stats`
+- `GET /api/auth/session`
 - `GET /api/pods`
 - `GET /api/nodes`
 - `GET /api/events`
+- `GET /api/audit`
+- `GET /api/stream` (SSE)
 - `GET /api/resources/{kind}`
 - `GET /api/resources/{kind}/{namespace}/{name}/yaml`
 - `PUT /api/resources/{kind}/{namespace}/{name}/yaml`

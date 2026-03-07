@@ -41,6 +41,9 @@ type Server struct {
 	now       func() time.Time
 	logger    *slog.Logger
 	metrics   *requestMetrics
+	auth      authRuntime
+	audit     *auditLog
+	stream    *streamHub
 	ai        ai.Provider
 	aiTTL     time.Duration
 	docs      docsRetriever
@@ -132,6 +135,8 @@ func newServer(clusterSvc clusterReader, now func() time.Time, logger *slog.Logg
 		now:            now,
 		logger:         logger,
 		metrics:        newRequestMetrics(now),
+		audit:          newAuditLog(maxAuditLimit),
+		stream:         newStreamHub(),
 		aiTTL:          8 * time.Second,
 		predictionsTTL: 8 * time.Second,
 		buildInfo: model.BuildInfo{
@@ -152,14 +157,19 @@ func (s *Server) Router(distDir string) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
-	r.Use(s.metrics.middleware(s.logger))
 	r.Use(middleware.Recoverer)
-	r.Use(middleware.Timeout(20 * time.Second))
+	r.Use(timeoutUnlessPath(20*time.Second, "/api/stream"))
+	r.Use(s.metrics.middleware(s.logger))
+	r.Use(s.authMiddleware)
+	r.Use(s.auditMiddleware)
 
 	r.Route("/api", func(api chi.Router) {
+		api.Get("/auth/session", s.handleAuthSession)
 		api.Get("/version", s.handleVersion)
 		api.Get("/cluster-info", s.handleClusterInfo)
 		api.Get("/metrics", s.handleMetrics)
+		api.Get("/audit", s.handleAuditLog)
+		api.Get("/stream", s.handleStream)
 		api.Get("/namespaces", s.handleNamespaces)
 		api.Get("/pods", s.handlePods)
 		api.Get("/nodes", s.handleNodes)
