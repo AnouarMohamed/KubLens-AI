@@ -205,4 +205,5 @@ CI is configured in:
 ![Screenshot 11](screenshots/Screenshot%202026-03-07%20134356.png)
 ![Screenshot 12](screenshots/Screenshot%202026-03-07%20134415.png)
 ![Screenshot 13](screenshots/Screenshot%202026-03-07%20134428.png)
-![Screenshot 14](screenshots/Screenshot%202026-03-07%20134458.png)
+<img width="1572" height="912" alt="image" src="https://github.com/user-attachments/assets/5fdfd9ce-2827-429e-a9c8-d737fe94eb72" />
+
