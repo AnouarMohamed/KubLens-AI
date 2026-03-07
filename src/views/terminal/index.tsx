@@ -84,7 +84,9 @@ export default function Terminal() {
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Terminal execution failed";
-      setEntries((prev) => prev.map((entry) => (entry.id === entryID ? { ...entry, running: false, error: message } : entry)));
+      setEntries((prev) =>
+        prev.map((entry) => (entry.id === entryID ? { ...entry, running: false, error: message } : entry)),
+      );
     } finally {
       setIsRunning(false);
     }
@@ -151,11 +153,7 @@ export default function Terminal() {
               className="field-sm ml-2 w-20"
             />
           </label>
-          <button
-            onClick={() => setEntries([])}
-            disabled={!canTerminal}
-            className="btn h-9"
-          >
+          <button onClick={() => setEntries([])} disabled={!canTerminal} className="btn h-9">
             Clear
           </button>
         </div>
@@ -208,7 +206,10 @@ export default function Terminal() {
         <header className="border-b border-zinc-800 bg-black px-4 py-2">
           <p className="font-mono text-xs text-zinc-400">{prompt}</p>
         </header>
-        <div ref={outputRef} className="h-[58vh] overflow-y-auto bg-black p-4 font-mono text-[13px] leading-relaxed text-[#d8f8d0]">
+        <div
+          ref={outputRef}
+          className="h-[58vh] overflow-y-auto bg-black p-4 font-mono text-[13px] leading-relaxed text-[#d8f8d0]"
+        >
           {entries.length === 0 && <p className="text-zinc-500">No commands yet. Start with `kubectl get pods -A`.</p>}
 
           {entries.map((entry) => (
@@ -223,9 +224,15 @@ export default function Terminal() {
 
               {entry.response && (
                 <>
-                  {entry.response.stdout.trim() !== "" && <pre className="whitespace-pre-wrap text-[#d8f8d0]">{entry.response.stdout}</pre>}
-                  {entry.response.stderr.trim() !== "" && <pre className="whitespace-pre-wrap text-[#fca5a5]">{entry.response.stderr}</pre>}
-                  {entry.response.stdout.trim() === "" && entry.response.stderr.trim() === "" && <p className="text-zinc-500">(no output)</p>}
+                  {entry.response.stdout.trim() !== "" && (
+                    <pre className="whitespace-pre-wrap text-[#d8f8d0]">{entry.response.stdout}</pre>
+                  )}
+                  {entry.response.stderr.trim() !== "" && (
+                    <pre className="whitespace-pre-wrap text-[#fca5a5]">{entry.response.stderr}</pre>
+                  )}
+                  {entry.response.stdout.trim() === "" && entry.response.stderr.trim() === "" && (
+                    <p className="text-zinc-500">(no output)</p>
+                  )}
                   <p className="text-[11px] text-zinc-500">
                     exit {entry.response.exitCode} | {entry.response.durationMs}ms | {entry.response.cwd}
                   </p>
@@ -238,4 +245,3 @@ export default function Terminal() {
     </div>
   );
 }
-

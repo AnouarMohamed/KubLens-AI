@@ -73,43 +73,52 @@ export default function Pods() {
     });
   }, [namespaceFilter, pods, search, statusFilter]);
 
-  const openDetail = useCallback(async (namespace: string, podName: string) => {
-    if (!canRead) {
-      setError("Authenticate to view pod details.");
-      return;
-    }
+  const openDetail = useCallback(
+    async (namespace: string, podName: string) => {
+      if (!canRead) {
+        setError("Authenticate to view pod details.");
+        return;
+      }
 
-    setIsBusy(true);
-    try {
-      const [detail, events] = await Promise.all([api.getPodDetail(namespace, podName), api.getPodEvents(namespace, podName)]);
-      setSelectedPod({ ...detail, events });
-      setActiveTab("specs");
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load pod details");
-    } finally {
-      setIsBusy(false);
-    }
-  }, [canRead]);
+      setIsBusy(true);
+      try {
+        const [detail, events] = await Promise.all([
+          api.getPodDetail(namespace, podName),
+          api.getPodEvents(namespace, podName),
+        ]);
+        setSelectedPod({ ...detail, events });
+        setActiveTab("specs");
+        setError(null);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to load pod details");
+      } finally {
+        setIsBusy(false);
+      }
+    },
+    [canRead],
+  );
 
-  const openLogs = useCallback(async (namespace: string, podName: string) => {
-    if (!canRead) {
-      setError("Authenticate to view pod logs.");
-      return;
-    }
+  const openLogs = useCallback(
+    async (namespace: string, podName: string) => {
+      if (!canRead) {
+        setError("Authenticate to view pod logs.");
+        return;
+      }
 
-    setIsBusy(true);
-    try {
-      const logs = await api.getPodLogs(namespace, podName);
-      setLogPodName(`${namespace}/${podName}`);
-      setLogText(logs);
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load pod logs");
-    } finally {
-      setIsBusy(false);
-    }
-  }, [canRead]);
+      setIsBusy(true);
+      try {
+        const logs = await api.getPodLogs(namespace, podName);
+        setLogPodName(`${namespace}/${podName}`);
+        setLogText(logs);
+        setError(null);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to load pod logs");
+      } finally {
+        setIsBusy(false);
+      }
+    },
+    [canRead],
+  );
 
   const createPod = useCallback(async () => {
     if (!canWrite) {
@@ -196,18 +205,11 @@ export default function Pods() {
         </div>
         <div className="flex gap-2">
           {canWrite && (
-            <button
-              onClick={() => setShowCreateForm((value) => !value)}
-              className="btn"
-            >
+            <button onClick={() => setShowCreateForm((value) => !value)} className="btn">
               {showCreateForm ? "Close Create" : "Create Pod"}
             </button>
           )}
-          <button
-            onClick={() => void load()}
-            disabled={isLoading || isBusy || !canRead}
-            className="btn"
-          >
+          <button onClick={() => void load()} disabled={isLoading || isBusy || !canRead} className="btn">
             {isLoading ? "Loading" : "Refresh"}
           </button>
         </div>
@@ -243,11 +245,7 @@ export default function Pods() {
             </label>
           </div>
           <div className="mt-3">
-            <button
-              onClick={() => void createPod()}
-              disabled={isBusy}
-              className="btn-solid"
-            >
+            <button onClick={() => void createPod()} disabled={isBusy} className="btn-solid">
               {isBusy ? "Processing" : "Create"}
             </button>
           </div>
@@ -261,11 +259,7 @@ export default function Pods() {
           placeholder="Search pods"
           className="field w-72"
         />
-        <select
-          value={namespaceFilter}
-          onChange={(event) => setNamespaceFilter(event.target.value)}
-          className="field"
-        >
+        <select value={namespaceFilter} onChange={(event) => setNamespaceFilter(event.target.value)} className="field">
           <option value="All">All namespaces</option>
           {namespaces.map((namespace) => (
             <option key={namespace} value={namespace}>
@@ -286,7 +280,9 @@ export default function Pods() {
         </select>
       </div>
 
-      {error && <div className="rounded-md border border-zinc-700 bg-zinc-900/80 px-3 py-2 text-sm text-zinc-200">{error}</div>}
+      {error && (
+        <div className="rounded-md border border-zinc-700 bg-zinc-900/80 px-3 py-2 text-sm text-zinc-200">{error}</div>
+      )}
 
       <div className="table-shell">
         <table className="min-w-full text-left text-sm">
@@ -306,7 +302,10 @@ export default function Pods() {
             {filteredPods.map((pod) => (
               <tr key={pod.id} className="table-row">
                 <td className="px-4 py-3">
-                  <button onClick={() => void openDetail(pod.namespace, pod.name)} className="text-left hover:underline">
+                  <button
+                    onClick={() => void openDetail(pod.namespace, pod.name)}
+                    className="text-left hover:underline"
+                  >
                     <p className="font-medium">{pod.name}</p>
                     <p className="text-xs text-zinc-500">{pod.id}</p>
                   </button>
@@ -321,10 +320,18 @@ export default function Pods() {
                 <td className="px-4 py-3 text-zinc-400">{pod.restarts}</td>
                 <td className="px-4 py-3">
                   <div className="flex gap-2">
-                    <button onClick={() => void openLogs(pod.namespace, pod.name)} className="btn-sm" disabled={!canRead}>
+                    <button
+                      onClick={() => void openLogs(pod.namespace, pod.name)}
+                      className="btn-sm"
+                      disabled={!canRead}
+                    >
                       Logs
                     </button>
-                    <button onClick={() => void restartPod(pod.namespace, pod.name)} className="btn-sm" disabled={!canWrite}>
+                    <button
+                      onClick={() => void restartPod(pod.namespace, pod.name)}
+                      className="btn-sm"
+                      disabled={!canWrite}
+                    >
                       Restart
                     </button>
                     <button
@@ -342,7 +349,9 @@ export default function Pods() {
         </table>
 
         {isLoading && <p className="px-4 py-8 text-center text-sm text-zinc-500">Loading pods...</p>}
-        {!isLoading && filteredPods.length === 0 && <p className="px-4 py-8 text-center text-sm text-zinc-500">No pods match the current filters.</p>}
+        {!isLoading && filteredPods.length === 0 && (
+          <p className="px-4 py-8 text-center text-sm text-zinc-500">No pods match the current filters.</p>
+        )}
       </div>
 
       {logText !== null && (
@@ -357,15 +366,19 @@ export default function Pods() {
                 Close
               </button>
             </header>
-            <pre className="max-h-[60vh] overflow-auto p-4 text-xs leading-relaxed text-zinc-200 bg-zinc-900/60">{logText}</pre>
+            <pre className="max-h-[60vh] overflow-auto p-4 text-xs leading-relaxed text-zinc-200 bg-zinc-900/60">
+              {logText}
+            </pre>
           </div>
         </div>
       )}
 
-      <PodDetailModal selectedPod={selectedPod} activeTab={activeTab} onTabChange={setActiveTab} onClose={() => setSelectedPod(null)} />
+      <PodDetailModal
+        selectedPod={selectedPod}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        onClose={() => setSelectedPod(null)}
+      />
     </div>
   );
 }
-
-
-

@@ -117,7 +117,7 @@ function toDiagnosePrompt(resource: string): string {
   if (trimmed === "") {
     return "Show cluster health";
   }
-  const podName = trimmed.includes("/") ? trimmed.split("/").pop() ?? trimmed : trimmed;
+  const podName = trimmed.includes("/") ? (trimmed.split("/").pop() ?? trimmed) : trimmed;
   return `Diagnose ${podName}`;
 }
 

@@ -7,6 +7,7 @@ import type {
   AuthSession,
   AssistantResponse,
   BuildInfo,
+  RuntimeStatus,
   ClusterContextList,
   ClusterInfo,
   ClusterSelectResponse,
@@ -120,6 +121,7 @@ export const api = {
       body: JSON.stringify({ name }),
     }),
   getVersion: () => requestJson<BuildInfo>(apiPath("version")),
+  getRuntimeStatus: () => requestJson<RuntimeStatus>(apiPath("runtime")),
   getClusterInfo: () => requestJson<ClusterInfo>(apiPath("cluster-info")),
   getApiMetrics: () => requestJson<ApiMetricsSnapshot>(apiPath("metrics")),
   dispatchAlert: (payload: AlertDispatchRequest) =>
@@ -163,7 +165,8 @@ export const api = {
       body: JSON.stringify(payload),
     }),
   getPodDetail: (namespace: string, name: string) => requestJson<PodDetail>(apiPath("pods", namespace, name)),
-  getPodEvents: (namespace: string, name: string) => requestJson<K8sEvent[]>(apiPath("pods", namespace, name, "events")),
+  getPodEvents: (namespace: string, name: string) =>
+    requestJson<K8sEvent[]>(apiPath("pods", namespace, name, "events")),
   getPodLogs: (namespace: string, name: string) => requestText(apiPath("pods", namespace, name, "logs")),
   restartPod: (namespace: string, name: string) =>
     requestJson<ActionResult>(apiPath("pods", namespace, name, "restart"), {

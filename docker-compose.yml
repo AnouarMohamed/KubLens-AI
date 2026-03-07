@@ -3,14 +3,17 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: kubernetes-operations-dashboard:latest
+    image: kubernetes-operations-dashboard:v0.2.0
     container_name: kubernetes-operations-dashboard
     ports:
       - "3000:3000"
     environment:
       PORT: "3000"
       DIST_DIR: "dist"
+      APP_MODE: ${APP_MODE:-demo}
+      DEV_MODE: ${DEV_MODE:-false}
       KUBECONFIG_DATA: ${KUBECONFIG_DATA:-}
+      KUBECONFIG_CONTEXTS: ${KUBECONFIG_CONTEXTS:-}
       PREDICTOR_BASE_URL: ${PREDICTOR_BASE_URL:-http://k8s-ops-predictor:8001}
       PREDICTOR_TIMEOUT_SECONDS: ${PREDICTOR_TIMEOUT_SECONDS:-4}
       ASSISTANT_PROVIDER: ${ASSISTANT_PROVIDER:-none}
@@ -20,6 +23,25 @@ services:
       ASSISTANT_MODEL: ${ASSISTANT_MODEL:-}
       ASSISTANT_TEMPERATURE: ${ASSISTANT_TEMPERATURE:-0.2}
       ASSISTANT_MAX_TOKENS: ${ASSISTANT_MAX_TOKENS:-700}
+      ASSISTANT_RAG_ENABLED: ${ASSISTANT_RAG_ENABLED:-true}
+      AUTH_ENABLED: ${AUTH_ENABLED:-false}
+      AUTH_TOKENS: ${AUTH_TOKENS:-}
+      WRITE_ACTIONS_ENABLED: ${WRITE_ACTIONS_ENABLED:-false}
+      RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
+      RATE_LIMIT_REQUESTS: ${RATE_LIMIT_REQUESTS:-300}
+      RATE_LIMIT_WINDOW_SECONDS: ${RATE_LIMIT_WINDOW_SECONDS:-60}
+      TERMINAL_ENABLED: ${TERMINAL_ENABLED:-false}
+      TERMINAL_ALLOWED_PREFIXES: ${TERMINAL_ALLOWED_PREFIXES:-kubectl,helm,kustomize,echo,pwd,ls,dir}
+      TERMINAL_DENIED_PREFIXES: ${TERMINAL_DENIED_PREFIXES:-kubectl delete,kubectl apply,kubectl patch,kubectl exec,kubectl cp,kubectl run,helm upgrade,helm uninstall,sh,bash,cmd,powershell}
+      TERMINAL_KUBECTL_ALLOWED_VERBS: ${TERMINAL_KUBECTL_ALLOWED_VERBS:-get,describe,top,logs,api-resources,cluster-info,version}
+      TERMINAL_MAX_OUTPUT_BYTES: ${TERMINAL_MAX_OUTPUT_BYTES:-20000}
+      AUDIT_LOG_FILE: ${AUDIT_LOG_FILE:-}
+      AUDIT_MAX_ITEMS: ${AUDIT_MAX_ITEMS:-500}
+      ALERT_TIMEOUT_SECONDS: ${ALERT_TIMEOUT_SECONDS:-5}
+      ALERTMANAGER_WEBHOOK_URL: ${ALERTMANAGER_WEBHOOK_URL:-}
+      SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL:-}
+      PAGERDUTY_EVENTS_URL: ${PAGERDUTY_EVENTS_URL:-https://events.pagerduty.com/v2/enqueue}
+      PAGERDUTY_ROUTING_KEY: ${PAGERDUTY_ROUTING_KEY:-}
     depends_on:
       - k8s-ops-predictor
     restart: unless-stopped
@@ -28,7 +50,7 @@ services:
     build:
       context: ./predictor
       dockerfile: Dockerfile
-    image: k8s-ops-predictor:latest
+    image: k8s-ops-predictor:v0.2.0
     container_name: k8s-ops-predictor
     ports:
       - "8001:8001"

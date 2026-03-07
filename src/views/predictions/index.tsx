@@ -39,7 +39,7 @@ export default function Predictions() {
     return () => window.clearInterval(timer);
   }, [autoRefresh, load]);
 
-  const items = payload?.items ?? [];
+  const items = useMemo(() => payload?.items ?? [], [payload]);
   const summary = useMemo(() => summarize(items), [items]);
   const topItems = useMemo(() => items.slice(0, 3), [items]);
 
@@ -67,7 +67,11 @@ export default function Predictions() {
         </div>
       </header>
 
-      {error && <div className="rounded-xl border border-[#eab308]/45 bg-[#eab308]/12 px-3 py-2 text-sm text-zinc-100">{error}</div>}
+      {error && (
+        <div className="rounded-xl border border-[#eab308]/45 bg-[#eab308]/12 px-3 py-2 text-sm text-zinc-100">
+          {error}
+        </div>
+      )}
 
       <section className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <StatCard label="Prediction Source" value={payload?.source ?? "-"} badge={sourceBadge(payload?.source)} />
@@ -80,7 +84,9 @@ export default function Predictions() {
       <section className="surface p-5">
         <div className="flex items-center justify-between gap-2">
           <h3 className="text-sm font-semibold text-zinc-100">Risk Distribution</h3>
-          <p className="text-xs text-zinc-500">High {summary.high} | Medium {summary.medium} | Low {summary.low}</p>
+          <p className="text-xs text-zinc-500">
+            High {summary.high} | Medium {summary.medium} | Low {summary.low}
+          </p>
         </div>
         <div className="mt-3 h-4 overflow-hidden rounded-lg border border-zinc-700 bg-zinc-800">
           <div className="h-full flex">
@@ -95,7 +101,9 @@ export default function Predictions() {
         {topItems.map((item) => (
           <article key={item.id} className="surface p-4">
             <div className="flex items-center justify-between gap-2">
-              <p className="text-sm font-semibold text-zinc-100">{item.resourceKind}: {item.resource}</p>
+              <p className="text-sm font-semibold text-zinc-100">
+                {item.resourceKind}: {item.resource}
+              </p>
               <RiskBadge score={item.riskScore} />
             </div>
             {item.namespace && <p className="text-xs text-zinc-500 mt-1">{item.namespace}</p>}
@@ -108,7 +116,9 @@ export default function Predictions() {
         ))}
         {topItems.length === 0 && (
           <article className="surface p-4 xl:col-span-3">
-            <p className="text-sm text-zinc-400">No high-signal predictions yet. Generate cluster activity and refresh.</p>
+            <p className="text-sm text-zinc-400">
+              No high-signal predictions yet. Generate cluster activity and refresh.
+            </p>
           </article>
         )}
       </section>
@@ -135,7 +145,9 @@ export default function Predictions() {
                   </td>
                   <td className="px-3 py-2">{item.confidence}%</td>
                   <td className="px-3 py-2">
-                    <p className="font-medium">{item.resourceKind}: {item.resource}</p>
+                    <p className="font-medium">
+                      {item.resourceKind}: {item.resource}
+                    </p>
                     {item.namespace && <p className="text-xs text-zinc-500 mt-0.5">{item.namespace}</p>}
                   </td>
                   <td className="px-3 py-2 text-zinc-300">{item.summary}</td>
@@ -143,7 +155,10 @@ export default function Predictions() {
                   <td className="px-3 py-2">
                     <div className="flex flex-wrap gap-1.5">
                       {(item.signals ?? []).map((signal) => (
-                        <span key={`${item.id}-${signal.key}`} className="rounded-md border border-zinc-700 bg-zinc-800/70 px-2 py-0.5 text-[11px] text-zinc-300">
+                        <span
+                          key={`${item.id}-${signal.key}`}
+                          className="rounded-md border border-zinc-700 bg-zinc-800/70 px-2 py-0.5 text-[11px] text-zinc-300"
+                        >
                           {signal.key}: {signal.value}
                         </span>
                       ))}
@@ -167,12 +182,26 @@ export default function Predictions() {
   );
 }
 
-function StatCard({ label, value, badge }: { label: string; value: string; badge?: { text: string; className: string } }) {
+function StatCard({
+  label,
+  value,
+  badge,
+}: {
+  label: string;
+  value: string;
+  badge?: { text: string; className: string };
+}) {
   return (
     <div className="kpi">
       <p className="text-[11px] uppercase tracking-wide text-zinc-500 font-semibold">{label}</p>
       <p className="mt-2 text-xl font-semibold text-zinc-100 break-words">{value}</p>
-      {badge && <span className={`mt-2 inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${badge.className}`}>{badge.text}</span>}
+      {badge && (
+        <span
+          className={`mt-2 inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${badge.className}`}
+        >
+          {badge.text}
+        </span>
+      )}
     </div>
   );
 }
@@ -185,7 +214,9 @@ function RiskBadge({ score }: { score: number }) {
     className = "border-[#eab308]/45 bg-[#eab308]/14";
   }
 
-  return <span className={`rounded-full border px-2 py-0.5 text-xs font-semibold text-zinc-100 ${className}`}>{score}</span>;
+  return (
+    <span className={`rounded-full border px-2 py-0.5 text-xs font-semibold text-zinc-100 ${className}`}>{score}</span>
+  );
 }
 
 function summarize(items: IncidentPrediction[]) {
@@ -240,4 +271,3 @@ function sourceBadge(source?: string): { text: string; className: string } | und
   }
   return { text: "custom", className: "border-zinc-600 bg-zinc-800/70 text-zinc-100" };
 }
-

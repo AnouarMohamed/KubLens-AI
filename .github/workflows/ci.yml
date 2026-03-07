@@ -6,9 +6,29 @@ on:
   pull_request:
 
 jobs:
-  validate:
+  frontend:
     runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Frontend quality gates
+        run: |
+          npm run lint
+          npm run test:web
+          npm run build
+
+  backend:
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -27,14 +47,83 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Lint
-        run: npm run lint
+      - name: Go format check
+        run: |
+          npm run fmt:go
+          git diff --exit-code -- backend/cmd backend/internal
 
       - name: Go tests
         run: npm run test:go
 
-      - name: Frontend tests
-        run: npm run test:web
+  predictor:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Build frontend
-        run: npm run build
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install predictor deps
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r predictor/requirements.txt -r predictor/requirements-dev.txt
+
+      - name: Predictor lint and tests
+        run: |
+          python -m ruff check predictor/app predictor/tests
+          python -m pytest predictor/tests -q
+
+  manifests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup kustomize
+        uses: imranismail/setup-kustomize@v2
+        with:
+          kustomize-version: "5.5.0"
+
+      - name: Install kubeconform
+        run: |
+          curl -sSL -o /tmp/kubeconform.tar.gz https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz
+          tar -xzf /tmp/kubeconform.tar.gz -C /tmp
+          sudo mv /tmp/kubeconform /usr/local/bin/kubeconform
+
+      - name: Validate kustomize overlays
+        run: |
+          set -e
+          for overlay in k8s/overlays/dev k8s/overlays/demo k8s/overlays/prod k8s; do
+            echo "Validating $overlay"
+            kustomize build "$overlay" > /tmp/manifest.yaml
+            kubeconform -strict -summary -ignore-missing-schemas /tmp/manifest.yaml
+          done
+
+  docker-build:
+    runs-on: ubuntu-latest
+    needs: [frontend, backend, predictor, manifests]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build dashboard image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          push: false
+          tags: kubernetes-operations-dashboard:ci
+
+      - name: Build predictor image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./predictor
+          file: ./predictor/Dockerfile
+          push: false
+          tags: k8s-ops-predictor:ci

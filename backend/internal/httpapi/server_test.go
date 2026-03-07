@@ -223,7 +223,19 @@ func TestResourcesEndpoint(t *testing.T) {
 
 func TestActionEndpoints(t *testing.T) {
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
-	server := newServer(testClusterReader{}, nil, logger)
+	server := newServer(
+		testClusterReader{},
+		nil,
+		logger,
+		WithWriteActionsEnabled(true),
+		WithTerminalPolicy(TerminalPolicy{Enabled: true}),
+		WithAuth(AuthConfig{
+			Enabled: true,
+			Tokens: []AuthToken{
+				{Token: "admin-token", User: "admin", Role: "admin"},
+			},
+		}),
+	)
 	router := server.Router("")
 
 	tests := []struct {
@@ -294,6 +306,7 @@ func TestActionEndpoints(t *testing.T) {
 			if tc.body != "" {
 				req.Header.Set("Content-Type", "application/json")
 			}
+			req.Header.Set("Authorization", "Bearer admin-token")
 			rr := httptest.NewRecorder()
 			router.ServeHTTP(rr, req)
 			if rr.Code != http.StatusOK {
@@ -443,7 +456,19 @@ func TestPredictionsEndpointSupportsCompatibilityAlias(t *testing.T) {
 
 func TestMutationsInvalidatePredictionsCache(t *testing.T) {
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
-	server := newServer(testClusterReader{}, nil, logger, WithPredictionsTTL(time.Minute))
+	server := newServer(
+		testClusterReader{},
+		nil,
+		logger,
+		WithPredictionsTTL(time.Minute),
+		WithWriteActionsEnabled(true),
+		WithAuth(AuthConfig{
+			Enabled: true,
+			Tokens: []AuthToken{
+				{Token: "operator-token", User: "operator", Role: "operator"},
+			},
+		}),
+	)
 	provider := &testPredictionProvider{
 		response: model.PredictionsResult{
 			Source:      "test-provider",
@@ -457,6 +482,7 @@ func TestMutationsInvalidatePredictionsCache(t *testing.T) {
 	router := server.Router("")
 
 	first := httptest.NewRequest(http.MethodGet, "/api/predictions", nil)
+	first.Header.Set("Authorization", "Bearer operator-token")
 	firstResp := httptest.NewRecorder()
 	router.ServeHTTP(firstResp, first)
 	if firstResp.Code != http.StatusOK {
@@ -468,6 +494,7 @@ func TestMutationsInvalidatePredictionsCache(t *testing.T) {
 
 	mutation := httptest.NewRequest(http.MethodPost, "/api/pods", strings.NewReader(`{"namespace":"default","name":"cache-bust","image":"nginx:latest"}`))
 	mutation.Header.Set("Content-Type", "application/json")
+	mutation.Header.Set("Authorization", "Bearer operator-token")
 	mutationResp := httptest.NewRecorder()
 	router.ServeHTTP(mutationResp, mutation)
 	if mutationResp.Code != http.StatusOK {
@@ -475,6 +502,7 @@ func TestMutationsInvalidatePredictionsCache(t *testing.T) {
 	}
 
 	second := httptest.NewRequest(http.MethodGet, "/api/predictions", nil)
+	second.Header.Set("Authorization", "Bearer operator-token")
 	secondResp := httptest.NewRecorder()
 	router.ServeHTTP(secondResp, second)
 	if secondResp.Code != http.StatusOK {

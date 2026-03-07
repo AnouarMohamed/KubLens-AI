@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: k8s-ops-config
+  namespace: kubernetes-operations-dashboard
+data:
+  APP_MODE: "prod"
+  DEV_MODE: "false"
+  AUTH_ENABLED: "true"
+  WRITE_ACTIONS_ENABLED: "false"
+  TERMINAL_ENABLED: "false"
+  RATE_LIMIT_REQUESTS: "180"

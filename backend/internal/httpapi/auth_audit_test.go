@@ -151,6 +151,8 @@ func newAuthTestServer() *Server {
 		testClusterReader{},
 		nil,
 		logger,
+		WithWriteActionsEnabled(true),
+		WithTerminalPolicy(TerminalPolicy{Enabled: true}),
 		WithAuth(AuthConfig{
 			Enabled: true,
 			Tokens: []AuthToken{

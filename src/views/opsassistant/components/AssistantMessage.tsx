@@ -13,7 +13,9 @@ export default function AssistantMessage({ message, copied, onCopy, onRunPrompt 
     <article className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
       <div className="max-w-[92%] lg:max-w-[86%]">
         <div className="mb-1.5 flex items-center justify-between gap-2">
-          <p className="text-[11px] uppercase tracking-wide text-zinc-500">{message.role === "user" ? "Operator" : "Assistant"}</p>
+          <p className="text-[11px] uppercase tracking-wide text-zinc-500">
+            {message.role === "user" ? "Operator" : "Assistant"}
+          </p>
           <div className="flex items-center gap-2 text-[11px] text-zinc-500">
             <span>{formatTimestamp(message.timestamp)}</span>
             {message.role === "assistant" && (
@@ -33,7 +35,11 @@ export default function AssistantMessage({ message, copied, onCopy, onRunPrompt 
                 : "border-zinc-700 bg-zinc-800/55 text-zinc-200"
           }`}
         >
-          {message.role === "assistant" ? <AssistantContent content={message.content} /> : <p className="whitespace-pre-wrap">{message.content}</p>}
+          {message.role === "assistant" ? (
+            <AssistantContent content={message.content} />
+          ) : (
+            <p className="whitespace-pre-wrap">{message.content}</p>
+          )}
         </div>
 
         {message.role === "assistant" && ((message.hints?.length ?? 0) > 0 || (message.resources?.length ?? 0) > 0) && (
@@ -96,7 +102,9 @@ function AssistantContent({ content }: { content: string }) {
               return isInlineCode ? (
                 <code className="rounded bg-zinc-900 px-1 py-0.5 text-[12px] text-zinc-100">{children}</code>
               ) : (
-                <code className="block whitespace-pre-wrap rounded-md border border-zinc-700 bg-zinc-900 p-2 text-[12px] text-zinc-100">{children}</code>
+                <code className="block whitespace-pre-wrap rounded-md border border-zinc-700 bg-zinc-900 p-2 text-[12px] text-zinc-100">
+                  {children}
+                </code>
               );
             },
             pre: ({ children }) => <pre className="overflow-x-auto">{children}</pre>,
@@ -172,6 +180,6 @@ function toDiagnosePrompt(resource: string): string {
   if (trimmed === "") {
     return "Show cluster health";
   }
-  const podName = trimmed.includes("/") ? trimmed.split("/").pop() ?? trimmed : trimmed;
+  const podName = trimmed.includes("/") ? (trimmed.split("/").pop() ?? trimmed) : trimmed;
   return `Diagnose ${podName}`;
 }

@@ -100,6 +100,21 @@ export interface BuildInfo {
   builtAt: string;
 }
 
+export interface RuntimeStatus {
+  mode: "dev" | "demo" | "prod" | string;
+  devMode: boolean;
+  insecure: boolean;
+  isRealCluster: boolean;
+  authEnabled: boolean;
+  writeActionsEnabled: boolean;
+  terminalEnabled: boolean;
+  predictorEnabled: boolean;
+  assistantEnabled: boolean;
+  ragEnabled: boolean;
+  alertsEnabled: boolean;
+  warnings: string[];
+}
+
 export interface SessionUser {
   name: string;
   role: "viewer" | "operator" | "admin";

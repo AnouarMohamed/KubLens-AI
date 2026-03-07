@@ -59,7 +59,9 @@ export default function OpsAssistant() {
           <div className="flex items-center justify-between gap-4">
             <div>
               <h3 className="text-base font-semibold text-zinc-100">Ops Assistant</h3>
-              <p className="text-xs text-zinc-500 mt-0.5">Interactive debug assistant with diagnostics + documentation grounding</p>
+              <p className="text-xs text-zinc-500 mt-0.5">
+                Interactive debug assistant with diagnostics + documentation grounding
+              </p>
             </div>
             <div className="flex items-center gap-2">
               <StatusPill label="Mode" value="Interactive" />
@@ -95,7 +97,9 @@ export default function OpsAssistant() {
 
           {isLoading && (
             <div className="flex justify-start">
-              <div className="rounded-lg border border-zinc-700 bg-zinc-800/55 px-3.5 py-3 text-sm text-zinc-400">Thinking and checking context...</div>
+              <div className="rounded-lg border border-zinc-700 bg-zinc-800/55 px-3.5 py-3 text-sm text-zinc-400">
+                Thinking and checking context...
+              </div>
             </div>
           )}
         </div>
@@ -160,7 +164,9 @@ export default function OpsAssistant() {
                 {resource}
               </button>
             ))}
-            {(lastAssistant?.resources?.length ?? 0) === 0 && <p className="text-xs text-zinc-500">No referenced resources yet.</p>}
+            {(lastAssistant?.resources?.length ?? 0) === 0 && (
+              <p className="text-xs text-zinc-500">No referenced resources yet.</p>
+            )}
           </div>
         </div>
       </aside>
@@ -183,7 +189,7 @@ function toDiagnosePrompt(resource: string): string {
   if (trimmed === "") {
     return "Show cluster health";
   }
-  const podName = trimmed.includes("/") ? trimmed.split("/").pop() ?? trimmed : trimmed;
+  const podName = trimmed.includes("/") ? (trimmed.split("/").pop() ?? trimmed) : trimmed;
   return `Diagnose ${podName}`;
 }
 

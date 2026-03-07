@@ -47,7 +47,9 @@ export default function Diagnostics() {
         source: "diagnostics",
         tags: [top.resource ?? "cluster", top.severity],
       });
-      setAlertMessage(response.success ? "Alert dispatched to configured channels." : "Alert dispatch partially failed.");
+      setAlertMessage(
+        response.success ? "Alert dispatched to configured channels." : "Alert dispatch partially failed.",
+      );
     } catch (err) {
       setAlertMessage(err instanceof Error ? err.message : "Failed to dispatch alert");
     } finally {
@@ -78,25 +80,31 @@ export default function Diagnostics() {
           <h2 className="text-2xl font-semibold text-zinc-100 tracking-tight">Diagnostics</h2>
           <p className="text-sm text-zinc-400 mt-1">Automated checks with prioritized, actionable issue reporting.</p>
         </div>
-        <button
-          onClick={() => void refresh()}
-          disabled={isLoading}
-          className="btn"
-        >
+        <button onClick={() => void refresh()} disabled={isLoading} className="btn">
           {isLoading ? "Loading" : "Refresh"}
         </button>
         <div className="flex gap-2">
           <button onClick={() => void sendTestAlert()} disabled={!canWrite || isAlerting} className="btn">
             {isAlerting ? "Sending" : "Test Alert"}
           </button>
-          <button onClick={() => void dispatchTopIssue()} disabled={!canWrite || isAlerting || prioritizedIssues.length === 0} className="btn">
+          <button
+            onClick={() => void dispatchTopIssue()}
+            disabled={!canWrite || isAlerting || prioritizedIssues.length === 0}
+            className="btn"
+          >
             Alert Top Issue
           </button>
         </div>
       </header>
 
-      {error && <div className="rounded-md border border-zinc-700 bg-zinc-900/80 px-3 py-2 text-sm text-zinc-200">{error}</div>}
-      {alertMessage && <div className="rounded-md border border-zinc-700 bg-zinc-900/80 px-3 py-2 text-sm text-zinc-200">{alertMessage}</div>}
+      {error && (
+        <div className="rounded-md border border-zinc-700 bg-zinc-900/80 px-3 py-2 text-sm text-zinc-200">{error}</div>
+      )}
+      {alertMessage && (
+        <div className="rounded-md border border-zinc-700 bg-zinc-900/80 px-3 py-2 text-sm text-zinc-200">
+          {alertMessage}
+        </div>
+      )}
 
       {diagnostics && (
         <>
@@ -123,7 +131,10 @@ export default function Diagnostics() {
               <div className="mt-3">
                 <p className="text-[11px] uppercase tracking-wide text-zinc-500 font-semibold">Health Progress</p>
                 <div className="mt-2 h-2 rounded-full bg-zinc-700 overflow-hidden">
-                  <div className="h-full bg-[#4f7bff]" style={{ width: `${Math.max(0, Math.min(100, diagnostics.healthScore))}%` }} />
+                  <div
+                    className="h-full bg-[#4f7bff]"
+                    style={{ width: `${Math.max(0, Math.min(100, diagnostics.healthScore))}%` }}
+                  />
                 </div>
               </div>
 
@@ -135,7 +146,9 @@ export default function Diagnostics() {
                       {line}
                     </p>
                   ))}
-                  {summaryHighlights.length === 0 && <p className="text-sm text-zinc-500">No summary highlights available.</p>}
+                  {summaryHighlights.length === 0 && (
+                    <p className="text-sm text-zinc-500">No summary highlights available.</p>
+                  )}
                 </div>
               </div>
             </section>
@@ -154,14 +167,18 @@ export default function Diagnostics() {
                   />
                 ))}
                 {prioritizedIssues.length === 0 && (
-                  <p className="text-sm text-zinc-500">No diagnostic issues detected. Cluster posture is currently healthy.</p>
+                  <p className="text-sm text-zinc-500">
+                    No diagnostic issues detected. Cluster posture is currently healthy.
+                  </p>
                 )}
               </div>
             </section>
           </section>
 
           <details className="rounded-lg border border-zinc-700 bg-zinc-900/70 px-3 py-2">
-            <summary className="cursor-pointer text-xs uppercase tracking-wide text-zinc-500 font-semibold">Raw narrative</summary>
+            <summary className="cursor-pointer text-xs uppercase tracking-wide text-zinc-500 font-semibold">
+              Raw narrative
+            </summary>
             <pre className="mt-3 whitespace-pre-wrap text-sm text-zinc-300 leading-relaxed">{diagnostics.summary}</pre>
           </details>
 
@@ -261,7 +278,11 @@ function SeverityBadge({ severity }: { severity: DiagnosticSeverity }) {
         ? "border-[#eab308]/50 bg-[#eab308]/14 text-zinc-100"
         : "border-[#4f7bff]/50 bg-[#4f7bff]/14 text-zinc-100";
 
-  return <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${className}`}>{severity}</span>;
+  return (
+    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${className}`}>
+      {severity}
+    </span>
+  );
 }
 
 function buildPrioritizedIssues(diagnostics: DiagnosticsResult | null) {
@@ -288,4 +309,3 @@ function formatTimestamp(value: string): string {
   }
   return date.toLocaleString();
 }
-

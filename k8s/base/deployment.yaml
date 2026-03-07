@@ -1,55 +1,64 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: k8s-ops-predictor
+  name: kubernetes-operations-dashboard
   namespace: kubernetes-operations-dashboard
   labels:
-    app.kubernetes.io/name: k8s-ops-predictor
+    app.kubernetes.io/name: kubernetes-operations-dashboard
     app.kubernetes.io/part-of: kubernetes-operations-dashboard
 spec:
-  replicas: 1
+  replicas: 2
   revisionHistoryLimit: 5
   selector:
     matchLabels:
-      app.kubernetes.io/name: k8s-ops-predictor
+      app.kubernetes.io/name: kubernetes-operations-dashboard
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: k8s-ops-predictor
+        app.kubernetes.io/name: kubernetes-operations-dashboard
         app.kubernetes.io/part-of: kubernetes-operations-dashboard
     spec:
+      serviceAccountName: kubelens-dashboard
       containers:
-        - name: predictor
-          # Replace this with your published predictor image.
-          image: k8s-ops-predictor:latest
+        - name: dashboard
+          image: ghcr.io/anouarmohamed/kubelens-ai:v0.2.0
           imagePullPolicy: IfNotPresent
           ports:
             - name: http
-              containerPort: 8001
+              containerPort: 3000
+          envFrom:
+            - configMapRef:
+                name: k8s-ops-config
+            - secretRef:
+                name: k8s-ops-secret
+                optional: true
           readinessProbe:
             httpGet:
-              path: /healthz
+              path: /api/cluster-info
               port: http
-            initialDelaySeconds: 3
+            initialDelaySeconds: 5
             periodSeconds: 10
             timeoutSeconds: 2
-            failureThreshold: 5
+            failureThreshold: 6
           livenessProbe:
             httpGet:
-              path: /healthz
+              path: /api/cluster-info
               port: http
-            initialDelaySeconds: 10
+            initialDelaySeconds: 15
             periodSeconds: 15
             timeoutSeconds: 2
             failureThreshold: 5
           resources:
             requests:
-              cpu: 100m
-              memory: 128Mi
-            limits:
-              cpu: 300m
+              cpu: 150m
               memory: 256Mi
+            limits:
+              cpu: 700m
+              memory: 768Mi
           securityContext:
+            runAsUser: 10001
+            runAsGroup: 10001
+            readOnlyRootFilesystem: true
             allowPrivilegeEscalation: false
             capabilities:
               drop:

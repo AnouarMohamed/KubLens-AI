@@ -87,7 +87,7 @@ func (s *Server) authMiddleware(next http.Handler) http.Handler {
 
 		if r.URL.Path == "/api/auth/session" {
 			if !s.auth.enabled {
-				next.ServeHTTP(w, r.WithContext(withPrincipal(r.Context(), principal{user: "local-admin", role: roleAdmin})))
+				next.ServeHTTP(w, r)
 				return
 			}
 
@@ -106,7 +106,7 @@ func (s *Server) authMiddleware(next http.Handler) http.Handler {
 		)
 
 		if !s.auth.enabled {
-			p = principal{user: "local-admin", role: roleAdmin}
+			p = principal{user: "local-viewer", role: roleViewer}
 		} else {
 			p, err = s.authenticate(r)
 			if err != "" {
@@ -120,6 +120,10 @@ func (s *Server) authMiddleware(next http.Handler) http.Handler {
 		if p.role < required {
 			s.recordAuthFailure(r, http.StatusForbidden, "forbidden")
 			writeError(w, http.StatusForbidden, "insufficient role for this action")
+			return
+		}
+		if required >= roleOperator && !s.writesOn && r.URL.Path != "/api/terminal/exec" {
+			writeError(w, http.StatusForbidden, "mutating operations are disabled for this environment")
 			return
 		}
 
@@ -314,6 +318,9 @@ func (s *Server) handleAuthSession(w http.ResponseWriter, r *http.Request) {
 		Enabled:       s.auth.enabled,
 		Authenticated: false,
 		Permissions:   nil,
+	}
+	if !s.auth.enabled {
+		session.Permissions = append([]string(nil), s.anonPerms...)
 	}
 
 	p, ok := principalFromContext(r.Context())

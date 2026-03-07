@@ -18,7 +18,10 @@ export default function NodeDetailModal({ selectedNode, onClose }: NodeDetailMod
             <h3 className="text-lg font-semibold text-zinc-100">{selectedNode.name}</h3>
             <p className="text-xs text-zinc-500 mt-0.5">Node details and conditions</p>
           </div>
-          <button onClick={onClose} className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-800">
+          <button
+            onClick={onClose}
+            className="rounded-md border border-zinc-700 px-3 py-1.5 text-xs text-zinc-300 hover:bg-zinc-800"
+          >
             Close
           </button>
         </header>
@@ -28,8 +31,16 @@ export default function NodeDetailModal({ selectedNode, onClose }: NodeDetailMod
             <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Capacity</p>
             <div className="mt-2 grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
               <InfoCard label="CPU" capacity={selectedNode.capacity.cpu} allocatable={selectedNode.allocatable.cpu} />
-              <InfoCard label="Memory" capacity={selectedNode.capacity.memory} allocatable={selectedNode.allocatable.memory} />
-              <InfoCard label="Pods" capacity={selectedNode.capacity.pods} allocatable={selectedNode.allocatable.pods} />
+              <InfoCard
+                label="Memory"
+                capacity={selectedNode.capacity.memory}
+                allocatable={selectedNode.allocatable.memory}
+              />
+              <InfoCard
+                label="Pods"
+                capacity={selectedNode.capacity.pods}
+                allocatable={selectedNode.allocatable.pods}
+              />
             </div>
           </section>
 
@@ -65,7 +76,10 @@ export default function NodeDetailModal({ selectedNode, onClose }: NodeDetailMod
             <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Addresses</p>
             <div className="mt-2 rounded-md border border-zinc-800 divide-y divide-zinc-800">
               {selectedNode.addresses.map((address) => (
-                <div key={`${address.type}-${address.address}`} className="px-4 py-2 text-sm flex items-center justify-between gap-3">
+                <div
+                  key={`${address.type}-${address.address}`}
+                  className="px-4 py-2 text-sm flex items-center justify-between gap-3"
+                >
                   <span className="font-medium text-zinc-100">{address.type}</span>
                   <span className="text-zinc-400">{address.address}</span>
                 </div>
@@ -87,5 +101,3 @@ function InfoCard({ label, capacity, allocatable }: { label: string; capacity: s
     </div>
   );
 }
-
-

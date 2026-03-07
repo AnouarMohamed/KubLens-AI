@@ -91,7 +91,9 @@ export default function AuditView() {
           <p className="text-sm text-zinc-500 mt-1">Live operator activity stream with request-level attribution.</p>
         </div>
         <div className="flex items-center gap-2">
-          <span className={`rounded-full border px-3 py-1 text-xs font-medium ${connected ? "border-emerald-500/40 text-emerald-300" : "border-zinc-600 text-zinc-400"}`}>
+          <span
+            className={`rounded-full border px-3 py-1 text-xs font-medium ${connected ? "border-emerald-500/40 text-emerald-300" : "border-zinc-600 text-zinc-400"}`}
+          >
             {connected ? "Stream connected" : "Stream disconnected"}
           </span>
           <button onClick={() => void loadAudit()} className="btn">
@@ -116,7 +118,9 @@ export default function AuditView() {
           </div>
         </div>
 
-        {error && <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">{error}</p>}
+        {error && (
+          <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">{error}</p>
+        )}
 
         <div className="overflow-x-auto rounded-xl border border-zinc-800">
           <table className="min-w-full text-sm">
@@ -151,7 +155,9 @@ export default function AuditView() {
                     <td className="px-3 py-2">{row.action ?? "-"}</td>
                     <td className="px-3 py-2 font-mono text-xs text-zinc-400">{row.path}</td>
                     <td className="px-3 py-2">
-                      <span className={`rounded-md px-2 py-0.5 text-xs ${row.success ? "bg-emerald-500/15 text-emerald-300" : "bg-red-500/15 text-red-300"}`}>
+                      <span
+                        className={`rounded-md px-2 py-0.5 text-xs ${row.success ? "bg-emerald-500/15 text-emerald-300" : "bg-red-500/15 text-red-300"}`}
+                      >
                         {row.status}
                       </span>
                     </td>

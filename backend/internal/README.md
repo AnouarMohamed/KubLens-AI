@@ -5,6 +5,8 @@
 - `ai/` -> assistant provider interfaces + implementations
 - `apperrors/` -> shared sentinel/domain errors
 - `cluster/` -> Kubernetes data access, mapping, and actions
+- `config/` -> env parsing, mode defaults, and startup validation
+- `bootstrap/` -> dependency assembly and server construction
 - `diagnostics/` -> health scoring + issue inference
 - `httpapi/` -> HTTP handlers, routing, transport concerns
 - `model/` -> canonical backend API models

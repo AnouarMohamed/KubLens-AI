@@ -29,7 +29,11 @@ export default function PodDetailModal({ selectedPod, activeTab, onTabChange, on
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
               <StatusChip label="Status" value={selectedPod.status} tone={podStatusTone(selectedPod.status)} />
-              <StatusChip label="Restarts" value={String(selectedPod.restarts)} tone={selectedPod.restarts > 0 ? "warning" : "neutral"} />
+              <StatusChip
+                label="Restarts"
+                value={String(selectedPod.restarts)}
+                tone={selectedPod.restarts > 0 ? "warning" : "neutral"}
+              />
               <StatusChip label="Containers" value={String(selectedPod.containers.length)} tone="neutral" />
               <StatusChip label="Events" value={String(events.length)} tone={events.length > 0 ? "info" : "neutral"} />
             </div>
@@ -59,7 +63,10 @@ export default function PodDetailModal({ selectedPod, activeTab, onTabChange, on
               <section className="space-y-3">
                 <SectionTitle title="Containers" subtitle="Runtime, resources, environment, and mounts" />
                 {selectedPod.containers.map((container) => (
-                  <article key={container.name} className="rounded-xl border border-zinc-700 bg-zinc-900/80 overflow-hidden">
+                  <article
+                    key={container.name}
+                    className="rounded-xl border border-zinc-700 bg-zinc-900/80 overflow-hidden"
+                  >
                     <header className="border-b border-zinc-700 px-4 py-3 bg-zinc-800/40">
                       <p className="text-sm font-semibold text-zinc-100">{container.name}</p>
                       <p className="text-xs text-zinc-400 mt-0.5 font-mono break-all">{container.image || "-"}</p>
@@ -78,7 +85,9 @@ export default function PodDetailModal({ selectedPod, activeTab, onTabChange, on
 
                       <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                         <div>
-                          <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Environment Variables</p>
+                          <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                            Environment Variables
+                          </p>
                           <div className="mt-2 rounded-lg border border-zinc-700 overflow-hidden">
                             {(container.env || []).length > 0 ? (
                               <table className="min-w-full text-sm">
@@ -128,7 +137,10 @@ export default function PodDetailModal({ selectedPod, activeTab, onTabChange, on
                   {(selectedPod.volumes || []).length > 0 ? (
                     <div className="flex flex-wrap gap-2">
                       {selectedPod.volumes?.map((volume) => (
-                        <span key={volume.name} className="rounded-md border border-zinc-700 bg-zinc-800/60 px-2 py-1 text-xs text-zinc-300">
+                        <span
+                          key={volume.name}
+                          className="rounded-md border border-zinc-700 bg-zinc-800/60 px-2 py-1 text-xs text-zinc-300"
+                        >
                           {volume.name}
                         </span>
                       ))}
@@ -201,7 +213,15 @@ function TabButton({ active, label, onClick }: { active: boolean; label: string;
   );
 }
 
-function StatusChip({ label, value, tone }: { label: string; value: string; tone: "neutral" | "info" | "warning" | "critical" }) {
+function StatusChip({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone: "neutral" | "info" | "warning" | "critical";
+}) {
   const toneClass =
     tone === "critical"
       ? "border-[#d946ef]/45 bg-[#d946ef]/12"
@@ -252,7 +272,9 @@ function EventTypeBadge({ type }: { type: string }) {
   return (
     <span
       className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${
-        isWarning ? "border-[#eab308]/45 bg-[#eab308]/12 text-zinc-100" : "border-[#34c759]/45 bg-[#34c759]/12 text-zinc-100"
+        isWarning
+          ? "border-[#eab308]/45 bg-[#eab308]/12 text-zinc-100"
+          : "border-[#34c759]/45 bg-[#34c759]/12 text-zinc-100"
       }`}
     >
       {type || "-"}

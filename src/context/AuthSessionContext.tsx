@@ -39,22 +39,19 @@ export function AuthSessionProvider({ children }: { children: React.ReactNode })
     void refresh();
   }, [refresh]);
 
-  const login = useCallback(
-    async (token: string) => {
-      setIsLoading(true);
-      try {
-        const response = await api.login(token);
-        setSession(response);
-        setError(null);
-      } catch (err) {
-        setSession(null);
-        throw err;
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    [],
-  );
+  const login = useCallback(async (token: string) => {
+    setIsLoading(true);
+    try {
+      const response = await api.login(token);
+      setSession(response);
+      setError(null);
+    } catch (err) {
+      setSession(null);
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
   const logout = useCallback(async () => {
     setIsLoading(true);
@@ -76,7 +73,7 @@ export function AuthSessionProvider({ children }: { children: React.ReactNode })
         return false;
       }
       if (!session.enabled) {
-        return true;
+        return session.permissions.includes(permission);
       }
       if (!session.authenticated) {
         return false;
@@ -109,4 +106,3 @@ export function useAuthSession() {
   }
   return context;
 }
-

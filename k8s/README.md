@@ -1,34 +1,53 @@
-# Kubernetes Manifests
+# Kubernetes Deployment Manifests
 
-This folder contains first-class Kubernetes deployment manifests for the dashboard.
+This directory uses a **base + overlays** structure.
 
-## Files
+## Layout
 
-- `namespace.yaml`: dedicated namespace
-- `configmap.yaml`: non-secret runtime configuration
-- `secret.example.yaml`: template for sensitive values
-- `deployment.yaml`: workload definition
-- `service.yaml`: ClusterIP service
-- `predictor-deployment.yaml`: Python predictor microservice
-- `predictor-service.yaml`: predictor internal service
-- `kustomization.yaml`: apply all base resources
+- `base/`: shared resources (namespace, config, deployments, services, NetworkPolicies, PDB, HPA)
+- `overlays/dev`: development profile (operator RBAC + dev config)
+- `overlays/demo`: read-focused demo profile (readonly RBAC)
+- `overlays/prod`: production profile (auth required + stricter defaults)
+- `secret.example.yaml`: secrets template
 
-## Quick Deploy
+Each overlay includes explicit RBAC manifests (`clusterrole.yaml`, `clusterrolebinding.yaml`) so `kubectl kustomize` and CI validation work with root-only load restrictions.
 
-1. Build and push both images, then update:
-   - `deployment.yaml` (dashboard image)
-   - `predictor-deployment.yaml` (predictor image)
-2. Create secret from template:
-   - `cp k8s/secret.example.yaml k8s/secret.yaml`
-   - fill values
-   - `kubectl apply -f k8s/secret.yaml`
-3. Apply resources:
-   - `kubectl apply -k k8s/`
-4. Check status:
-   - `kubectl -n kubernetes-operations-dashboard get pods,svc`
+## Deploy
 
-## Optional Local Access
+### Dev overlay
 
 ```bash
-kubectl -n kubernetes-operations-dashboard port-forward svc/kubernetes-operations-dashboard 3000:80
+kubectl apply -k k8s/overlays/dev
 ```
+
+### Demo overlay
+
+```bash
+kubectl apply -k k8s/overlays/demo
+```
+
+### Prod overlay
+
+1. Create secret:
+
+```bash
+cp k8s/secret.example.yaml k8s/secret.yaml
+# fill values, especially AUTH_TOKENS
+kubectl apply -f k8s/secret.yaml
+```
+
+2. Apply overlay:
+
+```bash
+kubectl apply -k k8s/overlays/prod
+```
+
+## Validate manifests locally
+
+```bash
+kubectl kustomize k8s/overlays/dev > /dev/null
+kubectl kustomize k8s/overlays/demo > /dev/null
+kubectl kustomize k8s/overlays/prod > /dev/null
+```
+
+CI also validates rendered manifests with `kubeconform`.

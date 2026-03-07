@@ -8,24 +8,39 @@ metadata:
 data:
   PORT: "3000"
   DIST_DIR: "dist"
+  APP_MODE: "demo"
+  DEV_MODE: "false"
   KUBECONFIG_CONTEXTS: ""
+
   PREDICTOR_BASE_URL: "http://k8s-ops-predictor:8001"
   PREDICTOR_TIMEOUT_SECONDS: "4"
+
   ASSISTANT_PROVIDER: "none"
   ASSISTANT_TIMEOUT_SECONDS: "8"
   ASSISTANT_API_BASE_URL: "https://api.openai.com/v1"
   ASSISTANT_MODEL: ""
   ASSISTANT_TEMPERATURE: "0.2"
   ASSISTANT_MAX_TOKENS: "700"
+  ASSISTANT_RAG_ENABLED: "true"
+
   AUTH_ENABLED: "false"
   AUTH_TOKENS: ""
+
+  WRITE_ACTIONS_ENABLED: "false"
+
   RATE_LIMIT_ENABLED: "true"
   RATE_LIMIT_REQUESTS: "300"
   RATE_LIMIT_WINDOW_SECONDS: "60"
-  TERMINAL_ENABLED: "true"
+
+  TERMINAL_ENABLED: "false"
   TERMINAL_ALLOWED_PREFIXES: "kubectl,helm,kustomize,echo,pwd,ls,dir"
+  TERMINAL_DENIED_PREFIXES: "kubectl delete,kubectl apply,kubectl patch,kubectl exec,kubectl cp,kubectl run,helm upgrade,helm uninstall,sh,bash,cmd,powershell"
+  TERMINAL_KUBECTL_ALLOWED_VERBS: "get,describe,top,logs,api-resources,cluster-info,version"
+  TERMINAL_MAX_OUTPUT_BYTES: "20000"
+
   AUDIT_LOG_FILE: ""
   AUDIT_MAX_ITEMS: "500"
+
   ALERT_TIMEOUT_SECONDS: "5"
   ALERTMANAGER_WEBHOOK_URL: ""
   SLACK_WEBHOOK_URL: ""

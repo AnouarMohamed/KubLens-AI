@@ -71,12 +71,20 @@ func TestAlertDispatchEndpoint(t *testing.T) {
 		testClusterReader{},
 		nil,
 		logger,
+		WithWriteActionsEnabled(true),
+		WithAuth(AuthConfig{
+			Enabled: true,
+			Tokens: []AuthToken{
+				{Token: "operator-token", User: "operator", Role: "operator"},
+			},
+		}),
 		WithAlertDispatcher(testAlertDispatcher{enabled: true}),
 	)
 	router := server.Router("")
 
 	req := httptest.NewRequest(http.MethodPost, "/api/alerts/dispatch", strings.NewReader(`{"title":"test","message":"hello","severity":"warning"}`))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer operator-token")
 	rr := httptest.NewRecorder()
 	router.ServeHTTP(rr, req)
 	if rr.Code != http.StatusOK {

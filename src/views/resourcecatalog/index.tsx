@@ -60,7 +60,8 @@ export default function ResourceCatalog({ view }: { view: View }) {
     }
 
     return resources.filter((resource) => {
-      const haystack = `${resource.name} ${resource.namespace ?? ""} ${resource.status} ${resource.summary ?? ""}`.toLowerCase();
+      const haystack =
+        `${resource.name} ${resource.namespace ?? ""} ${resource.status} ${resource.summary ?? ""}`.toLowerCase();
       return haystack.includes(query);
     });
   }, [resources, search]);
@@ -117,18 +118,21 @@ export default function ResourceCatalog({ view }: { view: View }) {
     }
   }, [canWrite, load, view, yamlTarget, yamlText]);
 
-  const openScaleEditor = useCallback((resource: ResourceRecord) => {
-    if (!canWrite) {
-      setError("Your role does not allow scaling actions.");
-      return;
-    }
-    if (!resource.namespace) {
-      return;
-    }
+  const openScaleEditor = useCallback(
+    (resource: ResourceRecord) => {
+      if (!canWrite) {
+        setError("Your role does not allow scaling actions.");
+        return;
+      }
+      if (!resource.namespace) {
+        return;
+      }
 
-    setScaleTarget(resource);
-    setScaleReplicas(String(extractReplicas(resource.status)));
-  }, [canWrite]);
+      setScaleTarget(resource);
+      setScaleReplicas(String(extractReplicas(resource.status)));
+    },
+    [canWrite],
+  );
 
   const applyScale = useCallback(async () => {
     if (!canWrite) {
@@ -229,18 +233,20 @@ export default function ResourceCatalog({ view }: { view: View }) {
             placeholder="Search"
             className="field w-72"
           />
-          <button
-            onClick={() => void load()}
-            disabled={isLoading || isActing || !canRead}
-            className="btn"
-          >
+          <button onClick={() => void load()} disabled={isLoading || isActing || !canRead} className="btn">
             {isLoading ? "Loading" : "Refresh"}
           </button>
         </div>
       </header>
 
-      {message && <div className="rounded-xl border border-[#2496ed]/40 bg-[#2496ed]/12 px-3 py-2 text-sm text-zinc-100">{message}</div>}
-      {error && <div className="rounded-xl border border-zinc-700 bg-zinc-900/80 px-3 py-2 text-sm text-zinc-200">{error}</div>}
+      {message && (
+        <div className="rounded-xl border border-[#2496ed]/40 bg-[#2496ed]/12 px-3 py-2 text-sm text-zinc-100">
+          {message}
+        </div>
+      )}
+      {error && (
+        <div className="rounded-xl border border-zinc-700 bg-zinc-900/80 px-3 py-2 text-sm text-zinc-200">{error}</div>
+      )}
 
       <div className="table-shell">
         <table className="min-w-full text-left">
@@ -266,9 +272,25 @@ export default function ResourceCatalog({ view }: { view: View }) {
                   <td className="px-4 py-3">
                     {resource.namespace ? (
                       <div className="flex flex-wrap gap-2">
-                        <ActionButton onClick={() => void openYAMLEditor(resource)} disabled={isActing || !canWrite} label="Edit YAML" />
-                        {SCALEABLE_VIEWS.has(view) && <ActionButton onClick={() => openScaleEditor(resource)} disabled={isActing || !canWrite} label="Scale" />}
-                        {RESTARTABLE_VIEWS.has(view) && <ActionButton onClick={() => void restartResource(resource)} disabled={isActing || !canWrite} label="Restart" />}
+                        <ActionButton
+                          onClick={() => void openYAMLEditor(resource)}
+                          disabled={isActing || !canWrite}
+                          label="Edit YAML"
+                        />
+                        {SCALEABLE_VIEWS.has(view) && (
+                          <ActionButton
+                            onClick={() => openScaleEditor(resource)}
+                            disabled={isActing || !canWrite}
+                            label="Scale"
+                          />
+                        )}
+                        {RESTARTABLE_VIEWS.has(view) && (
+                          <ActionButton
+                            onClick={() => void restartResource(resource)}
+                            disabled={isActing || !canWrite}
+                            label="Restart"
+                          />
+                        )}
                         {ROLLBACK_VIEWS.has(view) && (
                           <button
                             onClick={() => void rollbackResource(resource)}
@@ -289,7 +311,9 @@ export default function ResourceCatalog({ view }: { view: View }) {
           </tbody>
         </table>
 
-        {!isLoading && filtered.length === 0 && <p className="px-4 py-8 text-center text-sm text-zinc-500">No resources found.</p>}
+        {!isLoading && filtered.length === 0 && (
+          <p className="px-4 py-8 text-center text-sm text-zinc-500">No resources found.</p>
+        )}
       </div>
 
       {yamlTarget && (
@@ -316,7 +340,11 @@ export default function ResourceCatalog({ view }: { view: View }) {
                 <button onClick={() => setYAMLTarget(null)} className="btn-sm border-zinc-600">
                   Cancel
                 </button>
-                <button onClick={() => void applyYAML()} disabled={isActing || !canWrite} className="btn-primary h-auto py-1.5 text-xs">
+                <button
+                  onClick={() => void applyYAML()}
+                  disabled={isActing || !canWrite}
+                  className="btn-primary h-auto py-1.5 text-xs"
+                >
                   {isActing ? "Applying" : "Apply"}
                 </button>
               </div>
@@ -349,7 +377,11 @@ export default function ResourceCatalog({ view }: { view: View }) {
                 <button onClick={() => setScaleTarget(null)} className="btn-sm border-zinc-600">
                   Cancel
                 </button>
-                <button onClick={() => void applyScale()} disabled={isActing || !canWrite} className="btn-primary h-auto py-1.5 text-xs">
+                <button
+                  onClick={() => void applyScale()}
+                  disabled={isActing || !canWrite}
+                  className="btn-primary h-auto py-1.5 text-xs"
+                >
                   {isActing ? "Scaling" : "Scale"}
                 </button>
               </div>
@@ -382,4 +414,3 @@ function extractReplicas(status: string): number {
 
   return 1;
 }
-

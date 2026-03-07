@@ -50,6 +50,8 @@ func (s *Server) handleTerminalExec(w http.ResponseWriter, r *http.Request) {
 
 	timeout := toTerminalTimeout(req.TimeoutSeconds)
 	result := executeTerminalCommand(r.Context(), command, cwd, timeout)
+	result.Stdout = truncateOutput(result.Stdout, s.terminal.maxOutputBytes)
+	result.Stderr = truncateOutput(result.Stderr, s.terminal.maxOutputBytes)
 	result.Timestamp = s.now().UTC().Format(time.RFC3339)
 
 	writeJSON(w, http.StatusOK, result)
@@ -132,4 +134,18 @@ func shellCommand(command string) (string, []string) {
 		return "powershell.exe", []string{"-NoProfile", "-NonInteractive", "-Command", command}
 	}
 	return "sh", []string{"-lc", command}
+}
+
+func truncateOutput(value string, maxBytes int) string {
+	if maxBytes <= 0 {
+		return value
+	}
+	if len(value) <= maxBytes {
+		return value
+	}
+	const marker = "\n...output truncated...\n"
+	if maxBytes <= len(marker) {
+		return marker
+	}
+	return value[:maxBytes-len(marker)] + marker
 }

@@ -144,6 +144,21 @@ type BuildInfo struct {
 	BuiltAt string `json:"builtAt"`
 }
 
+type RuntimeStatus struct {
+	Mode                string   `json:"mode"`
+	DevMode             bool     `json:"devMode"`
+	Insecure            bool     `json:"insecure"`
+	IsRealCluster       bool     `json:"isRealCluster"`
+	AuthEnabled         bool     `json:"authEnabled"`
+	WriteActionsEnabled bool     `json:"writeActionsEnabled"`
+	TerminalEnabled     bool     `json:"terminalEnabled"`
+	PredictorEnabled    bool     `json:"predictorEnabled"`
+	AssistantEnabled    bool     `json:"assistantEnabled"`
+	RAGEnabled          bool     `json:"ragEnabled"`
+	AlertsEnabled       bool     `json:"alertsEnabled"`
+	Warnings            []string `json:"warnings"`
+}
+
 type PodStats struct {
 	Total   int `json:"total"`
 	Running int `json:"running"`

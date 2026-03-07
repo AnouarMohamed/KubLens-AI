@@ -37,14 +37,15 @@ export default function Dashboard() {
   const load = useCallback(async () => {
     setIsLoading(true);
     try {
-      const [statsResponse, diagnosticsResponse, eventsResponse, nodesResponse, podsResponse, apiMetricsResponse] = await Promise.all([
-        api.getStats(),
-        api.getDiagnostics(),
-        api.getEvents(),
-        api.getNodes(),
-        api.getPods(),
-        api.getApiMetrics(),
-      ]);
+      const [statsResponse, diagnosticsResponse, eventsResponse, nodesResponse, podsResponse, apiMetricsResponse] =
+        await Promise.all([
+          api.getStats(),
+          api.getDiagnostics(),
+          api.getEvents(),
+          api.getNodes(),
+          api.getPods(),
+          api.getApiMetrics(),
+        ]);
       setStats(statsResponse);
       setDiagnostics(diagnosticsResponse);
       setEvents(eventsResponse);
@@ -98,7 +99,9 @@ export default function Dashboard() {
         </div>
       </header>
 
-      {error && <div className="rounded-xl border border-zinc-700 bg-zinc-900/80 px-3 py-2 text-sm text-zinc-200">{error}</div>}
+      {error && (
+        <div className="rounded-xl border border-zinc-700 bg-zinc-900/80 px-3 py-2 text-sm text-zinc-200">{error}</div>
+      )}
 
       <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
         <KPI label="Cluster CPU" value={stats?.cluster.cpu ?? "-"} />
@@ -149,7 +152,14 @@ export default function Dashboard() {
             <ResponsiveContainer width="100%" height={320}>
               <BarChart data={nodeUsageBars} margin={{ top: 6, right: 8, left: 0, bottom: 0 }}>
                 <CartesianGrid stroke="#d8dde6" strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="name" tick={{ fill: "#5d6674", fontSize: 12 }} interval={0} angle={-20} textAnchor="end" height={48} />
+                <XAxis
+                  dataKey="name"
+                  tick={{ fill: "#5d6674", fontSize: 12 }}
+                  interval={0}
+                  angle={-20}
+                  textAnchor="end"
+                  height={48}
+                />
                 <YAxis domain={[0, 100]} tick={{ fill: "#5d6674", fontSize: 12 }} unit="%" />
                 <Tooltip
                   contentStyle={TOOLTIP_STYLE}
@@ -171,8 +181,18 @@ export default function Dashboard() {
                 <CartesianGrid stroke="#d8dde6" strokeDasharray="3 3" vertical={false} />
                 <XAxis dataKey="time" tick={{ fill: "#5d6674", fontSize: 12 }} />
                 <YAxis domain={[0, 100]} tick={{ fill: "#5d6674", fontSize: 12 }} unit="%" />
-                <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(value: number) => [`${value.toFixed(1)}%`, "Avg CPU"]} />
-                <Line type="monotone" dataKey="value" stroke={DOCKER_BLUE} strokeWidth={2} dot={{ r: 2 }} activeDot={{ r: 4 }} />
+                <Tooltip
+                  contentStyle={TOOLTIP_STYLE}
+                  formatter={(value: number) => [`${value.toFixed(1)}%`, "Avg CPU"]}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="value"
+                  stroke={DOCKER_BLUE}
+                  strokeWidth={2}
+                  dot={{ r: 2 }}
+                  activeDot={{ r: 4 }}
+                />
               </LineChart>
             </ResponsiveContainer>
           ) : (
@@ -185,7 +205,14 @@ export default function Dashboard() {
             <ResponsiveContainer width="100%" height={320}>
               <BarChart data={eventReasonBars} margin={{ top: 6, right: 8, left: 0, bottom: 0 }}>
                 <CartesianGrid stroke="#d8dde6" strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="name" tick={{ fill: "#5d6674", fontSize: 12 }} interval={0} angle={-20} textAnchor="end" height={48} />
+                <XAxis
+                  dataKey="name"
+                  tick={{ fill: "#5d6674", fontSize: 12 }}
+                  interval={0}
+                  angle={-20}
+                  textAnchor="end"
+                  height={48}
+                />
                 <YAxis allowDecimals={false} tick={{ fill: "#5d6674", fontSize: 12 }} />
                 <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(value: number) => [value, "Events"]} />
                 <Bar dataKey="count" fill={CHART_AMBER} radius={[4, 4, 0, 0]} />
@@ -219,30 +246,10 @@ export default function Dashboard() {
         <ChartCard title="API Response Class Mix" subtitle="2xx, 3xx, 4xx, and 5xx totals from API observability.">
           {apiStatusMix.total > 0 ? (
             <div className="space-y-3 pt-1">
-              <StackBar
-                label="2xx"
-                value={apiStatusMix.ok}
-                total={apiStatusMix.total}
-                color={CHART_GREEN}
-              />
-              <StackBar
-                label="3xx"
-                value={apiStatusMix.redirect}
-                total={apiStatusMix.total}
-                color={CHART_BLUE}
-              />
-              <StackBar
-                label="4xx"
-                value={apiStatusMix.clientError}
-                total={apiStatusMix.total}
-                color={CHART_AMBER}
-              />
-              <StackBar
-                label="5xx"
-                value={apiStatusMix.serverError}
-                total={apiStatusMix.total}
-                color={CHART_MAGENTA}
-              />
+              <StackBar label="2xx" value={apiStatusMix.ok} total={apiStatusMix.total} color={CHART_GREEN} />
+              <StackBar label="3xx" value={apiStatusMix.redirect} total={apiStatusMix.total} color={CHART_BLUE} />
+              <StackBar label="4xx" value={apiStatusMix.clientError} total={apiStatusMix.total} color={CHART_AMBER} />
+              <StackBar label="5xx" value={apiStatusMix.serverError} total={apiStatusMix.total} color={CHART_MAGENTA} />
               <div className="rounded-lg border border-zinc-700 bg-zinc-900/60 px-3 py-2 text-xs text-zinc-300">
                 Total responses observed: <span className="font-semibold text-zinc-100">{apiStatusMix.total}</span>
               </div>
@@ -262,9 +269,13 @@ export default function Dashboard() {
               <div key={pod.id} className="rounded-lg border border-zinc-700 bg-zinc-800/60 px-3 py-2">
                 <div className="flex items-center justify-between gap-2 text-xs">
                   <span className="font-semibold text-zinc-100 truncate">{pod.name}</span>
-                  <span className="rounded-full bg-[#d946ef]/18 px-2 py-0.5 text-zinc-100 font-semibold">{pod.restarts} restarts</span>
+                  <span className="rounded-full bg-[#d946ef]/18 px-2 py-0.5 text-zinc-100 font-semibold">
+                    {pod.restarts} restarts
+                  </span>
                 </div>
-                <p className="text-[11px] text-zinc-400 mt-1">{pod.namespace} | {pod.status}</p>
+                <p className="text-[11px] text-zinc-400 mt-1">
+                  {pod.namespace} | {pod.status}
+                </p>
               </div>
             ))}
             {topRiskPods.length === 0 && <p className="text-sm text-zinc-400">No pod risk signals yet.</p>}
@@ -276,7 +287,10 @@ export default function Dashboard() {
           <p className="text-xs text-zinc-400 mt-1">Latest {Math.min(events.length, 8)} items.</p>
           <div className="mt-3 space-y-2">
             {events.slice(0, 8).map((event, index) => (
-              <div key={`${event.reason}-${index}`} className="rounded-lg border border-zinc-700 bg-zinc-800/60 px-3 py-2">
+              <div
+                key={`${event.reason}-${index}`}
+                className="rounded-lg border border-zinc-700 bg-zinc-800/60 px-3 py-2"
+              >
                 <div className="flex items-center justify-between text-xs">
                   <span className="font-semibold text-zinc-100">{event.reason}</span>
                   <span className="text-zinc-400">{event.age}</span>
@@ -299,7 +313,10 @@ export default function Dashboard() {
               <div>
                 <p className="text-[11px] uppercase tracking-wide text-zinc-500 font-semibold">Health Trend</p>
                 <div className="mt-2 h-2 rounded-full bg-zinc-700 overflow-hidden">
-                  <div className="h-full bg-[#4f7bff]" style={{ width: `${Math.max(0, Math.min(100, diagnostics.healthScore))}%` }} />
+                  <div
+                    className="h-full bg-[#4f7bff]"
+                    style={{ width: `${Math.max(0, Math.min(100, diagnostics.healthScore))}%` }}
+                  />
                 </div>
               </div>
               <p className="text-xs text-zinc-500">Updated: {formatTimestamp(diagnostics.timestamp)}</p>
@@ -346,15 +363,21 @@ export default function Dashboard() {
                     />
                   ))}
                   {prioritizedIssues.length === 0 && (
-                    <p className="text-sm text-zinc-500">No findings reported. System diagnostics are currently clean.</p>
+                    <p className="text-sm text-zinc-500">
+                      No findings reported. System diagnostics are currently clean.
+                    </p>
                   )}
                 </div>
               </section>
             </div>
 
             <details className="mt-4 rounded-lg border border-zinc-700 bg-zinc-800/40 px-3 py-2">
-              <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wide text-zinc-500">Raw narrative</summary>
-              <pre className="mt-3 whitespace-pre-wrap text-sm text-zinc-300 leading-relaxed">{diagnostics.summary}</pre>
+              <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                Raw narrative
+              </summary>
+              <pre className="mt-3 whitespace-pre-wrap text-sm text-zinc-300 leading-relaxed">
+                {diagnostics.summary}
+              </pre>
             </details>
           </>
         ) : (
@@ -414,7 +437,9 @@ function StackBar({ label, value, total, color }: { label: string; value: number
     <div>
       <div className="flex items-center justify-between gap-2 text-xs">
         <p className="font-semibold text-zinc-300">{label}</p>
-        <p className="text-zinc-500">{value} ({ratio.toFixed(1)}%)</p>
+        <p className="text-zinc-500">
+          {value} ({ratio.toFixed(1)}%)
+        </p>
       </div>
       <div className="mt-1.5 h-2 rounded-full bg-zinc-700 overflow-hidden">
         <div className="h-full" style={{ width: `${Math.max(0, Math.min(100, ratio))}%`, backgroundColor: color }} />
@@ -478,7 +503,11 @@ function SeverityBadge({ severity }: { severity: "critical" | "warning" | "info"
         ? "border-[#eab308]/50 bg-[#eab308]/14 text-zinc-100"
         : "border-[#4f7bff]/50 bg-[#4f7bff]/14 text-zinc-100";
 
-  return <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold tracking-wide ${className}`}>{label}</span>;
+  return (
+    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold tracking-wide ${className}`}>
+      {label}
+    </span>
+  );
 }
 
 function buildPrioritizedIssues(diagnostics: DiagnosticsResult | null) {
@@ -621,4 +650,3 @@ function formatTimestamp(value: string): string {
   }
   return date.toLocaleString();
 }
-

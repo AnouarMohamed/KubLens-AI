@@ -13,3 +13,5 @@ k8s/secret.yaml
 backend/server.exe
 predictor/.venv/
 predictor/__pycache__/
+predictor/app/__pycache__/
+predictor/.pytest_cache/

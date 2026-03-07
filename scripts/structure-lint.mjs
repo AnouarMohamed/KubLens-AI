@@ -132,8 +132,9 @@ function checkViewImports() {
       if (!isInViews && inViewsTarget) {
         const relativeToSrc = toPosix(path.relative(srcDir, file));
         const relativeTarget = pathSegmentsFrom(viewsDir, resolved);
-        if (relativeToSrc !== "App.tsx") {
-          fail(`Only src/App.tsx can import views directly: ${relativeToSrc} -> ${specifier}`);
+        const allowedViewImporters = new Set(["App.tsx", "app/AppShell.tsx"]);
+        if (!allowedViewImporters.has(relativeToSrc)) {
+          fail(`Only src/App.tsx or src/app/AppShell.tsx can import views directly: ${relativeToSrc} -> ${specifier}`);
           continue;
         }
 

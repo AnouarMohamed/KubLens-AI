@@ -24,8 +24,20 @@ WORKDIR /app
 
 RUN addgroup -S app && adduser -S app -G app && apk add --no-cache ca-certificates
 
+ARG APP_VERSION=v0.2.0
+ARG APP_COMMIT=local
+ARG APP_BUILT_AT=unknown
+
 ENV PORT=3000
 ENV DIST_DIR=dist
+ENV APP_MODE=demo
+ENV DEV_MODE=false
+ENV AUTH_ENABLED=false
+ENV WRITE_ACTIONS_ENABLED=false
+ENV TERMINAL_ENABLED=false
+ENV APP_VERSION=$APP_VERSION
+ENV APP_COMMIT=$APP_COMMIT
+ENV APP_BUILT_AT=$APP_BUILT_AT
 
 COPY --from=go-builder /out/server /app/server
 COPY --from=web-builder /workspace/dist /app/dist

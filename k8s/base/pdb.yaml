@@ -1,0 +1,21 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: kubelens-dashboard-pdb
+  namespace: kubernetes-operations-dashboard
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: kubernetes-operations-dashboard
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: kubelens-predictor-pdb
+  namespace: kubernetes-operations-dashboard
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: k8s-ops-predictor

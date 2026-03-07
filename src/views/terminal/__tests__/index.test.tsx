@@ -38,4 +38,3 @@ describe("Terminal view", () => {
     });
   });
 });
-

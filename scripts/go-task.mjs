@@ -23,7 +23,6 @@ const result = spawnSync("go", args, {
 });
 
 if (result.error) {
-  // eslint-disable-next-line no-console
   console.error(result.error.message);
   process.exit(1);
 }

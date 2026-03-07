@@ -41,9 +41,12 @@ type Server struct {
 	now       func() time.Time
 	logger    *slog.Logger
 	metrics   *requestMetrics
+	runtime   model.RuntimeStatus
 	auth      authRuntime
 	limiter   rateLimiter
 	terminal  terminalRuntimePolicy
+	writesOn  bool
+	anonPerms []string
 	audit     *auditLog
 	stream    *streamHub
 	alerts    alertDispatcher
@@ -132,6 +135,24 @@ func WithBuildInfo(info model.BuildInfo) Option {
 	}
 }
 
+func WithRuntimeStatus(status model.RuntimeStatus) Option {
+	return func(s *Server) {
+		s.runtime = status
+	}
+}
+
+func WithWriteActionsEnabled(enabled bool) Option {
+	return func(s *Server) {
+		s.writesOn = enabled
+	}
+}
+
+func WithAnonymousPermissions(permissions []string) Option {
+	return func(s *Server) {
+		s.anonPerms = append([]string(nil), permissions...)
+	}
+}
+
 func New(clusterSvc ClusterReader, opts ...Option) *Server {
 	return newServer(clusterSvc, time.Now, slog.New(slog.NewJSONHandler(os.Stdout, nil)), opts...)
 }
@@ -158,6 +179,14 @@ func newServer(clusterSvc ClusterReader, now func() time.Time, logger *slog.Logg
 			Commit:  "local",
 			BuiltAt: now().UTC().Format(time.RFC3339),
 		},
+		writesOn:  false,
+		anonPerms: []string{"read", "assist", "stream"},
+		runtime: model.RuntimeStatus{
+			Mode:                "demo",
+			Insecure:            true,
+			WriteActionsEnabled: false,
+			TerminalEnabled:     false,
+		},
 	}
 	server.limiter.configure(RateLimitConfig{
 		Enabled:  true,
@@ -165,7 +194,7 @@ func newServer(clusterSvc ClusterReader, now func() time.Time, logger *slog.Logg
 		Window:   time.Minute,
 	})
 	server.terminal.configure(TerminalPolicy{
-		Enabled: true,
+		Enabled: false,
 	})
 
 	for _, opt := range opts {
@@ -194,6 +223,7 @@ func (s *Server) Router(distDir string) http.Handler {
 		api.Get("/clusters", s.handleClusters)
 		api.Post("/clusters/select", s.handleSelectCluster)
 		api.Get("/version", s.handleVersion)
+		api.Get("/runtime", s.handleRuntime)
 		api.Get("/cluster-info", s.handleClusterInfo)
 		api.Get("/metrics", s.handleMetrics)
 		api.Post("/alerts/dispatch", s.handleAlertDispatch)

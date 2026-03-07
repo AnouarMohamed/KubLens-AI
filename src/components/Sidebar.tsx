@@ -17,34 +17,36 @@ export default function Sidebar({ currentView, onViewChange }: SidebarProps) {
   useEffect(() => {
     let cancelled = false;
 
-    Promise.allSettled([api.getClusterInfo(), api.getStats(), api.getVersion()]).then(([clusterResult, statsResult, versionResult]) => {
-      if (cancelled) {
-        return;
-      }
+    Promise.allSettled([api.getClusterInfo(), api.getStats(), api.getVersion()])
+      .then(([clusterResult, statsResult, versionResult]) => {
+        if (cancelled) {
+          return;
+        }
 
-      if (clusterResult.status === "fulfilled") {
-        setIsReal(clusterResult.value.isRealCluster);
-      } else {
-        setIsReal(false);
-      }
+        if (clusterResult.status === "fulfilled") {
+          setIsReal(clusterResult.value.isRealCluster);
+        } else {
+          setIsReal(false);
+        }
 
-      if (statsResult.status === "fulfilled") {
-        setStats(statsResult.value);
-      }
+        if (statsResult.status === "fulfilled") {
+          setStats(statsResult.value);
+        }
 
-      if (versionResult.status === "fulfilled") {
-        setBuild(versionResult.value);
-        setBackendLegacy(false);
-      } else {
-        const err = versionResult.reason;
-        setBuild(null);
-        setBackendLegacy(err instanceof ApiError && err.status === 404);
-      }
-    }).catch(() => {
-      if (!cancelled) {
-        setIsReal(false);
-      }
-    });
+        if (versionResult.status === "fulfilled") {
+          setBuild(versionResult.value);
+          setBackendLegacy(false);
+        } else {
+          const err = versionResult.reason;
+          setBuild(null);
+          setBackendLegacy(err instanceof ApiError && err.status === 404);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setIsReal(false);
+        }
+      });
 
     return () => {
       cancelled = true;
@@ -68,7 +70,9 @@ export default function Sidebar({ currentView, onViewChange }: SidebarProps) {
           <h1 className="mt-2 text-2xl font-semibold text-zinc-100 tracking-tight">Cluster Control Console</h1>
           <div className="mt-4 flex items-center gap-2">
             <span className={`h-2.5 w-2.5 rounded-full ${isReal ? "bg-[#2496ed]" : "bg-zinc-500"}`} />
-            <span className="text-xs font-medium text-zinc-400">{isReal ? "Live cluster connection" : "Mock runtime mode"}</span>
+            <span className="text-xs font-medium text-zinc-400">
+              {isReal ? "Live cluster connection" : "Mock runtime mode"}
+            </span>
           </div>
 
           <div className="mt-4 grid grid-cols-3 gap-2">
@@ -84,7 +88,9 @@ export default function Sidebar({ currentView, onViewChange }: SidebarProps) {
         <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-5 scrollbar-hide">
           {VIEW_SECTIONS.map((section) => (
             <section key={section.id}>
-              <p className="px-2 pb-2 text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{section.label}</p>
+              <p className="px-2 pb-2 text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
+                {section.label}
+              </p>
               <div className="space-y-1.5">
                 {section.items.map((item) => {
                   const active = item.id === currentView;
@@ -101,12 +107,16 @@ export default function Sidebar({ currentView, onViewChange }: SidebarProps) {
                       <div className="flex items-center justify-between gap-2">
                         <p className="text-sm font-medium">{item.label}</p>
                         {item.id === "metrics" && (
-                          <span className={`rounded-full px-2 py-0.5 text-[9px] font-semibold ${active ? "bg-[#2496ed]/25 text-zinc-100" : "bg-zinc-700 text-zinc-300"}`}>
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-[9px] font-semibold ${active ? "bg-[#2496ed]/25 text-zinc-100" : "bg-zinc-700 text-zinc-300"}`}
+                          >
                             Live
                           </span>
                         )}
                       </div>
-                      <p className={`text-[11px] mt-1 leading-relaxed ${active ? "text-zinc-300" : "text-zinc-500"}`}>{item.description}</p>
+                      <p className={`text-[11px] mt-1 leading-relaxed ${active ? "text-zinc-300" : "text-zinc-500"}`}>
+                        {item.description}
+                      </p>
                     </button>
                   );
                 })}
@@ -117,7 +127,9 @@ export default function Sidebar({ currentView, onViewChange }: SidebarProps) {
 
         <footer className="px-5 py-4 border-t border-zinc-700 bg-zinc-800/60">
           <p className="text-[11px] uppercase tracking-wide text-zinc-500">Tip</p>
-          <p className="text-xs text-zinc-300 mt-1">Press <span className="font-mono font-semibold">/</span> to focus search.</p>
+          <p className="text-xs text-zinc-300 mt-1">
+            Press <span className="font-mono font-semibold">/</span> to focus search.
+          </p>
           <div className="mt-3 rounded-lg border border-zinc-700 bg-zinc-900/70 px-2 py-1.5">
             <p className="text-[10px] uppercase tracking-wide text-zinc-500">Backend Build</p>
             {build ? (

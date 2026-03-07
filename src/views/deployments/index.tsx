@@ -52,14 +52,22 @@ export default function Deployments() {
   }, [authLoading, load]);
 
   const namespaces = useMemo(() => {
-    return Array.from(new Set(items.map((item) => item.namespace).filter((value): value is string => typeof value === "string" && value !== ""))).sort();
+    return Array.from(
+      new Set(
+        items
+          .map((item) => item.namespace)
+          .filter((value): value is string => typeof value === "string" && value !== ""),
+      ),
+    ).sort();
   }, [items]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return items.filter((item) => {
       const matchNamespace = namespaceFilter === "All" || item.namespace === namespaceFilter;
-      const matchSearch = q === "" || `${item.name} ${item.namespace ?? ""} ${item.status} ${item.summary ?? ""}`.toLowerCase().includes(q);
+      const matchSearch =
+        q === "" ||
+        `${item.name} ${item.namespace ?? ""} ${item.status} ${item.summary ?? ""}`.toLowerCase().includes(q);
       return matchNamespace && matchSearch;
     });
   }, [items, namespaceFilter, search]);
@@ -111,7 +119,9 @@ export default function Deployments() {
     }
     setIsActing(true);
     try {
-      const response = await api.applyResourceYAML("deployments", yamlEditor.target.namespace, yamlEditor.target.name, { yaml: yamlEditor.yaml });
+      const response = await api.applyResourceYAML("deployments", yamlEditor.target.namespace, yamlEditor.target.name, {
+        yaml: yamlEditor.yaml,
+      });
       setMessage(response.message);
       setYAMLEditor(null);
       await load();
@@ -202,8 +212,17 @@ export default function Deployments() {
           <p className="text-sm text-zinc-400 mt-1">Specialized rollout controls with detail and YAML workflows.</p>
         </div>
         <div className="flex gap-2">
-          <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search deployments" className="field w-72" />
-          <select value={namespaceFilter} onChange={(event) => setNamespaceFilter(event.target.value)} className="field">
+          <input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search deployments"
+            className="field w-72"
+          />
+          <select
+            value={namespaceFilter}
+            onChange={(event) => setNamespaceFilter(event.target.value)}
+            className="field"
+          >
             <option value="All">All namespaces</option>
             {namespaces.map((namespace) => (
               <option key={namespace} value={namespace}>
@@ -217,8 +236,14 @@ export default function Deployments() {
         </div>
       </header>
 
-      {message && <div className="rounded-xl border border-[#2496ed]/40 bg-[#2496ed]/12 px-3 py-2 text-sm text-zinc-100">{message}</div>}
-      {error && <div className="rounded-xl border border-zinc-700 bg-zinc-900/80 px-3 py-2 text-sm text-zinc-200">{error}</div>}
+      {message && (
+        <div className="rounded-xl border border-[#2496ed]/40 bg-[#2496ed]/12 px-3 py-2 text-sm text-zinc-100">
+          {message}
+        </div>
+      )}
+      {error && (
+        <div className="rounded-xl border border-zinc-700 bg-zinc-900/80 px-3 py-2 text-sm text-zinc-200">{error}</div>
+      )}
 
       <div className="table-shell">
         <table className="min-w-full text-left text-sm">
@@ -246,16 +271,32 @@ export default function Deployments() {
                 <td className="px-4 py-3 text-zinc-400">{item.summary || "-"}</td>
                 <td className="px-4 py-3">
                   <div className="flex flex-wrap gap-2">
-                    <button onClick={() => setScaleTarget(item)} disabled={!canWrite || isActing} className="btn-sm border-zinc-600">
+                    <button
+                      onClick={() => setScaleTarget(item)}
+                      disabled={!canWrite || isActing}
+                      className="btn-sm border-zinc-600"
+                    >
                       Scale
                     </button>
-                    <button onClick={() => void restart(item)} disabled={!canWrite || isActing} className="btn-sm border-zinc-600">
+                    <button
+                      onClick={() => void restart(item)}
+                      disabled={!canWrite || isActing}
+                      className="btn-sm border-zinc-600"
+                    >
                       Restart
                     </button>
-                    <button onClick={() => void rollback(item)} disabled={!canWrite || isActing} className="btn-sm border-zinc-600">
+                    <button
+                      onClick={() => void rollback(item)}
+                      disabled={!canWrite || isActing}
+                      className="btn-sm border-zinc-600"
+                    >
                       Rollback
                     </button>
-                    <button onClick={() => void openYAMLEditor(item)} disabled={!canWrite || isActing} className="btn-sm border-zinc-600">
+                    <button
+                      onClick={() => void openYAMLEditor(item)}
+                      disabled={!canWrite || isActing}
+                      className="btn-sm border-zinc-600"
+                    >
                       YAML
                     </button>
                   </div>
@@ -265,7 +306,9 @@ export default function Deployments() {
           </tbody>
         </table>
 
-        {!isLoading && filtered.length === 0 && <p className="px-4 py-8 text-center text-sm text-zinc-500">No deployments match the current filters.</p>}
+        {!isLoading && filtered.length === 0 && (
+          <p className="px-4 py-8 text-center text-sm text-zinc-500">No deployments match the current filters.</p>
+        )}
       </div>
 
       {detail && (
@@ -288,7 +331,9 @@ export default function Deployments() {
                 <InfoRow label="Age" value={detail.target.age} />
                 <InfoRow label="Summary" value={detail.target.summary || "n/a"} />
               </div>
-              <pre className="max-h-[65vh] overflow-auto rounded-md border border-zinc-700 bg-zinc-950 p-3 text-xs text-zinc-200">{detail.yaml}</pre>
+              <pre className="max-h-[65vh] overflow-auto rounded-md border border-zinc-700 bg-zinc-950 p-3 text-xs text-zinc-200">
+                {detail.yaml}
+              </pre>
             </div>
           </div>
         </div>
@@ -315,7 +360,11 @@ export default function Deployments() {
                 <button onClick={() => setYAMLEditor(null)} className="btn-sm border-zinc-600">
                   Cancel
                 </button>
-                <button onClick={() => void applyYAML()} disabled={!canWrite || isActing} className="btn-primary h-auto py-1.5 text-xs">
+                <button
+                  onClick={() => void applyYAML()}
+                  disabled={!canWrite || isActing}
+                  className="btn-primary h-auto py-1.5 text-xs"
+                >
                   {isActing ? "Applying" : "Apply"}
                 </button>
               </div>
@@ -336,13 +385,23 @@ export default function Deployments() {
             <div className="p-4 space-y-3">
               <label className="text-xs text-zinc-400">
                 Replicas
-                <input value={scaleReplicas} onChange={(event) => setScaleReplicas(event.target.value)} type="number" min={0} className="field mt-1 w-full" />
+                <input
+                  value={scaleReplicas}
+                  onChange={(event) => setScaleReplicas(event.target.value)}
+                  type="number"
+                  min={0}
+                  className="field mt-1 w-full"
+                />
               </label>
               <div className="flex justify-end gap-2">
                 <button onClick={() => setScaleTarget(null)} className="btn-sm border-zinc-600">
                   Cancel
                 </button>
-                <button onClick={() => void scale()} disabled={!canWrite || isActing} className="btn-primary h-auto py-1.5 text-xs">
+                <button
+                  onClick={() => void scale()}
+                  disabled={!canWrite || isActing}
+                  className="btn-primary h-auto py-1.5 text-xs"
+                >
                   {isActing ? "Scaling" : "Scale"}
                 </button>
               </div>
@@ -361,4 +420,3 @@ function InfoRow({ label, value }: { label: string; value: string }) {
     </p>
   );
 }
-

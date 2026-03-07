@@ -1,11 +1,9 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import List, Optional
 
 from fastapi import FastAPI
 from pydantic import BaseModel, Field
-
 
 api = FastAPI(title="k8s-ops-predictor", version="1.0.0")
 
@@ -37,7 +35,7 @@ class K8sEvent(BaseModel):
     age: str = ""
     from_: str = Field(default="", alias="from")
     message: str = ""
-    count: Optional[int] = None
+    count: int | None = None
 
 
 class PredictionSignal(BaseModel):
@@ -49,25 +47,25 @@ class IncidentPrediction(BaseModel):
     id: str
     resourceKind: str
     resource: str
-    namespace: Optional[str] = None
+    namespace: str | None = None
     riskScore: int
     confidence: int
     summary: str
     recommendation: str
-    signals: List[PredictionSignal] = []
+    signals: list[PredictionSignal] = Field(default_factory=list)
 
 
 class PredictionRequest(BaseModel):
-    pods: List[PodSummary] = []
-    nodes: List[NodeSummary] = []
-    events: List[K8sEvent] = []
-    timestamp: Optional[str] = None
+    pods: list[PodSummary] = Field(default_factory=list)
+    nodes: list[NodeSummary] = Field(default_factory=list)
+    events: list[K8sEvent] = Field(default_factory=list)
+    timestamp: str | None = None
 
 
 class PredictionResponse(BaseModel):
     source: str
     generatedAt: str
-    items: List[IncidentPrediction]
+    items: list[IncidentPrediction]
 
 
 @api.get("/healthz")
@@ -78,11 +76,11 @@ def healthz() -> dict:
 @api.post("/predict", response_model=PredictionResponse)
 def predict(request: PredictionRequest) -> PredictionResponse:
     warning_events = count_warning_events(request.events)
-    items: List[IncidentPrediction] = []
+    items: list[IncidentPrediction] = []
 
     for pod in request.pods:
         score = 0
-        signals: List[PredictionSignal] = []
+        signals: list[PredictionSignal] = []
 
         status = pod.status.lower().strip()
         if status == "failed":
@@ -139,7 +137,7 @@ def predict(request: PredictionRequest) -> PredictionResponse:
 
     for node in request.nodes:
         score = 0
-        signals: List[PredictionSignal] = []
+        signals: list[PredictionSignal] = []
 
         if node.status.strip().lower() == "notready":
             score += 75
@@ -183,7 +181,7 @@ def predict(request: PredictionRequest) -> PredictionResponse:
     )
 
 
-def count_warning_events(events: List[K8sEvent]) -> int:
+def count_warning_events(events: list[K8sEvent]) -> int:
     warning_reasons = {"backoff", "failed", "unhealthy", "oomkilled"}
     total = 0
     for event in events:
@@ -199,23 +197,29 @@ def parse_cpu_milli(value: str) -> int:
     raw = value.strip().lower()
     if not raw or raw == "n/a":
         return 0
-    if raw.endswith("m"):
-        return int(float(raw[:-1] or 0))
-    return int(float(raw) * 1000)
+    try:
+        if raw.endswith("m"):
+            return int(float(raw[:-1] or 0))
+        return int(float(raw) * 1000)
+    except ValueError:
+        return 0
 
 
 def parse_memory_mi(value: str) -> int:
     raw = value.strip().lower()
     if not raw or raw == "n/a":
         return 0
-    if raw.endswith("mi"):
-        return int(float(raw[:-2] or 0))
-    if raw.endswith("gi"):
-        return int(float(raw[:-2] or 0) * 1024)
-    if raw.endswith("ki"):
-        return int(float(raw[:-2] or 0) / 1024)
-    if raw.endswith("b"):
-        return int(float(raw[:-1] or 0) / (1024 * 1024))
+    try:
+        if raw.endswith("mi"):
+            return int(float(raw[:-2] or 0))
+        if raw.endswith("gi"):
+            return int(float(raw[:-2] or 0) * 1024)
+        if raw.endswith("ki"):
+            return int(float(raw[:-2] or 0) / 1024)
+        if raw.endswith("b"):
+            return int(float(raw[:-1] or 0) / (1024 * 1024))
+    except ValueError:
+        return 0
     return 0
 
 
@@ -223,7 +227,11 @@ def parse_percent(value: str) -> float:
     raw = value.strip().lower().replace("%", "")
     if not raw or raw == "n/a":
         return 0.0
-    return max(0.0, min(100.0, float(raw)))
+    try:
+        parsed = float(raw)
+    except ValueError:
+        return 0.0
+    return max(0.0, min(100.0, parsed))
 
 
 def clamp(value: int, low: int, high: int) -> int:

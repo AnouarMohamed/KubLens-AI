@@ -51,23 +51,26 @@ export default function Nodes() {
     return nodes.filter((node) => `${node.name} ${node.roles} ${node.status}`.toLowerCase().includes(query));
   }, [nodes, search]);
 
-  const openDetail = useCallback(async (name: string) => {
-    if (!canRead) {
-      setError("Authenticate to view node details.");
-      return;
-    }
+  const openDetail = useCallback(
+    async (name: string) => {
+      if (!canRead) {
+        setError("Authenticate to view node details.");
+        return;
+      }
 
-    setIsBusy(true);
-    try {
-      const response = await api.getNodeDetail(name);
-      setSelectedNode(response);
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load node details");
-    } finally {
-      setIsBusy(false);
-    }
-  }, [canRead]);
+      setIsBusy(true);
+      try {
+        const response = await api.getNodeDetail(name);
+        setSelectedNode(response);
+        setError(null);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to load node details");
+      } finally {
+        setIsBusy(false);
+      }
+    },
+    [canRead],
+  );
 
   const cordon = useCallback(
     async (name: string) => {
@@ -107,17 +110,15 @@ export default function Nodes() {
             placeholder="Search nodes"
             className="field w-72"
           />
-          <button
-            onClick={() => void load()}
-            disabled={isLoading || isBusy || !canRead}
-            className="btn"
-          >
+          <button onClick={() => void load()} disabled={isLoading || isBusy || !canRead} className="btn">
             {isLoading ? "Loading" : "Refresh"}
           </button>
         </div>
       </header>
 
-      {error && <div className="rounded-md border border-zinc-700 bg-zinc-900/80 px-3 py-2 text-sm text-zinc-200">{error}</div>}
+      {error && (
+        <div className="rounded-md border border-zinc-700 bg-zinc-900/80 px-3 py-2 text-sm text-zinc-200">{error}</div>
+      )}
 
       <div className="table-shell">
         <table className="min-w-full text-left text-sm">
@@ -159,13 +160,12 @@ export default function Nodes() {
         </table>
 
         {isLoading && <p className="px-4 py-8 text-center text-sm text-zinc-500">Loading nodes...</p>}
-        {!isLoading && filteredNodes.length === 0 && <p className="px-4 py-8 text-center text-sm text-zinc-500">No nodes found.</p>}
+        {!isLoading && filteredNodes.length === 0 && (
+          <p className="px-4 py-8 text-center text-sm text-zinc-500">No nodes found.</p>
+        )}
       </div>
 
       <NodeDetailModal selectedNode={selectedNode} onClose={() => setSelectedNode(null)} />
     </div>
   );
 }
-
-
-

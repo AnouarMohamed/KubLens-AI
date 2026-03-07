@@ -105,7 +105,10 @@ export default function Metrics() {
     return percentage(stats.pods.running + succeeded, stats.pods.total);
   }, [stats]);
 
-  const apiSuccess = useMemo(() => percentage(apiStatusTotals.ok + apiStatusTotals.redirect, apiStatusTotals.total), [apiStatusTotals]);
+  const apiSuccess = useMemo(
+    () => percentage(apiStatusTotals.ok + apiStatusTotals.redirect, apiStatusTotals.total),
+    [apiStatusTotals],
+  );
 
   const podLifecycleBars = useMemo(() => buildPodLifecycleBars(stats), [stats]);
   const nodeUtilizationBars = useMemo(() => buildNodeUtilizationBars(nodes), [nodes]);
@@ -124,16 +127,13 @@ export default function Metrics() {
             <p className="text-[11px] uppercase tracking-[0.22em] text-zinc-400">Operations Metrics</p>
             <h2 className="mt-2 text-3xl font-semibold tracking-tight">Cluster Telemetry</h2>
             <p className="text-sm text-zinc-300 mt-2 max-w-2xl">
-              Charts are selected by data semantics: trends use lines, comparisons use grouped bars, and composition uses stacked bars.
+              Charts are selected by data semantics: trends use lines, comparisons use grouped bars, and composition
+              uses stacked bars.
             </p>
           </div>
           <div className="flex items-center gap-3">
             <label className="flex items-center gap-2 text-xs text-zinc-300 rounded-xl border border-zinc-700 px-3 py-2 bg-zinc-800/50">
-              <input
-                type="checkbox"
-                checked={autoRefresh}
-                onChange={(event) => setAutoRefresh(event.target.checked)}
-              />
+              <input type="checkbox" checked={autoRefresh} onChange={(event) => setAutoRefresh(event.target.checked)} />
               Auto refresh (15s)
             </label>
             <button
@@ -147,7 +147,9 @@ export default function Metrics() {
         </div>
       </header>
 
-      {error && <div className="rounded-xl border border-zinc-700 bg-zinc-900/85 px-3 py-2 text-sm text-zinc-200">{error}</div>}
+      {error && (
+        <div className="rounded-xl border border-zinc-700 bg-zinc-900/85 px-3 py-2 text-sm text-zinc-200">{error}</div>
+      )}
 
       <section className="grid grid-cols-1 xl:grid-cols-3 gap-4">
         <SignalCard
@@ -193,9 +195,22 @@ export default function Metrics() {
                 <ResponsiveContainer width="100%" height={340}>
                   <BarChart data={nodeUtilizationBars} margin={{ top: 6, right: 10, left: 0, bottom: 0 }}>
                     <CartesianGrid stroke={GRID_STROKE} strokeDasharray="3 3" vertical={false} />
-                    <XAxis dataKey="name" tick={{ fill: "#5d6674", fontSize: 12 }} interval={0} angle={-20} textAnchor="end" height={52} />
+                    <XAxis
+                      dataKey="name"
+                      tick={{ fill: "#5d6674", fontSize: 12 }}
+                      interval={0}
+                      angle={-20}
+                      textAnchor="end"
+                      height={52}
+                    />
                     <YAxis domain={[0, 100]} tick={{ fill: "#5d6674", fontSize: 12 }} unit="%" />
-                    <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(value: number, name: string) => [`${value.toFixed(1)}%`, name === "cpu" ? "CPU" : "Memory"]} />
+                    <Tooltip
+                      contentStyle={TOOLTIP_STYLE}
+                      formatter={(value: number, name: string) => [
+                        `${value.toFixed(1)}%`,
+                        name === "cpu" ? "CPU" : "Memory",
+                      ]}
+                    />
                     <Bar dataKey="cpu" name="CPU" fill={CHART_BLUE} radius={[4, 4, 0, 0]} />
                     <Bar dataKey="memory" name="Memory" fill={CHART_GREEN} radius={[4, 4, 0, 0]} />
                   </BarChart>
@@ -212,8 +227,18 @@ export default function Metrics() {
                     <CartesianGrid stroke={GRID_STROKE} strokeDasharray="3 3" vertical={false} />
                     <XAxis dataKey="time" tick={{ fill: "#5d6674", fontSize: 12 }} />
                     <YAxis domain={[0, 100]} tick={{ fill: "#5d6674", fontSize: 12 }} unit="%" />
-                    <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(value: number) => [`${value.toFixed(1)}%`, "Avg CPU"]} />
-                    <Area type="monotone" dataKey="value" stroke={DOCKER_BLUE} fill={CHART_BLUE} fillOpacity={0.22} strokeWidth={2} />
+                    <Tooltip
+                      contentStyle={TOOLTIP_STYLE}
+                      formatter={(value: number) => [`${value.toFixed(1)}%`, "Avg CPU"]}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="value"
+                      stroke={DOCKER_BLUE}
+                      fill={CHART_BLUE}
+                      fillOpacity={0.22}
+                      strokeWidth={2}
+                    />
                   </AreaChart>
                 </ResponsiveContainer>
               ) : (
@@ -249,7 +274,14 @@ export default function Metrics() {
               <ResponsiveContainer width="100%" height={340}>
                 <BarChart data={restartBands} margin={{ top: 6, right: 10, left: 0, bottom: 0 }}>
                   <CartesianGrid stroke={GRID_STROKE} strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="name" tick={{ fill: "#5d6674", fontSize: 12 }} interval={0} angle={-18} textAnchor="end" height={50} />
+                  <XAxis
+                    dataKey="name"
+                    tick={{ fill: "#5d6674", fontSize: 12 }}
+                    interval={0}
+                    angle={-18}
+                    textAnchor="end"
+                    height={50}
+                  />
                   <YAxis allowDecimals={false} tick={{ fill: "#5d6674", fontSize: 12 }} />
                   <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(value: number) => [value, "Pods"]} />
                   <Bar dataKey="value" radius={[4, 4, 0, 0]}>
@@ -264,7 +296,11 @@ export default function Metrics() {
             <ChartCard title="Top Pod Resource Pressure">
               {podPressureBars.length > 0 ? (
                 <ResponsiveContainer width="100%" height={340}>
-                  <BarChart data={podPressureBars} layout="vertical" margin={{ top: 6, right: 10, left: 10, bottom: 0 }}>
+                  <BarChart
+                    data={podPressureBars}
+                    layout="vertical"
+                    margin={{ top: 6, right: 10, left: 10, bottom: 0 }}
+                  >
                     <CartesianGrid stroke={GRID_STROKE} strokeDasharray="3 3" horizontal={false} />
                     <XAxis type="number" domain={[0, 100]} tick={{ fill: "#5d6674", fontSize: 12 }} unit="%" />
                     <YAxis type="category" dataKey="name" width={120} tick={{ fill: "#5d6674", fontSize: 12 }} />
@@ -273,7 +309,10 @@ export default function Metrics() {
                       formatter={(value: number, name: string, item) => {
                         const payload = item.payload as { cpuMilli: number; memMi: number };
                         if (name === "score") {
-                          return [`${value.toFixed(1)}%`, `Pressure (CPU ${payload.cpuMilli}m | Mem ${payload.memMi}Mi)`];
+                          return [
+                            `${value.toFixed(1)}%`,
+                            `Pressure (CPU ${payload.cpuMilli}m | Mem ${payload.memMi}Mi)`,
+                          ];
                         }
                         return [value, name];
                       }}
@@ -314,12 +353,33 @@ export default function Metrics() {
                 <ResponsiveContainer width="100%" height={340}>
                   <ComposedChart data={routePerformance} margin={{ top: 6, right: 10, left: 0, bottom: 0 }}>
                     <CartesianGrid stroke={GRID_STROKE} strokeDasharray="3 3" vertical={false} />
-                    <XAxis dataKey="route" tick={{ fill: "#5d6674", fontSize: 12 }} interval={0} angle={-20} textAnchor="end" height={52} />
+                    <XAxis
+                      dataKey="route"
+                      tick={{ fill: "#5d6674", fontSize: 12 }}
+                      interval={0}
+                      angle={-20}
+                      textAnchor="end"
+                      height={52}
+                    />
                     <YAxis yAxisId="requests" tick={{ fill: "#5d6674", fontSize: 12 }} allowDecimals={false} />
                     <YAxis yAxisId="latency" orientation="right" tick={{ fill: "#5d6674", fontSize: 12 }} />
                     <Tooltip contentStyle={TOOLTIP_STYLE} />
-                    <Bar yAxisId="requests" dataKey="requests" fill={CHART_BLUE} radius={[4, 4, 0, 0]} name="Requests" />
-                    <Line yAxisId="latency" type="monotone" dataKey="avgLatencyMs" stroke={CHART_AMBER} strokeWidth={2} dot={{ r: 3 }} name="Avg Latency (ms)" />
+                    <Bar
+                      yAxisId="requests"
+                      dataKey="requests"
+                      fill={CHART_BLUE}
+                      radius={[4, 4, 0, 0]}
+                      name="Requests"
+                    />
+                    <Line
+                      yAxisId="latency"
+                      type="monotone"
+                      dataKey="avgLatencyMs"
+                      stroke={CHART_AMBER}
+                      strokeWidth={2}
+                      dot={{ r: 3 }}
+                      name="Avg Latency (ms)"
+                    />
                   </ComposedChart>
                 </ResponsiveContainer>
               ) : (
@@ -375,7 +435,9 @@ export default function Metrics() {
             {slowRoutes.map((route, index) => (
               <div key={route.route} className="rounded-lg border border-zinc-800 bg-zinc-900/70 px-3 py-2">
                 <div className="flex items-center justify-between gap-2 text-xs">
-                  <span className="font-medium text-zinc-100 truncate">{index + 1}. {route.route}</span>
+                  <span className="font-medium text-zinc-100 truncate">
+                    {index + 1}. {route.route}
+                  </span>
                   <span className="text-zinc-300">{route.avgLatencyMs.toFixed(2)}ms</span>
                 </div>
                 <div className="mt-2 h-2 rounded-full bg-zinc-800 overflow-hidden">
@@ -527,7 +589,9 @@ function buildRestartBands(pods: Pod[]): Array<{ name: string; value: number; co
   ].filter((row) => row.value > 0);
 }
 
-function buildTopPodPressure(pods: Pod[]): Array<{ name: string; score: number; cpuMilli: number; memMi: number; color: string }> {
+function buildTopPodPressure(
+  pods: Pod[],
+): Array<{ name: string; score: number; cpuMilli: number; memMi: number; color: string }> {
   return pods
     .map((pod) => {
       const cpuMilli = parseCPUMilli(pod.cpu);
@@ -577,7 +641,9 @@ function buildAPIStatusStack(totals: { ok: number; redirect: number; clientError
   ];
 }
 
-function buildRoutePerformance(metrics: ApiMetricsSnapshot | null): Array<{ route: string; requests: number; avgLatencyMs: number }> {
+function buildRoutePerformance(
+  metrics: ApiMetricsSnapshot | null,
+): Array<{ route: string; requests: number; avgLatencyMs: number }> {
   if (!metrics) {
     return [];
   }
@@ -592,7 +658,9 @@ function buildRoutePerformance(metrics: ApiMetricsSnapshot | null): Array<{ rout
     }));
 }
 
-function buildSlowRoutes(metrics: ApiMetricsSnapshot | null): Array<{ route: string; avgLatencyMs: number; normalized: number }> {
+function buildSlowRoutes(
+  metrics: ApiMetricsSnapshot | null,
+): Array<{ route: string; avgLatencyMs: number; normalized: number }> {
   if (!metrics || metrics.routes.length === 0) {
     return [];
   }
@@ -691,4 +759,3 @@ function formatBytes(bytes: number): string {
   }
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
 }
-

@@ -1,0 +1,8 @@
+node_modules
+dist
+.gocache
+.gomodcache
+.tmp-go
+coverage
+.pytest_cache
+predictor/.pytest_cache
