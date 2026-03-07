@@ -121,7 +121,7 @@ export default function Terminal() {
 
   return (
     <div className="space-y-4">
-      <header className="flex flex-wrap items-end justify-between gap-3">
+      <header className="panel-head">
         <div>
           <h2 className="text-2xl font-semibold text-zinc-100 tracking-tight">Cluster Terminal</h2>
           <p className="text-sm text-zinc-500 mt-1">Run live shell commands from the dashboard runtime.</p>
@@ -135,19 +135,19 @@ export default function Terminal() {
               type="number"
               min={2}
               max={30}
-              className="ml-2 h-9 w-20 rounded-md border border-zinc-700 bg-zinc-900 px-2 text-sm text-zinc-200"
+              className="field-sm ml-2 w-20"
             />
           </label>
           <button
             onClick={() => setEntries([])}
-            className="h-9 rounded-md border border-zinc-700 px-3 text-sm font-medium text-zinc-300 hover:bg-zinc-800"
+            className="btn h-9"
           >
             Clear
           </button>
         </div>
       </header>
 
-      <section className="rounded-xl border border-zinc-700 bg-zinc-900 p-4 space-y-3">
+      <section className="surface p-4 space-y-3">
         <div className="flex flex-wrap items-center gap-2">
           {QUICK_COMMANDS.map((item) => (
             <button
@@ -157,7 +157,7 @@ export default function Terminal() {
                 void runCommand(item);
               }}
               disabled={isRunning}
-              className="rounded-md border border-zinc-700 bg-zinc-950 px-2.5 py-1 text-xs text-zinc-300 hover:bg-zinc-800 disabled:opacity-50"
+              className="btn-sm bg-zinc-950"
             >
               {item}
             </button>
@@ -169,19 +169,19 @@ export default function Terminal() {
             value={cwd}
             onChange={(event) => setCwd(event.target.value)}
             placeholder="Working directory (optional)"
-            className="h-10 rounded-md border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-200 placeholder:text-zinc-500"
+            className="field"
           />
           <input
             value={command}
             onChange={(event) => setCommand(event.target.value)}
             onKeyDown={onCommandKeyDown}
             placeholder="Type command and press Enter"
-            className="h-10 rounded-md border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-200 placeholder:text-zinc-500"
+            className="field"
           />
           <button
             onClick={() => void runCommand()}
             disabled={isRunning || command.trim() === ""}
-            className="h-10 rounded-md border border-[#2496ed] bg-[#2496ed]/15 px-3 text-sm font-medium text-zinc-100 hover:bg-[#2496ed]/24 disabled:opacity-50"
+            className="btn-primary"
           >
             {isRunning ? "Running..." : "Run"}
           </button>

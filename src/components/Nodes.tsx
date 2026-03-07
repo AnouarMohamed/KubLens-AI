@@ -72,7 +72,7 @@ export default function Nodes() {
 
   return (
     <div className="space-y-5">
-      <header className="flex items-end justify-between gap-4">
+      <header className="panel-head">
         <div>
           <h2 className="text-2xl font-semibold text-zinc-100 tracking-tight">Nodes</h2>
           <p className="text-sm text-zinc-400 mt-1">Infrastructure status and scheduling controls.</p>
@@ -82,12 +82,12 @@ export default function Nodes() {
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Search nodes"
-            className="h-10 w-72 rounded-md border border-zinc-700 bg-zinc-900 px-3 text-sm text-zinc-100 focus:border-[#2496ed] focus:outline-none"
+            className="field w-72"
           />
           <button
             onClick={() => void load()}
             disabled={isLoading || isBusy}
-            className="h-10 rounded-md border border-zinc-700 px-3 text-sm font-medium text-zinc-300 hover:bg-zinc-800 disabled:opacity-50"
+            className="btn"
           >
             {isLoading ? "Loading" : "Refresh"}
           </button>
@@ -96,9 +96,9 @@ export default function Nodes() {
 
       {error && <div className="rounded-md border border-zinc-700 bg-zinc-900/80 px-3 py-2 text-sm text-zinc-200">{error}</div>}
 
-      <div className="overflow-hidden rounded-lg border border-zinc-800 bg-zinc-900">
+      <div className="table-shell">
         <table className="min-w-full text-left text-sm">
-          <thead className="bg-zinc-900/60 text-xs uppercase tracking-wide text-zinc-400">
+          <thead className="table-head table-head-sticky">
             <tr>
               <th className="px-4 py-3 font-semibold">Node</th>
               <th className="px-4 py-3 font-semibold">Status</th>
@@ -112,7 +112,7 @@ export default function Nodes() {
           </thead>
           <tbody className="divide-y divide-zinc-800 text-zinc-200">
             {filteredNodes.map((node) => (
-              <tr key={node.name} className="hover:bg-zinc-900/60">
+              <tr key={node.name} className="table-row">
                 <td className="px-4 py-3 font-medium">{node.name}</td>
                 <td className="px-4 py-3">{node.status}</td>
                 <td className="px-4 py-3 text-zinc-400">{node.roles}</td>
@@ -122,10 +122,10 @@ export default function Nodes() {
                 <td className="px-4 py-3 text-zinc-400">{node.age}</td>
                 <td className="px-4 py-3">
                   <div className="flex gap-2">
-                    <button onClick={() => void cordon(node.name)} className="rounded border border-zinc-700 px-2 py-1 text-xs hover:bg-zinc-800">
+                    <button onClick={() => void cordon(node.name)} className="btn-sm">
                       Cordon
                     </button>
-                    <button onClick={() => void openDetail(node.name)} className="rounded border border-zinc-700 px-2 py-1 text-xs hover:bg-zinc-800">
+                    <button onClick={() => void openDetail(node.name)} className="btn-sm">
                       Details
                     </button>
                   </div>

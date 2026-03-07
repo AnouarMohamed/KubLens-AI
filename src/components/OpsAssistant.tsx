@@ -54,7 +54,7 @@ export default function OpsAssistant() {
   };
 
   return (
-    <div className="h-[calc(100vh-140px)] rounded-xl border border-zinc-700 bg-zinc-900 flex flex-col overflow-hidden">
+    <div className="h-[calc(100vh-140px)] app-shell flex flex-col overflow-hidden">
       <header className="border-b border-zinc-700 px-5 py-4 bg-zinc-900/95">
         <div className="flex items-center justify-between gap-4">
           <div>
@@ -75,7 +75,7 @@ export default function OpsAssistant() {
             <button
               key={suggestion}
               onClick={() => setInput(suggestion)}
-              className="rounded-md border border-zinc-700 bg-zinc-800/60 px-2.5 py-1 text-xs text-zinc-300 hover:bg-zinc-800"
+              className="btn-sm bg-zinc-800/60"
             >
               {suggestion}
             </button>
@@ -110,12 +110,12 @@ export default function OpsAssistant() {
             onChange={(event) => setInput(event.target.value)}
             onKeyDown={(event) => event.key === "Enter" && void send()}
             placeholder="Ask for diagnostics, health summaries, or manifests"
-            className="h-11 flex-1 rounded-md border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100 focus:border-[#2496ed] focus:outline-none"
+            className="field h-11 flex-1"
           />
           <button
             onClick={() => void send()}
             disabled={!input.trim() || isLoading}
-            className="h-11 rounded-md bg-[#2496ed] px-4 text-sm font-medium text-white hover:bg-[#1d63ed] disabled:opacity-50"
+            className="btn-solid h-11"
           >
             Send
           </button>

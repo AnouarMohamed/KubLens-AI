@@ -1,148 +1,253 @@
-# Kubernetes Operations Dashboard
+# Kubernetes Operations Dashboard (KubeLens AI)
 
-## Academic Project Statement
+An academic full-stack Kubernetes operations project focused on **observability, diagnostics, predictions, and operator workflows**.
 
-In this academic project, I designed and implemented a full-stack Kubernetes Operations Dashboard focused on observability, diagnostics, and operator productivity.  
-My objective was to produce a practical system that can run in two modes:
+This system is designed to run in two modes:
 
-1. Live mode against a real Kubernetes cluster.
-2. Deterministic mock mode for reproducible testing and demonstrations.
+- **Live cluster mode**: reads real Kubernetes resources and real CPU/memory usage from `metrics.k8s.io`.
+- **Deterministic mock mode**: no cluster required, predictable data for demos and testing.
 
-This project combines:
+---
 
-- A React + Vite frontend for operational workflows.
-- A Go backend API for Kubernetes integration and diagnostics.
-- A Python FastAPI predictor microservice for incident-risk inference.
-- A lightweight assistant layer with deterministic fallback.
-- A terminal execution endpoint for controlled runtime commands.
+## Table of Contents
 
-## Abstract
+- [1) Project Overview](#1-project-overview)
+- [2) What The Dashboard Does](#2-what-the-dashboard-does)
+- [3) Architecture Diagrams](#3-architecture-diagrams)
+- [4) Repository Structure](#4-repository-structure)
+- [5) Prerequisites](#5-prerequisites)
+- [6) Quick Start (Mock Mode)](#6-quick-start-mock-mode)
+- [7) Run With Real Cluster + Real Metrics](#7-run-with-real-cluster--real-metrics)
+- [8) Predictor Service (Optional, but Recommended)](#8-predictor-service-optional-but-recommended)
+- [9) Environment Variables](#9-environment-variables)
+- [10) API Surface](#10-api-surface)
+- [11) Docker Workflow](#11-docker-workflow)
+- [12) Kubernetes Deployment Workflow](#12-kubernetes-deployment-workflow)
+- [13) Screenshots](#13-screenshots)
+- [14) Troubleshooting](#14-troubleshooting)
+- [15) Security Notes](#15-security-notes)
 
-I built this platform to study how cluster data can be transformed into actionable operator insights.  
-Instead of showing raw Kubernetes objects only, the system computes summaries, health signals, and prioritized recommendations.  
-The application also exposes structured API metrics and supports real pod/node usage collection via `metrics.k8s.io`.
+---
 
-## Core Features
+## 1) Project Overview
 
-- Cluster overview with health indicators and issue prioritization.
-- Resource management views for pods, nodes, deployments, services, and more.
-- Diagnostics engine with severity-based findings and recommendations.
-- Predictive Incidents view with risk scoring and confidence by resource.
-- Assistant interface for operational Q&A with deterministic fallback.
-- Integrated black-themed terminal UI for direct command execution.
-- Real usage metrics (CPU/memory) for pods and nodes when Metrics Server is available.
-- Mock fallback mode when kubeconfig is missing or invalid.
+I built this project as an academic engineering exercise to answer one practical question:
 
-## Architecture
+> How can raw Kubernetes state be converted into operational decisions quickly, in one interface?
 
-### Frontend
+Instead of only listing objects, this dashboard adds:
 
-- Framework: React + TypeScript + Vite
-- Location: `src/`
-- Responsibility: UI composition, feature views, and typed API integration
+- issue prioritization,
+- health scoring,
+- predictive incident risk,
+- API observability,
+- in-app terminal actions,
+- and assistant-guided troubleshooting.
 
-### Backend
+---
 
-- Language: Go
-- HTTP stack: `net/http` + `chi`
-- Location: `backend/`
-- Responsibility: Kubernetes connectivity, diagnostics logic, assistant orchestration, and transport APIs
+## 2) What The Dashboard Does
 
-### Predictor Service
+### Cluster / Workload Management
 
-- Language: Python
-- Framework: FastAPI
-- Location: `predictor/`
-- Responsibility: infer incident risk for pods/nodes and return ranked predictions to the Go API
+- Pods, Nodes, Deployments, ReplicaSets, StatefulSets, DaemonSets, Jobs, CronJobs
+- Services, Ingresses, NetworkPolicies
+- ConfigMaps, Secrets, ServiceAccounts, RBAC
+- PersistentVolumes, PVCs, StorageClasses
 
-### Kubernetes Integration
+### Operational Actions
 
-- Primary SDK: `client-go`
-- Metrics SDK: `k8s.io/metrics`
-- Real usage path:
-  - Pod usage from `metrics.k8s.io` pod metrics.
-  - Node usage from `metrics.k8s.io` node metrics.
-  - Cluster CPU/memory derived from aggregated node usage percentages.
+- Create / restart / delete pods
+- Cordon nodes
+- Edit resource YAML
+- Scale workloads
+- Restart workloads
+- Rollback deployments
 
-## Methodology and Design Decisions
+### Intelligence Features
 
-I made the following engineering decisions to keep the system maintainable:
+- Diagnostics engine with severity-ranked findings
+- Predictions engine (Python service) with local fallback
+- Assistant endpoint with deterministic fallback
+- API route metrics and latency analytics
 
-- Separated domain logic by concern (`cluster`, `diagnostics`, `httpapi`, `ai`).
-- Implemented short-lived backend caching to reduce API pressure.
-- Added deterministic mock stores so the project remains runnable without infrastructure dependencies.
-- Chose explicit typed models between backend and frontend for contract stability.
-- Preserved deterministic assistant behavior when external providers fail.
+---
 
-## Project Structure
+## 3) Architecture Diagrams
+
+### 3.1 High-Level System Architecture
+
+```mermaid
+graph LR
+  U[Operator Browser] --> F[React + Vite Frontend]
+  F -->|REST /api/*| B[Go Backend API]
+  B -->|client-go| K[(Kubernetes API Server)]
+  B -->|k8s.io/metrics| M[(metrics.k8s.io / Metrics Server)]
+  B -->|POST /predict| P[Python FastAPI Predictor]
+  B -->|optional| A[OpenAI-Compatible Provider]
+  B -->|exec shell commands| T[Host Shell Runtime]
+```
+
+### 3.2 Request + Data Flow
+
+```mermaid
+sequenceDiagram
+  participant UI as Frontend UI
+  participant API as Go API
+  participant K8s as Kubernetes API
+  participant Metrics as metrics.k8s.io
+  participant Pred as Predictor
+
+  UI->>API: GET /api/stats, /api/pods, /api/nodes
+  API->>K8s: List Pods / Nodes / Resources
+  API->>Metrics: List PodMetrics + NodeMetrics
+  Metrics-->>API: CPU + Memory usage
+  K8s-->>API: object state
+  API-->>UI: normalized summaries
+
+  UI->>API: GET /api/predictions
+  API->>Pred: POST /predict (pods, nodes, events)
+  Pred-->>API: risk items
+  API-->>UI: predictions (or local fallback)
+```
+
+### 3.3 Real Metrics Pipeline
+
+```mermaid
+flowchart TD
+  A[Metrics Server installed] --> B[metrics.k8s.io API available]
+  B --> C[Go backend fetchUsage]
+  C --> D[Pod CPU/memory usage mapped]
+  C --> E[Node CPU/memory usage mapped]
+  D --> F[Pods view + Metrics view]
+  E --> F
+  E --> G[Cluster aggregate CPU/Memory %]
+  G --> F
+```
+
+### 3.4 Deployment Topology (Kubernetes)
+
+```mermaid
+graph TD
+  subgraph Namespace[kubernetes-operations-dashboard namespace]
+    D1[dashboard Deployment x2]
+    S1[dashboard Service :80 -> 3000]
+    D2[predictor Deployment x1]
+    S2[predictor Service :8001]
+    CM[ConfigMap]
+    SEC[Secret]
+  end
+
+  User[Operator] -->|port-forward or ingress| S1
+  D1 -->|internal HTTP| S2
+  D1 -->|kubeconfig / in-cluster creds| K8s[(Kubernetes API)]
+  D1 -->|metrics.k8s.io| MS[(Metrics Server)]
+  CM --> D1
+  SEC --> D1
+```
+
+---
+
+## 4) Repository Structure
 
 ```text
 .
-+-- backend/
-|   +-- cmd/server/
-|   +-- internal/
-|       +-- ai/
-|       +-- apperrors/
-|       +-- cluster/
-|       +-- diagnostics/
-|       +-- httpapi/
-|       +-- model/
-+-- src/
-|   +-- components/
-|   +-- features/
-|   +-- lib/
-|   +-- types.ts
-+-- k8s/
-|   +-- namespace.yaml
-|   +-- configmap.yaml
-|   +-- deployment.yaml
-|   +-- service.yaml
-|   +-- predictor-deployment.yaml
-|   +-- predictor-service.yaml
-|   +-- secret.example.yaml
-|   +-- kustomization.yaml
-+-- predictor/
-|   +-- app/main.py
-|   +-- requirements.txt
-|   +-- Dockerfile
-+-- Dockerfile
-+-- docker-compose.yml
-+-- RUN_AND_USE.md
-+-- README.md
++- backend/
+¦  +- cmd/server/
+¦  +- internal/
+¦     +- ai/
+¦     +- apperrors/
+¦     +- cluster/
+¦     +- diagnostics/
+¦     +- httpapi/
+¦     +- model/
++- predictor/
+¦  +- app/main.py
+¦  +- requirements.txt
+¦  +- Dockerfile
++- src/
+¦  +- components/
+¦  +- features/
+¦  +- lib/
+¦  +- types.ts
++- k8s/
+¦  +- namespace.yaml
+¦  +- configmap.yaml
+¦  +- deployment.yaml
+¦  +- service.yaml
+¦  +- predictor-deployment.yaml
+¦  +- predictor-service.yaml
+¦  +- secret.example.yaml
+¦  +- kustomization.yaml
++- screenshots/
++- Dockerfile
++- docker-compose.yml
++- RUN_AND_USE.md
++- README.md
 ```
 
-## Local Development
+---
 
-### Prerequisites
+## 5) Prerequisites
 
 - Node.js 20+
 - Go 1.25+
+- npm
 
-### Install
+For real-cluster mode:
+
+- `kubectl` configured to target your cluster
+- Cluster access permissions
+- Metrics Server (`metrics.k8s.io`) for real CPU/memory usage
+
+---
+
+## 6) Quick Start (Mock Mode)
+
+This mode requires **no Kubernetes cluster**.
 
 ```bash
 npm install
-```
-
-### Run (frontend + backend)
-
-```bash
 npm run dev
 ```
 
 - Frontend: `http://localhost:5173`
-- Backend: `http://localhost:3000`
+- Backend API: `http://localhost:3000`
 
-### Useful Commands
+If `KUBECONFIG_DATA` is empty, backend automatically serves deterministic mock data.
 
-- `npm run test:go` -> run backend tests
-- `npm run lint` -> TypeScript type-check
-- `npm run build` -> build frontend
-- `npm run start` -> run backend server
+---
 
-## Live Cluster Setup
+## 7) Run With Real Cluster + Real Metrics
 
-The backend expects a base64 kubeconfig payload in `KUBECONFIG_DATA`.
+### Step 1: Verify `kubectl` context
+
+```bash
+kubectl cluster-info
+kubectl get nodes
+```
+
+### Step 2: Verify Metrics Server is available
+
+Linux/macOS:
+
+```bash
+kubectl get apiservices | grep metrics.k8s.io
+kubectl top nodes
+kubectl top pods -A
+```
+
+PowerShell (Windows):
+
+```powershell
+kubectl get apiservices | findstr metrics.k8s.io
+kubectl top nodes
+kubectl top pods -A
+```
+
+If `kubectl top` fails, install/repair Metrics Server before expecting real metrics in UI.
+
+### Step 3: Set `KUBECONFIG_DATA`
 
 PowerShell:
 
@@ -151,143 +256,295 @@ $bytes = [System.IO.File]::ReadAllBytes("$HOME\.kube\config")
 $env:KUBECONFIG_DATA = [Convert]::ToBase64String($bytes)
 ```
 
-Then start:
+Bash:
+
+```bash
+export KUBECONFIG_DATA="$(base64 -w 0 ~/.kube/config)"
+```
+
+### Step 4: Start app
 
 ```bash
 npm run dev
 ```
 
-## Real Metrics Requirements
-
-To populate pod/node usage from real data, the cluster must expose:
-
-- `metrics.k8s.io` API (typically via Metrics Server)
-
-Validation:
+### Step 5: Validate from API
 
 ```bash
-kubectl get apiservices | grep metrics.k8s.io
+curl http://localhost:3000/api/cluster-info
+curl http://localhost:3000/api/pods
+curl http://localhost:3000/api/nodes
+curl http://localhost:3000/api/stats
 ```
 
-If metrics are unavailable, the app remains functional and shows `N/A` for usage fields.
+Expected:
 
-## Full Dockerization
+- `/api/cluster-info` shows `isRealCluster: true`
+- pod/node CPU-memory fields are populated (not `N/A`) when Metrics Server is healthy
 
-This project is fully containerized:
+---
 
-1. Main application image (Node build stage + Go build stage + Alpine runtime).
-2. Python predictor image (FastAPI + uvicorn).
-3. Unified orchestration through `docker-compose.yml`.
+## 8) Predictor Service (Optional, but Recommended)
 
-### Build image
+The Go backend can run predictions locally (fallback), but best setup is with predictor service enabled.
+
+### Local predictor run
+
+```bash
+cd predictor
+python -m pip install -r requirements.txt
+python -m uvicorn app.main:api --host 0.0.0.0 --port 8001
+```
+
+Set backend env var:
+
+```bash
+PREDICTOR_BASE_URL=http://localhost:8001
+```
+
+or in PowerShell:
+
+```powershell
+$env:PREDICTOR_BASE_URL="http://localhost:8001"
+```
+
+Then run `npm run dev`.
+
+---
+
+## 9) Environment Variables
+
+| Variable | Required | Description | Default |
+|---|---:|---|---|
+| `KUBECONFIG_DATA` | No | Base64 kubeconfig payload for live cluster mode | empty |
+| `PORT` | No | Go API port | `3000` |
+| `DIST_DIR` | No | Frontend build folder served by backend | `dist` |
+| `PREDICTOR_BASE_URL` | No | Predictor service base URL | empty (or compose default) |
+| `PREDICTOR_TIMEOUT_SECONDS` | No | Predictor timeout | `4` |
+| `ASSISTANT_PROVIDER` | No | `none` or `openai_compatible` | `none` |
+| `ASSISTANT_TIMEOUT_SECONDS` | No | Assistant timeout | `8` |
+| `ASSISTANT_API_BASE_URL` | No | OpenAI-compatible base URL | `https://api.openai.com/v1` |
+| `ASSISTANT_API_KEY` | No | Assistant provider key | empty |
+| `ASSISTANT_MODEL` | No | Assistant model ID | empty |
+| `ASSISTANT_TEMPERATURE` | No | Assistant temperature | `0.2` |
+| `ASSISTANT_MAX_TOKENS` | No | Assistant output cap | `700` |
+
+You can start from [`.env.example`](./.env.example).
+
+---
+
+## 10) API Surface
+
+### System / Health
+
+- `GET /api/version`
+- `GET /api/cluster-info`
+- `GET /api/metrics` (API observability metrics)
+- `GET /api/stats`
+
+### Core Resources
+
+- `GET /api/namespaces`
+- `GET /api/pods`
+- `GET /api/nodes`
+- `GET /api/resources/{kind}`
+
+### Pod/Node Actions
+
+- `POST /api/pods`
+- `POST /api/pods/{namespace}/{name}/restart`
+- `DELETE /api/pods/{namespace}/{name}`
+- `GET /api/pods/{namespace}/{name}`
+- `GET /api/pods/{namespace}/{name}/events`
+- `GET /api/pods/{namespace}/{name}/logs`
+- `POST /api/nodes/{name}/cordon`
+- `GET /api/nodes/{name}`
+
+### Workload Actions
+
+- `GET /api/resources/{kind}/{namespace}/{name}/yaml`
+- `PUT /api/resources/{kind}/{namespace}/{name}/yaml`
+- `POST /api/resources/{kind}/{namespace}/{name}/scale`
+- `POST /api/resources/{kind}/{namespace}/{name}/restart`
+- `POST /api/resources/{kind}/{namespace}/{name}/rollback`
+
+### Intelligence
+
+- `GET /api/diagnostics`
+- `GET /api/predictions`
+- `GET /api/predictive-incidents` (compat alias)
+- `POST /api/assistant`
+
+### Terminal
+
+- `POST /api/terminal/exec`
+
+---
+
+## 11) Docker Workflow
+
+### Build and run dashboard image
 
 ```bash
 npm run docker:build
-```
-
-### Run container
-
-```bash
 npm run docker:run
 ```
 
-Open:
+### Build and run predictor image
 
-- `http://localhost:3000`
+```bash
+npm run docker:build:predictor
+npm run docker:run:predictor
+```
 
-### Run with Docker Compose
+### Full stack with Compose
 
 ```bash
 npm run docker:up
-```
-
-Stop:
-
-```bash
 npm run docker:down
 ```
 
-Compose reads variables from your shell or `.env` file.
+Compose file: [docker-compose.yml](./docker-compose.yml)
 
-## Kubernetes Deployment Manifests
+---
 
-To make this repository complete for cluster deployment, I included first-class manifests in `k8s/`.
+## 12) Kubernetes Deployment Workflow
 
-### Included resources
+Manifests live in [`k8s/`](./k8s).
 
-- `k8s/namespace.yaml`
-- `k8s/configmap.yaml`
+### Step 1: Build and push images
+
+```bash
+docker build -t <registry>/kubernetes-operations-dashboard:<tag> .
+docker build -t <registry>/k8s-ops-predictor:<tag> ./predictor
+docker push <registry>/kubernetes-operations-dashboard:<tag>
+docker push <registry>/k8s-ops-predictor:<tag>
+```
+
+### Step 2: Update image refs
+
 - `k8s/deployment.yaml`
-- `k8s/service.yaml`
 - `k8s/predictor-deployment.yaml`
-- `k8s/predictor-service.yaml`
-- `k8s/secret.example.yaml`
-- `k8s/kustomization.yaml`
 
-### Deploy workflow
+### Step 3: Create secret with kubeconfig payload
 
-1. Build and publish images:
-   - `docker build -t <registry>/kubernetes-operations-dashboard:<tag> .`
-   - `docker build -t <registry>/k8s-ops-predictor:<tag> ./predictor`
-   - `docker push <registry>/kubernetes-operations-dashboard:<tag>`
-   - `docker push <registry>/k8s-ops-predictor:<tag>`
-2. Update image fields in:
-   - `k8s/deployment.yaml`
-   - `k8s/predictor-deployment.yaml`
-3. Create a real secret file from template:
-   - `cp k8s/secret.example.yaml k8s/secret.yaml`
-   - set `KUBECONFIG_DATA` and optional `ASSISTANT_API_KEY`
-   - `kubectl apply -f k8s/secret.yaml`
-4. Apply manifests:
-   - `kubectl apply -k k8s/`
-5. Validate:
-   - `kubectl -n kubernetes-operations-dashboard get pods,svc`
+```bash
+cp k8s/secret.example.yaml k8s/secret.yaml
+```
 
-### Access the dashboard
+Fill `KUBECONFIG_DATA` and optional `ASSISTANT_API_KEY`, then:
+
+```bash
+kubectl apply -f k8s/secret.yaml
+```
+
+### Step 4: Apply all manifests
+
+```bash
+kubectl apply -k k8s/
+kubectl -n kubernetes-operations-dashboard get pods,svc
+```
+
+### Step 5: Access the UI
 
 ```bash
 kubectl -n kubernetes-operations-dashboard port-forward svc/kubernetes-operations-dashboard 3000:80
 ```
 
-Then open `http://localhost:3000`.
+Open `http://localhost:3000`.
 
-## Environment Variables
+---
 
-- `KUBECONFIG_DATA`: base64 kubeconfig payload
-- `PORT`: backend port (`3000` by default)
-- `DIST_DIR`: static assets directory (`dist` by default)
-- `PREDICTOR_BASE_URL`: predictor endpoint (for example `http://k8s-ops-predictor:8001`)
-- `PREDICTOR_TIMEOUT_SECONDS`: predictor request timeout
-- `ASSISTANT_PROVIDER`: `none` or `openai_compatible`
-- `ASSISTANT_TIMEOUT_SECONDS`: assistant timeout
-- `ASSISTANT_API_BASE_URL`: provider base URL
-- `ASSISTANT_API_KEY`: API key
-- `ASSISTANT_MODEL`: model id
-- `ASSISTANT_TEMPERATURE`: generation temperature
-- `ASSISTANT_MAX_TOKENS`: output token cap
+## 13) Screenshots
 
-## API Verification
+### Overview (new multi-chart dashboard)
+
+![Overview top](./screenshots/Screenshot%202026-03-07%20133914.png)
+![Overview analytics](./screenshots/Screenshot%202026-03-07%20133928.png)
+![Overview risk + diagnostics](./screenshots/Screenshot%202026-03-07%20134004.png)
+
+### Pods and Pod Details
+
+![Pods table](./screenshots/Screenshot%202026-03-07%20134029.png)
+![Pod details modal](./screenshots/Screenshot%202026-03-07%20134040.png)
+
+### Workloads / Resource Catalog
+
+![Deployments](./screenshots/Screenshot%202026-03-07%20134107.png)
+![Network policies](./screenshots/Screenshot%202026-03-07%20134152.png)
+
+### Nodes
+
+![Node details](./screenshots/Screenshot%202026-03-07%20134252.png)
+
+### Metrics View
+
+![Metrics overview](./screenshots/Screenshot%202026-03-07%20134328.png)
+![Metrics route analytics](./screenshots/Screenshot%202026-03-07%20134342.png)
+
+### Predictions
+
+![Predictions](./screenshots/Screenshot%202026-03-07%20134356.png)
+
+### Diagnostics
+
+![Diagnostics](./screenshots/Screenshot%202026-03-07%20134415.png)
+
+### Terminal and Assistant
+
+![Terminal](./screenshots/Screenshot%202026-03-07%20134428.png)
+![Assistant](./screenshots/Screenshot%202026-03-07%20134458.png)
+
+---
+
+## 14) Troubleshooting
+
+### `isRealCluster` is `false`
+
+- `KUBECONFIG_DATA` missing or invalid
+- kubeconfig context inaccessible from running backend
+
+### CPU/Memory shows `N/A`
+
+- Metrics Server not installed / unhealthy
+- `metrics.k8s.io` API unavailable
+- permissions deny metrics listing
+
+Check quickly:
 
 ```bash
-curl http://localhost:3000/api/cluster-info
-curl http://localhost:3000/api/stats
-curl http://localhost:3000/api/pods
-curl http://localhost:3000/api/nodes
-curl http://localhost:3000/api/diagnostics
-curl http://localhost:3000/api/predictions
-curl http://localhost:3000/api/version
+kubectl top nodes
+kubectl top pods -A
 ```
 
-## Screenshots
+### Predictions shows fallback source
 
-I keep image assets under [`screenshots`](./screenshots).  
-Conventions are documented in [`screenshots/README.md`](./screenshots/README.md).
+- predictor service unavailable
+- `PREDICTOR_BASE_URL` not set / wrong
 
-## Additional Documentation
+### Predictions endpoint 404
 
-- Detailed run guide: [RUN_AND_USE.md](./RUN_AND_USE.md)
+- backend binary is outdated; restart API service/container
 
-## Conclusion
+### Terminal command failures
 
-Through this project, I implemented a production-oriented Kubernetes dashboard with clear separation of concerns, reproducible execution modes, and containerized deployment support.  
-The final system is designed to be demonstrable in academic settings and directly useful in practical operations workflows.
+- invalid working directory
+- timeout exceeded (max 30s)
+- command not present in runtime environment
+
+---
+
+## 15) Security Notes
+
+- The terminal endpoint executes shell commands on the backend host/container.
+- Do not expose this dashboard publicly without authentication, network policy, and RBAC constraints.
+- Treat `KUBECONFIG_DATA` and `ASSISTANT_API_KEY` as sensitive secrets.
+- Prefer Kubernetes `Secret` resources (or sealed/external secrets) for production.
+
+---
+
+## Additional Docs
+
+- Runbook: [RUN_AND_USE.md](./RUN_AND_USE.md)
+- Kubernetes manifests: [k8s/README.md](./k8s/README.md)
+- Screenshot notes: [screenshots/README.md](./screenshots/README.md)

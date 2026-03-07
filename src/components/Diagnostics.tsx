@@ -29,7 +29,7 @@ export default function Diagnostics() {
 
   return (
     <div className="space-y-5">
-      <header className="flex items-end justify-between gap-4">
+      <header className="panel-head">
         <div>
           <h2 className="text-2xl font-semibold text-zinc-100 tracking-tight">Diagnostics</h2>
           <p className="text-sm text-zinc-400 mt-1">Automated checks with prioritized, actionable issue reporting.</p>
@@ -37,7 +37,7 @@ export default function Diagnostics() {
         <button
           onClick={() => void refresh()}
           disabled={isLoading}
-          className="h-10 rounded-md border border-zinc-700 px-3 text-sm font-medium text-zinc-300 hover:bg-zinc-800 disabled:opacity-50"
+          className="btn"
         >
           {isLoading ? "Loading" : "Refresh"}
         </button>
@@ -112,12 +112,12 @@ export default function Diagnostics() {
             <pre className="mt-3 whitespace-pre-wrap text-sm text-zinc-300 leading-relaxed">{diagnostics.summary}</pre>
           </details>
 
-          <section className="rounded-lg border border-zinc-700 bg-zinc-900 overflow-hidden">
+          <section className="table-shell">
             <header className="px-4 py-3 border-b border-zinc-700 bg-zinc-900/70">
               <p className="text-xs uppercase tracking-wide text-zinc-500 font-semibold">Issue Registry</p>
             </header>
             <table className="min-w-full text-left text-sm">
-              <thead className="bg-zinc-900/60 text-xs uppercase tracking-wide text-zinc-500">
+              <thead className="table-head table-head-sticky">
                 <tr>
                   <th className="px-4 py-3 font-semibold">Severity</th>
                   <th className="px-4 py-3 font-semibold">Title</th>
@@ -128,7 +128,7 @@ export default function Diagnostics() {
               </thead>
               <tbody className="divide-y divide-zinc-700 text-zinc-200">
                 {diagnostics.issues.map((issue, index) => (
-                  <tr key={`${issue.title}-${index}`} className="hover:bg-zinc-800/40">
+                  <tr key={`${issue.title}-${index}`} className="table-row">
                     <td className="px-4 py-3">
                       <SeverityBadge severity={issue.severity} />
                     </td>

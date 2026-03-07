@@ -1,32 +1,56 @@
 import { Suspense, lazy, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import Sidebar from "./components/Sidebar";
 import Dashboard from "./components/Dashboard";
-import Pods from "./components/Pods";
-import Nodes from "./components/Nodes";
-import Diagnostics from "./components/Diagnostics";
-import Predictions from "./components/Predictions";
-import OpsAssistant from "./components/OpsAssistant";
-import Terminal from "./components/Terminal";
-import ResourceCatalog from "./components/ResourceCatalog";
 import { findViewByQuery, getViewItem } from "./features/viewCatalog";
 import { api } from "./lib/api";
 import type { K8sEvent, View } from "./types";
 
 const Metrics = lazy(() => import("./components/Metrics"));
+const Pods = lazy(() => import("./components/Pods"));
+const Nodes = lazy(() => import("./components/Nodes"));
+const Diagnostics = lazy(() => import("./components/Diagnostics"));
+const Predictions = lazy(() => import("./components/Predictions"));
+const OpsAssistant = lazy(() => import("./components/OpsAssistant"));
+const Terminal = lazy(() => import("./components/Terminal"));
+const ResourceCatalog = lazy(() => import("./components/ResourceCatalog"));
 
 const PRIMARY_VIEWS: Partial<Record<View, ReactElement>> = {
   overview: <Dashboard />,
-  pods: <Pods />,
-  nodes: <Nodes />,
+  pods: (
+    <Suspense fallback={<ViewLoadingState label="Loading pods..." />}>
+      <Pods />
+    </Suspense>
+  ),
+  nodes: (
+    <Suspense fallback={<ViewLoadingState label="Loading nodes..." />}>
+      <Nodes />
+    </Suspense>
+  ),
   metrics: (
     <Suspense fallback={<ViewLoadingState label="Loading metrics..." />}>
       <Metrics />
     </Suspense>
   ),
-  predictions: <Predictions />,
-  diagnostics: <Diagnostics />,
-  terminal: <Terminal />,
-  assistant: <OpsAssistant />,
+  predictions: (
+    <Suspense fallback={<ViewLoadingState label="Loading predictions..." />}>
+      <Predictions />
+    </Suspense>
+  ),
+  diagnostics: (
+    <Suspense fallback={<ViewLoadingState label="Loading diagnostics..." />}>
+      <Diagnostics />
+    </Suspense>
+  ),
+  terminal: (
+    <Suspense fallback={<ViewLoadingState label="Loading terminal..." />}>
+      <Terminal />
+    </Suspense>
+  ),
+  assistant: (
+    <Suspense fallback={<ViewLoadingState label="Loading assistant..." />}>
+      <OpsAssistant />
+    </Suspense>
+  ),
 };
 
 const SETTINGS_KEY = "k8s-ops.settings.v1";
@@ -119,7 +143,12 @@ export default function App() {
   const currentViewMeta = getViewItem(currentView);
 
   const renderedView = useMemo(
-    () => PRIMARY_VIEWS[currentView] ?? <ResourceCatalog view={currentView} />,
+    () =>
+      PRIMARY_VIEWS[currentView] ?? (
+        <Suspense fallback={<ViewLoadingState label="Loading resources..." />}>
+          <ResourceCatalog view={currentView} />
+        </Suspense>
+      ),
     [currentView],
   );
 
@@ -192,8 +221,8 @@ export default function App() {
       <Sidebar currentView={currentView} onViewChange={setCurrentView} />
 
       <main className="flex-1 flex flex-col overflow-hidden p-4 pl-0">
-        <div className="surface-strong flex-1 flex flex-col overflow-hidden">
-          <header className="h-16 border-b border-zinc-800 flex items-center justify-between px-6 bg-zinc-900/90">
+        <div className="app-shell flex-1 flex flex-col overflow-hidden">
+          <header className="h-16 border-b border-zinc-700 flex items-center justify-between px-6 bg-zinc-900/92">
             <div>
               <h2 className="text-base font-semibold text-zinc-100 tracking-tight">{currentViewMeta.label}</h2>
               <p className="text-xs text-zinc-400 mt-0.5 font-mono">{currentViewMeta.kubectlCommand}</p>
@@ -207,7 +236,7 @@ export default function App() {
                 onChange={(event) => setSearch(event.target.value)}
                 onKeyDown={(event) => event.key === "Enter" && handleSearchSubmit()}
                 placeholder="Search views ( / )"
-                className="h-10 w-72 rounded-xl border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-[#2496ed]"
+                className="field w-72"
               />
               <TopButton onClick={handleSearchSubmit} label="Go" />
               <TopButton onClick={() => setPanel((value) => (value === "notifications" ? "none" : "notifications"))} label="Notifications" />
@@ -221,7 +250,7 @@ export default function App() {
           <div className="flex-1 overflow-y-auto p-6 bg-grid">{renderedView}</div>
 
           {panel !== "none" && (
-            <aside className="absolute top-20 right-4 h-[calc(100%-6rem)] w-[30rem] surface-strong overflow-hidden">
+            <aside className="absolute top-20 right-4 h-[calc(100%-6rem)] w-[30rem] app-shell overflow-hidden">
               {panel === "notifications" && (
                 <PanelShell title="Notifications" subtitle="Event stream from cluster activity">
                   {notificationError && <p className="text-sm text-zinc-200">{notificationError}</p>}
@@ -294,7 +323,7 @@ function ViewLoadingState({ label }: { label: string }) {
 
 function TopButton({ onClick, label }: { onClick: () => void; label: string }) {
   return (
-    <button onClick={onClick} className="h-10 rounded-xl border border-zinc-700 px-3 text-sm font-medium text-zinc-200 hover:bg-zinc-800">
+    <button onClick={onClick} className="btn">
       {label}
     </button>
   );

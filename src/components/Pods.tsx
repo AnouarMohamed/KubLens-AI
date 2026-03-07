@@ -152,7 +152,7 @@ export default function Pods() {
 
   return (
     <div className="space-y-5">
-      <header className="flex items-end justify-between gap-4">
+      <header className="panel-head">
         <div>
           <h2 className="text-2xl font-semibold text-zinc-100 tracking-tight">Pods</h2>
           <p className="text-sm text-zinc-400 mt-1">Workload inventory with operational actions.</p>
@@ -160,14 +160,14 @@ export default function Pods() {
         <div className="flex gap-2">
           <button
             onClick={() => setShowCreateForm((value) => !value)}
-            className="h-10 rounded-md border border-zinc-700 px-3 text-sm font-medium text-zinc-300 hover:bg-zinc-800"
+            className="btn"
           >
             {showCreateForm ? "Close Create" : "Create Pod"}
           </button>
           <button
             onClick={() => void load()}
             disabled={isLoading || isBusy}
-            className="h-10 rounded-md border border-zinc-700 px-3 text-sm font-medium text-zinc-300 hover:bg-zinc-800 disabled:opacity-50"
+            className="btn"
           >
             {isLoading ? "Loading" : "Refresh"}
           </button>
@@ -175,7 +175,7 @@ export default function Pods() {
       </header>
 
       {showCreateForm && (
-        <div className="rounded-md border border-zinc-800 bg-zinc-900 p-4">
+        <div className="surface p-4">
           <p className="text-sm font-semibold text-zinc-100">Create Pod</p>
           <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3">
             <label className="text-xs text-zinc-400">
@@ -183,7 +183,7 @@ export default function Pods() {
               <input
                 value={createForm.namespace}
                 onChange={(event) => setCreateForm((state) => ({ ...state, namespace: event.target.value }))}
-                className="mt-1 h-10 w-full rounded-md border border-zinc-700 px-3 text-sm text-zinc-100 focus:border-[#2496ed] focus:outline-none"
+                className="field mt-1 w-full"
               />
             </label>
             <label className="text-xs text-zinc-400">
@@ -191,7 +191,7 @@ export default function Pods() {
               <input
                 value={createForm.name}
                 onChange={(event) => setCreateForm((state) => ({ ...state, name: event.target.value }))}
-                className="mt-1 h-10 w-full rounded-md border border-zinc-700 px-3 text-sm text-zinc-100 focus:border-[#2496ed] focus:outline-none"
+                className="field mt-1 w-full"
               />
             </label>
             <label className="text-xs text-zinc-400">
@@ -199,7 +199,7 @@ export default function Pods() {
               <input
                 value={createForm.image}
                 onChange={(event) => setCreateForm((state) => ({ ...state, image: event.target.value }))}
-                className="mt-1 h-10 w-full rounded-md border border-zinc-700 px-3 text-sm text-zinc-100 focus:border-[#2496ed] focus:outline-none"
+                className="field mt-1 w-full"
               />
             </label>
           </div>
@@ -207,7 +207,7 @@ export default function Pods() {
             <button
               onClick={() => void createPod()}
               disabled={isBusy}
-              className="rounded-md bg-[#2496ed] px-3 py-2 text-sm font-medium text-white hover:bg-[#1d63ed] disabled:opacity-50"
+              className="btn-solid"
             >
               {isBusy ? "Processing" : "Create"}
             </button>
@@ -220,12 +220,12 @@ export default function Pods() {
           value={search}
           onChange={(event) => setSearch(event.target.value)}
           placeholder="Search pods"
-          className="h-10 w-72 rounded-md border border-zinc-700 bg-zinc-900 px-3 text-sm text-zinc-100 focus:border-[#2496ed] focus:outline-none"
+          className="field w-72"
         />
         <select
           value={namespaceFilter}
           onChange={(event) => setNamespaceFilter(event.target.value)}
-          className="h-10 rounded-md border border-zinc-700 bg-zinc-900 px-3 text-sm text-zinc-100 focus:border-[#2496ed] focus:outline-none"
+          className="field"
         >
           <option value="All">All namespaces</option>
           {namespaces.map((namespace) => (
@@ -237,7 +237,7 @@ export default function Pods() {
         <select
           value={statusFilter}
           onChange={(event) => setStatusFilter(event.target.value as (typeof STATUSES)[number])}
-          className="h-10 rounded-md border border-zinc-700 bg-zinc-900 px-3 text-sm text-zinc-100 focus:border-[#2496ed] focus:outline-none"
+          className="field"
         >
           {STATUSES.map((status) => (
             <option key={status} value={status}>
@@ -249,9 +249,9 @@ export default function Pods() {
 
       {error && <div className="rounded-md border border-zinc-700 bg-zinc-900/80 px-3 py-2 text-sm text-zinc-200">{error}</div>}
 
-      <div className="overflow-hidden rounded-lg border border-zinc-800 bg-zinc-900">
+      <div className="table-shell">
         <table className="min-w-full text-left text-sm">
-          <thead className="bg-zinc-900/60 text-xs uppercase tracking-wide text-zinc-400">
+          <thead className="table-head table-head-sticky">
             <tr>
               <th className="px-4 py-3 font-semibold">Pod</th>
               <th className="px-4 py-3 font-semibold">Namespace</th>
@@ -265,7 +265,7 @@ export default function Pods() {
           </thead>
           <tbody className="divide-y divide-zinc-800 text-zinc-200">
             {filteredPods.map((pod) => (
-              <tr key={pod.id} className="hover:bg-zinc-900/60">
+              <tr key={pod.id} className="table-row">
                 <td className="px-4 py-3">
                   <button onClick={() => void openDetail(pod.namespace, pod.name)} className="text-left hover:underline">
                     <p className="font-medium">{pod.name}</p>
@@ -282,15 +282,15 @@ export default function Pods() {
                 <td className="px-4 py-3 text-zinc-400">{pod.restarts}</td>
                 <td className="px-4 py-3">
                   <div className="flex gap-2">
-                    <button onClick={() => void openLogs(pod.namespace, pod.name)} className="rounded border border-zinc-700 px-2 py-1 text-xs hover:bg-zinc-800">
+                    <button onClick={() => void openLogs(pod.namespace, pod.name)} className="btn-sm">
                       Logs
                     </button>
-                    <button onClick={() => void restartPod(pod.namespace, pod.name)} className="rounded border border-zinc-700 px-2 py-1 text-xs hover:bg-zinc-800">
+                    <button onClick={() => void restartPod(pod.namespace, pod.name)} className="btn-sm">
                       Restart
                     </button>
                     <button
                       onClick={() => void deletePod(pod.namespace, pod.name)}
-                      className="rounded border border-zinc-600 px-2 py-1 text-xs text-zinc-200 hover:bg-zinc-800"
+                      className="btn-sm border-zinc-600"
                     >
                       Delete
                     </button>
@@ -307,13 +307,13 @@ export default function Pods() {
 
       {logText !== null && (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-4xl rounded-lg border border-zinc-800 bg-zinc-900">
+          <div className="w-full max-w-4xl app-shell">
             <header className="border-b border-zinc-800 px-4 py-3 flex items-center justify-between">
               <div>
                 <p className="text-sm font-semibold text-zinc-100">Pod Logs</p>
                 <p className="text-xs text-zinc-500">{logPodName}</p>
               </div>
-              <button onClick={() => setLogText(null)} className="rounded border border-zinc-700 px-2 py-1 text-xs hover:bg-zinc-800">
+              <button onClick={() => setLogText(null)} className="btn-sm">
                 Close
               </button>
             </header>

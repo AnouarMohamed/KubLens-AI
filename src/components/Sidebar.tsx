@@ -62,7 +62,7 @@ export default function Sidebar({ currentView, onViewChange }: SidebarProps) {
 
   return (
     <aside className="w-80 h-screen p-4 pr-3">
-      <div className="surface-strong h-full flex flex-col overflow-hidden">
+      <div className="app-shell h-full flex flex-col overflow-hidden">
         <header className="px-5 py-5 border-b border-zinc-700">
           <p className="text-[11px] uppercase tracking-[0.22em] text-zinc-400 font-semibold">Kubernetes Ops</p>
           <h1 className="mt-2 text-2xl font-semibold text-zinc-100 tracking-tight">Cluster Control Console</h1>

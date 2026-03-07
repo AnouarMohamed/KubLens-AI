@@ -41,6 +41,10 @@
 }
 
 @layer components {
+  .app-shell {
+    @apply rounded-2xl border border-zinc-700 bg-zinc-900 shadow-[0_12px_28px_rgba(16,24,40,0.1)];
+  }
+
   .surface {
     @apply rounded-xl border border-zinc-700 bg-zinc-900 shadow-[0_8px_20px_rgba(16,24,40,0.08)];
   }
@@ -51,6 +55,54 @@
 
   .kpi {
     @apply rounded-xl border border-zinc-700 bg-zinc-900 p-4 shadow-[0_6px_16px_rgba(16,24,40,0.08)] transition-transform duration-200 hover:-translate-y-0.5;
+  }
+
+  .panel-head {
+    @apply flex flex-wrap items-end justify-between gap-4;
+  }
+
+  .field {
+    @apply h-10 rounded-xl border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100 placeholder:text-zinc-500 transition-colors focus:border-[#2496ed];
+  }
+
+  .field-sm {
+    @apply h-9 rounded-lg border border-zinc-700 bg-zinc-950 px-2 text-sm text-zinc-100 transition-colors focus:border-[#2496ed];
+  }
+
+  .btn {
+    @apply h-10 rounded-xl border border-zinc-700 px-3 text-sm font-medium text-zinc-200 transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .btn-sm {
+    @apply rounded-lg border border-zinc-700 px-2.5 py-1 text-xs font-medium text-zinc-200 transition-colors hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .btn-primary {
+    @apply h-10 rounded-xl border border-[#2496ed] bg-[#2496ed]/14 px-3 text-sm font-medium text-zinc-100 transition-colors hover:bg-[#2496ed]/22 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .btn-solid {
+    @apply h-10 rounded-xl bg-[#2496ed] px-4 text-sm font-medium text-white transition-colors hover:bg-[#1d63ed] disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .table-shell {
+    @apply overflow-hidden rounded-2xl border border-zinc-700 bg-zinc-900;
+  }
+
+  .table-wrap {
+    @apply overflow-x-auto;
+  }
+
+  .table-head {
+    @apply bg-zinc-800/70 text-xs uppercase tracking-wide text-zinc-500;
+  }
+
+  .table-head-sticky {
+    @apply sticky top-0 z-10 bg-zinc-800/90 backdrop-blur-sm;
+  }
+
+  .table-row {
+    @apply hover:bg-zinc-800/45;
   }
 }
 

@@ -179,7 +179,7 @@ export default function ResourceCatalog({ view }: { view: View }) {
 
   return (
     <div className="space-y-5">
-      <header className="flex items-end justify-between gap-4">
+      <header className="panel-head">
         <div>
           <h2 className="text-2xl font-semibold text-zinc-100 tracking-tight">{meta.label}</h2>
           <p className="text-sm text-zinc-400 mt-1">{meta.description}</p>
@@ -189,12 +189,12 @@ export default function ResourceCatalog({ view }: { view: View }) {
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Search"
-            className="h-10 w-72 rounded-xl border border-zinc-700 bg-zinc-900 px-3 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-[#2496ed]"
+            className="field w-72"
           />
           <button
             onClick={() => void load()}
             disabled={isLoading || isActing}
-            className="h-10 rounded-xl border border-zinc-700 px-3 text-sm font-medium text-zinc-200 hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
+            className="btn"
           >
             {isLoading ? "Loading" : "Refresh"}
           </button>
@@ -204,9 +204,9 @@ export default function ResourceCatalog({ view }: { view: View }) {
       {message && <div className="rounded-xl border border-[#2496ed]/40 bg-[#2496ed]/12 px-3 py-2 text-sm text-zinc-100">{message}</div>}
       {error && <div className="rounded-xl border border-zinc-700 bg-zinc-900/80 px-3 py-2 text-sm text-zinc-200">{error}</div>}
 
-      <div className="overflow-hidden rounded-2xl border border-zinc-700 bg-zinc-900">
+      <div className="table-shell">
         <table className="min-w-full text-left">
-          <thead className="bg-zinc-800/80 text-xs uppercase tracking-wide text-zinc-400">
+          <thead className="table-head table-head-sticky">
             <tr>
               <th className="px-4 py-3 font-semibold">Name</th>
               <th className="px-4 py-3 font-semibold">Namespace</th>
@@ -218,7 +218,7 @@ export default function ResourceCatalog({ view }: { view: View }) {
           </thead>
           <tbody className="divide-y divide-zinc-800 text-sm text-zinc-200">
             {filtered.map((resource) => (
-              <tr key={resource.id} className="hover:bg-zinc-800/60">
+              <tr key={resource.id} className="table-row">
                 <td className="px-4 py-3 font-medium">{resource.name}</td>
                 <td className="px-4 py-3 text-zinc-400">{resource.namespace || "-"}</td>
                 <td className="px-4 py-3">{resource.status}</td>
@@ -235,7 +235,7 @@ export default function ResourceCatalog({ view }: { view: View }) {
                           <button
                             onClick={() => void rollbackResource(resource)}
                             disabled={isActing}
-                            className="rounded border border-zinc-600 px-2 py-1 text-xs text-zinc-200 hover:bg-zinc-800 disabled:opacity-50"
+                            className="btn-sm border-zinc-600"
                           >
                             Rollback
                           </button>
@@ -256,7 +256,7 @@ export default function ResourceCatalog({ view }: { view: View }) {
 
       {yamlTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div className="w-full max-w-5xl rounded-2xl border border-zinc-700 bg-zinc-900">
+          <div className="w-full max-w-5xl app-shell">
             <header className="border-b border-zinc-700 px-4 py-3 flex items-center justify-between">
               <div>
                 <p className="text-sm font-semibold text-zinc-100">Edit YAML</p>
@@ -264,7 +264,7 @@ export default function ResourceCatalog({ view }: { view: View }) {
                   {view}: {yamlTarget.namespace}/{yamlTarget.name}
                 </p>
               </div>
-              <button onClick={() => setYAMLTarget(null)} className="rounded border border-zinc-600 px-3 py-1 text-xs text-zinc-200 hover:bg-zinc-800">
+              <button onClick={() => setYAMLTarget(null)} className="btn-sm border-zinc-600">
                 Close
               </button>
             </header>
@@ -275,10 +275,10 @@ export default function ResourceCatalog({ view }: { view: View }) {
                 className="h-[60vh] w-full rounded-md border border-zinc-700 bg-zinc-950 p-3 text-xs font-mono text-zinc-100"
               />
               <div className="mt-3 flex justify-end gap-2">
-                <button onClick={() => setYAMLTarget(null)} className="rounded border border-zinc-600 px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-800">
+                <button onClick={() => setYAMLTarget(null)} className="btn-sm border-zinc-600">
                   Cancel
                 </button>
-                <button onClick={() => void applyYAML()} disabled={isActing} className="rounded bg-[#2496ed] px-3 py-1.5 text-xs font-medium text-white hover:bg-[#1d63ed] disabled:opacity-50">
+                <button onClick={() => void applyYAML()} disabled={isActing} className="btn-primary h-auto py-1.5 text-xs">
                   {isActing ? "Applying" : "Apply"}
                 </button>
               </div>
@@ -289,7 +289,7 @@ export default function ResourceCatalog({ view }: { view: View }) {
 
       {scaleTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div className="w-full max-w-md rounded-2xl border border-zinc-700 bg-zinc-900">
+          <div className="w-full max-w-md app-shell">
             <header className="border-b border-zinc-700 px-4 py-3">
               <p className="text-sm font-semibold text-zinc-100">Scale Resource</p>
               <p className="text-xs text-zinc-400 mt-0.5">
@@ -304,14 +304,14 @@ export default function ResourceCatalog({ view }: { view: View }) {
                   onChange={(event) => setScaleReplicas(event.target.value)}
                   type="number"
                   min={0}
-                  className="mt-1 h-10 w-full rounded-md border border-zinc-700 bg-zinc-950 px-3 text-sm text-zinc-100"
+                  className="field mt-1 w-full"
                 />
               </label>
               <div className="flex justify-end gap-2">
-                <button onClick={() => setScaleTarget(null)} className="rounded border border-zinc-600 px-3 py-1.5 text-xs text-zinc-200 hover:bg-zinc-800">
+                <button onClick={() => setScaleTarget(null)} className="btn-sm border-zinc-600">
                   Cancel
                 </button>
-                <button onClick={() => void applyScale()} disabled={isActing} className="rounded bg-[#2496ed] px-3 py-1.5 text-xs font-medium text-white hover:bg-[#1d63ed] disabled:opacity-50">
+                <button onClick={() => void applyScale()} disabled={isActing} className="btn-primary h-auto py-1.5 text-xs">
                   {isActing ? "Scaling" : "Scale"}
                 </button>
               </div>
@@ -325,7 +325,7 @@ export default function ResourceCatalog({ view }: { view: View }) {
 
 function ActionButton({ onClick, disabled, label }: { onClick: () => void; disabled: boolean; label: string }) {
   return (
-    <button onClick={onClick} disabled={disabled} className="rounded border border-zinc-600 px-2 py-1 text-xs text-zinc-200 hover:bg-zinc-800 disabled:opacity-50">
+    <button onClick={onClick} disabled={disabled} className="btn-sm border-zinc-600">
       {label}
     </button>
   );
