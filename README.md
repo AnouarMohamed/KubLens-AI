@@ -124,14 +124,20 @@ See details:
 
 ## Screenshots
 
-### Overview
-![Overview](screenshots/Screenshot%202026-03-07%20133914.png)
-
-### Metrics
-![Metrics](screenshots/Screenshot%202026-03-07%20134004.png)
-
-### Predictions
-![Predictions](screenshots/Screenshot%202026-03-07%20134415.png)
+![Screenshot 1](screenshots/Screenshot%202026-03-07%20133914.png)
+![Screenshot 2](screenshots/Screenshot%202026-03-07%20133928.png)
+![Screenshot 3](screenshots/Screenshot%202026-03-07%20134004.png)
+![Screenshot 4](screenshots/Screenshot%202026-03-07%20134029.png)
+![Screenshot 5](screenshots/Screenshot%202026-03-07%20134040.png)
+![Screenshot 6](screenshots/Screenshot%202026-03-07%20134107.png)
+![Screenshot 7](screenshots/Screenshot%202026-03-07%20134152.png)
+![Screenshot 8](screenshots/Screenshot%202026-03-07%20134252.png)
+![Screenshot 9](screenshots/Screenshot%202026-03-07%20134328.png)
+![Screenshot 10](screenshots/Screenshot%202026-03-07%20134342.png)
+![Screenshot 11](screenshots/Screenshot%202026-03-07%20134356.png)
+![Screenshot 12](screenshots/Screenshot%202026-03-07%20134415.png)
+![Screenshot 13](screenshots/Screenshot%202026-03-07%20134428.png)
+![Screenshot 14](screenshots/Screenshot%202026-03-07%20134458.png)
 
 ## Notes
 - If predictions return 404, restart backend and confirm you are running the latest code.
