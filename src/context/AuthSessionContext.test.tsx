@@ -19,7 +19,6 @@ function Probe() {
     <div>
       <p data-testid="role">{session?.user?.role ?? "none"}</p>
       <p data-testid="can-read">{String(can("read"))}</p>
-      <p data-testid="can-terminal">{String(can("terminal"))}</p>
       <button onClick={() => void login("admin-token")}>login</button>
       <button onClick={() => void logout()}>logout</button>
     </div>
@@ -36,7 +35,7 @@ describe("AuthSessionProvider", () => {
       enabled: true,
       authenticated: true,
       user: { name: "admin", role: "admin" },
-      permissions: ["read", "write", "terminal"],
+      permissions: ["read", "write"],
     });
 
     render(
@@ -48,7 +47,6 @@ describe("AuthSessionProvider", () => {
     await waitFor(() => {
       expect(screen.getByTestId("role")).toHaveTextContent("admin");
       expect(screen.getByTestId("can-read")).toHaveTextContent("true");
-      expect(screen.getByTestId("can-terminal")).toHaveTextContent("true");
     });
   });
 

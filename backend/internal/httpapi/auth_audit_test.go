@@ -53,24 +53,6 @@ func TestAuthEnforcesRoles(t *testing.T) {
 	if operatorWriteResp.Code != http.StatusOK {
 		t.Fatalf("operator write status = %d, want 200", operatorWriteResp.Code)
 	}
-
-	operatorTerminal := httptest.NewRequest(http.MethodPost, "/api/terminal/exec", strings.NewReader(`{"command":"echo ok"}`))
-	operatorTerminal.Header.Set("Authorization", "Bearer operator-token")
-	operatorTerminal.Header.Set("Content-Type", "application/json")
-	operatorTerminalResp := httptest.NewRecorder()
-	router.ServeHTTP(operatorTerminalResp, operatorTerminal)
-	if operatorTerminalResp.Code != http.StatusForbidden {
-		t.Fatalf("operator terminal status = %d, want 403", operatorTerminalResp.Code)
-	}
-
-	adminTerminal := httptest.NewRequest(http.MethodPost, "/api/terminal/exec", strings.NewReader(`{"command":"echo ok"}`))
-	adminTerminal.Header.Set("Authorization", "Bearer admin-token")
-	adminTerminal.Header.Set("Content-Type", "application/json")
-	adminTerminalResp := httptest.NewRecorder()
-	router.ServeHTTP(adminTerminalResp, adminTerminal)
-	if adminTerminalResp.Code != http.StatusOK {
-		t.Fatalf("admin terminal status = %d, want 200", adminTerminalResp.Code)
-	}
 }
 
 func TestAuditEndpointIncludesAuthFailures(t *testing.T) {
@@ -325,7 +307,6 @@ func TestAuditCapturesMutatingActions(t *testing.T) {
 		nil,
 		logger,
 		WithWriteActionsEnabled(true),
-		WithTerminalPolicy(TerminalPolicy{Enabled: true}),
 		WithAuth(AuthConfig{
 			Enabled: true,
 			Tokens: []AuthToken{
@@ -348,7 +329,6 @@ func TestAuditCapturesMutatingActions(t *testing.T) {
 		{method: http.MethodPost, path: "/api/resources/deployments/default/demo/scale", body: `{"replicas":2}`},
 		{method: http.MethodPost, path: "/api/resources/deployments/default/demo/restart"},
 		{method: http.MethodPost, path: "/api/resources/deployments/default/demo/rollback"},
-		{method: http.MethodPost, path: "/api/terminal/exec", body: `{"command":"echo ok"}`},
 	}
 
 	for _, item := range requests {
@@ -393,7 +373,6 @@ func TestAuditCapturesMutatingActions(t *testing.T) {
 		"resource.scale",
 		"resource.restart",
 		"resource.rollback",
-		"terminal.exec",
 	}
 	for _, action := range expected {
 		if !slices.Contains(actions, action) {
@@ -456,7 +435,6 @@ func newAuthTestServer() *Server {
 		nil,
 		logger,
 		WithWriteActionsEnabled(true),
-		WithTerminalPolicy(TerminalPolicy{Enabled: true}),
 		WithAuth(AuthConfig{
 			Enabled: true,
 			Tokens: []AuthToken{

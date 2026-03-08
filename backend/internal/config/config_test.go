@@ -18,9 +18,6 @@ func TestLoadDefaultsDemoMode(t *testing.T) {
 	if cfg.WriteActionsEnabled {
 		t.Fatal("write actions should be disabled by default")
 	}
-	if cfg.Terminal.Enabled {
-		t.Fatal("terminal should be disabled by default")
-	}
 }
 
 func TestLoadProdRequiresAuth(t *testing.T) {
@@ -67,28 +64,6 @@ func TestWriteActionsRequireAuth(t *testing.T) {
 	}
 }
 
-func TestTerminalRequiresAuth(t *testing.T) {
-	clearConfigEnv(t)
-	t.Setenv("TERMINAL_ENABLED", "true")
-	t.Setenv("AUTH_ENABLED", "false")
-
-	if _, err := Load(); err == nil {
-		t.Fatal("expected error when terminal enabled without auth")
-	}
-}
-
-func TestTerminalRequiresWriteActions(t *testing.T) {
-	clearConfigEnv(t)
-	t.Setenv("AUTH_ENABLED", "true")
-	t.Setenv("AUTH_TOKENS", "admin:admin:secret-token")
-	t.Setenv("TERMINAL_ENABLED", "true")
-	t.Setenv("WRITE_ACTIONS_ENABLED", "false")
-
-	if _, err := Load(); err == nil {
-		t.Fatal("expected error when terminal enabled without write actions")
-	}
-}
-
 func TestProdDisallowsHeaderTokenAuth(t *testing.T) {
 	clearConfigEnv(t)
 	t.Setenv("APP_MODE", "prod")
@@ -125,6 +100,7 @@ func clearConfigEnv(t *testing.T) {
 		"ASSISTANT_PROMPT_TIMEOUT_SECONDS",
 		"PREDICTOR_BASE_URL",
 		"PREDICTOR_TIMEOUT_SECONDS",
+		"PREDICTOR_SHARED_SECRET",
 		"AUTH_ENABLED",
 		"AUTH_ALLOW_HEADER_TOKEN",
 		"AUTH_TRUSTED_CSRF_DOMAINS",
@@ -132,11 +108,6 @@ func clearConfigEnv(t *testing.T) {
 		"RATE_LIMIT_ENABLED",
 		"RATE_LIMIT_REQUESTS",
 		"RATE_LIMIT_WINDOW_SECONDS",
-		"TERMINAL_ENABLED",
-		"TERMINAL_ALLOWED_PREFIXES",
-		"TERMINAL_DENIED_PREFIXES",
-		"TERMINAL_KUBECTL_ALLOWED_VERBS",
-		"TERMINAL_MAX_OUTPUT_BYTES",
 		"AUDIT_MAX_ITEMS",
 		"AUDIT_LOG_FILE",
 		"ALERT_TIMEOUT_SECONDS",

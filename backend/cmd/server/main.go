@@ -29,7 +29,7 @@ func main() {
 	}
 
 	log.Printf("KubeLens backend listening on http://localhost:%d", cfg.Port)
-	log.Printf("Mode=%s devMode=%t auth=%t writeActions=%t terminal=%t", cfg.Mode, cfg.DevMode, cfg.Auth.Enabled, cfg.WriteActionsEnabled, cfg.Terminal.Enabled)
+	log.Printf("Mode=%s devMode=%t auth=%t writeActions=%t", cfg.Mode, cfg.DevMode, cfg.Auth.Enabled, cfg.WriteActionsEnabled)
 	log.Printf("Build info: version=%s commit=%s builtAt=%s", cfg.Build.Version, cfg.Build.Commit, cfg.Build.BuiltAt)
 
 	go func() {

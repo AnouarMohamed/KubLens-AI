@@ -46,7 +46,6 @@ const requiredPaths = [
   "/diagnostics",
   "/predictions",
   "/assistant",
-  "/terminal/exec",
 ];
 
 const paths = spec.paths && typeof spec.paths === "object" ? spec.paths : {};

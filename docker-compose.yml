@@ -16,6 +16,7 @@ services:
       KUBECONFIG_CONTEXTS: ${KUBECONFIG_CONTEXTS:-}
       PREDICTOR_BASE_URL: ${PREDICTOR_BASE_URL:-http://k8s-ops-predictor:8001}
       PREDICTOR_TIMEOUT_SECONDS: ${PREDICTOR_TIMEOUT_SECONDS:-4}
+      PREDICTOR_SHARED_SECRET: ${PREDICTOR_SHARED_SECRET:-}
       ASSISTANT_PROVIDER: ${ASSISTANT_PROVIDER:-none}
       ASSISTANT_TIMEOUT_SECONDS: ${ASSISTANT_TIMEOUT_SECONDS:-8}
       ASSISTANT_API_BASE_URL: ${ASSISTANT_API_BASE_URL:-https://api.openai.com/v1}
@@ -32,11 +33,6 @@ services:
       RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
       RATE_LIMIT_REQUESTS: ${RATE_LIMIT_REQUESTS:-300}
       RATE_LIMIT_WINDOW_SECONDS: ${RATE_LIMIT_WINDOW_SECONDS:-60}
-      TERMINAL_ENABLED: ${TERMINAL_ENABLED:-false}
-      TERMINAL_ALLOWED_PREFIXES: ${TERMINAL_ALLOWED_PREFIXES:-kubectl,echo,pwd,ls,dir}
-      TERMINAL_DENIED_PREFIXES: ${TERMINAL_DENIED_PREFIXES:-kubectl delete,kubectl apply,kubectl patch,kubectl exec,kubectl cp,kubectl run,helm upgrade,helm uninstall,sh,bash,cmd,powershell}
-      TERMINAL_KUBECTL_ALLOWED_VERBS: ${TERMINAL_KUBECTL_ALLOWED_VERBS:-get,describe,top,logs,api-resources,cluster-info,version}
-      TERMINAL_MAX_OUTPUT_BYTES: ${TERMINAL_MAX_OUTPUT_BYTES:-20000}
       AUDIT_LOG_FILE: ${AUDIT_LOG_FILE:-}
       AUDIT_MAX_ITEMS: ${AUDIT_MAX_ITEMS:-500}
       ALERT_TIMEOUT_SECONDS: ${ALERT_TIMEOUT_SECONDS:-5}
@@ -56,4 +52,6 @@ services:
     container_name: k8s-ops-predictor
     ports:
       - "8001:8001"
+    environment:
+      PREDICTOR_SHARED_SECRET: ${PREDICTOR_SHARED_SECRET:-}
     restart: unless-stopped

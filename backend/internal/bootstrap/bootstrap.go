@@ -59,19 +59,12 @@ func Build(cfg config.Config) (Result, error) {
 		httpapi.WithAIProvider(aiProvider),
 		httpapi.WithAITimeout(cfg.Assistant.Timeout),
 		httpapi.WithDocsRetriever(ragger),
-		httpapi.WithPredictor(cfg.Predictor.BaseURL, cfg.Predictor.Timeout),
+		httpapi.WithPredictor(cfg.Predictor.BaseURL, cfg.Predictor.Timeout, cfg.Predictor.SharedSecret),
 		httpapi.WithAuth(toHTTPAuth(cfg.Auth)),
 		httpapi.WithRateLimit(httpapi.RateLimitConfig{
 			Enabled:  cfg.RateLimit.Enabled,
 			Requests: cfg.RateLimit.Requests,
 			Window:   cfg.RateLimit.Window,
-		}),
-		httpapi.WithTerminalPolicy(httpapi.TerminalPolicy{
-			Enabled:            cfg.Terminal.Enabled,
-			AllowedPrefixes:    cfg.Terminal.AllowedPrefixes,
-			DeniedPrefixes:     cfg.Terminal.DeniedPrefixes,
-			KubectlAllowedVerb: cfg.Terminal.KubectlAllowedVerb,
-			MaxOutputBytes:     cfg.Terminal.MaxOutputBytes,
 		}),
 		httpapi.WithAuditConfig(httpapi.AuditConfig{
 			MaxItems: cfg.Audit.MaxItems,

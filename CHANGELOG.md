@@ -8,7 +8,6 @@ All notable changes to this project are documented here.
 
 - Authentication and role-based enforcement for dashboard API flows.
 - CSRF same-origin validation for cookie-authenticated mutating routes.
-- Terminal policy hardening tests for operator bypass patterns.
 - API contract tests for core endpoints, mutating action payloads, and auth error shape.
 - Playwright E2E coverage for dashboard smoke and auth role matrix.
 - Release/version consistency checks (`verify:release`, `verify:changelog`) in CI.
@@ -24,5 +23,4 @@ All notable changes to this project are documented here.
 - Audit entries now sanitize client IP representation (strip source port).
 - Bootstrap auth wiring now includes header-token and trusted CSRF domain controls.
 - CI pipeline now includes release discipline, OpenAPI contract checks, and stronger E2E verification.
-- Terminal risk posture tightened: terminal now requires both auth and write-action enablement; default command roots narrowed.
 - Kubernetes liveness/readiness probes moved to dedicated health endpoints and overlay RBAC removed default `secrets` read privilege.

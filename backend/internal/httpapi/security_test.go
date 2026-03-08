@@ -44,100 +44,6 @@ func TestRateLimiterBlocksExcessRequests(t *testing.T) {
 	}
 }
 
-func TestTerminalPolicyAllowlist(t *testing.T) {
-	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
-	server := newServer(
-		testClusterReader{},
-		nil,
-		logger,
-		WithWriteActionsEnabled(true),
-		WithAuth(AuthConfig{
-			Enabled: true,
-			Tokens: []AuthToken{
-				{Token: "admin-token", User: "admin", Role: "admin"},
-			},
-		}),
-		WithTerminalPolicy(TerminalPolicy{
-			Enabled:         true,
-			AllowedPrefixes: []string{"kubectl"},
-		}),
-	)
-	router := server.Router("")
-
-	disallowed := httptest.NewRequest(http.MethodPost, "/api/terminal/exec", strings.NewReader(`{"command":"echo hello"}`))
-	disallowed.Header.Set("Content-Type", "application/json")
-	disallowed.Header.Set("Authorization", "Bearer admin-token")
-	disallowedResp := httptest.NewRecorder()
-	router.ServeHTTP(disallowedResp, disallowed)
-	if disallowedResp.Code != http.StatusBadRequest {
-		t.Fatalf("disallowed status = %d, want 400", disallowedResp.Code)
-	}
-}
-
-func TestTerminalPolicyBlocksShellOperatorBypass(t *testing.T) {
-	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
-	server := newServer(
-		testClusterReader{},
-		nil,
-		logger,
-		WithWriteActionsEnabled(true),
-		WithAuth(AuthConfig{
-			Enabled: true,
-			Tokens: []AuthToken{
-				{Token: "admin-token", User: "admin", Role: "admin"},
-			},
-		}),
-		WithTerminalPolicy(TerminalPolicy{
-			Enabled:            true,
-			AllowedPrefixes:    []string{"kubectl"},
-			KubectlAllowedVerb: []string{"get", "logs"},
-		}),
-	)
-	router := server.Router("")
-
-	req := httptest.NewRequest(http.MethodPost, "/api/terminal/exec", strings.NewReader(`{"command":"kubectl get pods -A && kubectl delete pod x"}`))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer admin-token")
-	rr := httptest.NewRecorder()
-	router.ServeHTTP(rr, req)
-
-	if rr.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d, want 400", rr.Code)
-	}
-}
-
-func TestTerminalPolicyBlocksDeniedPrefixWithLeadingWhitespace(t *testing.T) {
-	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
-	server := newServer(
-		testClusterReader{},
-		nil,
-		logger,
-		WithWriteActionsEnabled(true),
-		WithAuth(AuthConfig{
-			Enabled: true,
-			Tokens: []AuthToken{
-				{Token: "admin-token", User: "admin", Role: "admin"},
-			},
-		}),
-		WithTerminalPolicy(TerminalPolicy{
-			Enabled:         true,
-			AllowedPrefixes: []string{"kubectl"},
-			DeniedPrefixes:  []string{"kubectl delete"},
-		}),
-	)
-	router := server.Router("")
-
-	req := httptest.NewRequest(http.MethodPost, "/api/terminal/exec", strings.NewReader(`{"command":"   kubectl delete pod demo"}`))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer admin-token")
-	rr := httptest.NewRecorder()
-	router.ServeHTTP(rr, req)
-
-	if rr.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d, want 400", rr.Code)
-	}
-}
-
 func TestRateLimiterCanonicalizesHostPortForSameIP(t *testing.T) {
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
 	server := newServer(
@@ -236,36 +142,6 @@ func TestMutationBlockedWhenWriteActionsDisabled(t *testing.T) {
 	}
 }
 
-func TestTerminalBlockedWhenWriteActionsDisabled(t *testing.T) {
-	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
-	server := newServer(
-		testClusterReader{},
-		nil,
-		logger,
-		WithAuth(AuthConfig{
-			Enabled: true,
-			Tokens: []AuthToken{
-				{Token: "admin-token", User: "admin", Role: "admin"},
-			},
-		}),
-		WithWriteActionsEnabled(false),
-		WithTerminalPolicy(TerminalPolicy{
-			Enabled:         true,
-			AllowedPrefixes: []string{"kubectl"},
-		}),
-	)
-	router := server.Router("")
-
-	req := httptest.NewRequest(http.MethodPost, "/api/terminal/exec", strings.NewReader(`{"command":"kubectl get pods -A"}`))
-	req.Header.Set("Authorization", "Bearer admin-token")
-	req.Header.Set("Content-Type", "application/json")
-	rr := httptest.NewRecorder()
-	router.ServeHTTP(rr, req)
-	if rr.Code != http.StatusForbidden {
-		t.Fatalf("status = %d, want 403", rr.Code)
-	}
-}
-
 func TestRuntimeEndpoint(t *testing.T) {
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
 	server := newServer(
@@ -277,7 +153,6 @@ func TestRuntimeEndpoint(t *testing.T) {
 			Insecure:            true,
 			AuthEnabled:         false,
 			WriteActionsEnabled: false,
-			TerminalEnabled:     false,
 			PredictorHealthy:    true,
 		}),
 	)

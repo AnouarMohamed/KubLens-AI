@@ -25,7 +25,6 @@ const Nodes = lazy(() => import("../views/nodes"));
 const Diagnostics = lazy(() => import("../views/diagnostics"));
 const Predictions = lazy(() => import("../views/predictions"));
 const OpsAssistant = lazy(() => import("../views/opsassistant"));
-const Terminal = lazy(() => import("../views/terminal"));
 const ResourceCatalog = lazy(() => import("../views/resourcecatalog"));
 
 type Panel = "none" | "notifications" | "settings" | "profile";
@@ -58,9 +57,7 @@ export function AppShell() {
 
   const { message: transientMessage, showMessage } = useTransientMessage();
   const { sections, searchableItems, isAllowed } = useViewAccess({
-    canTerminal: can("terminal"),
     canAssist: can("assist"),
-    runtime,
   });
   const { search, setSearch, submitSearch } = useSearchNavigation({
     items: searchableItems,
@@ -98,9 +95,9 @@ export function AppShell() {
     }
     if (!isAllowed(currentView)) {
       setCurrentView("overview");
-      showMessage(blockedViewMessage(currentView, runtime), 1800);
+      showMessage(blockedViewMessage(currentView), 1800);
     }
-  }, [authLoading, currentView, isAllowed, runtime, setCurrentView, showMessage]);
+  }, [authLoading, currentView, isAllowed, setCurrentView, showMessage]);
 
   return (
     <div className={`flex h-screen text-zinc-100 ${settings.denseMode ? "text-[13px]" : "text-sm"}`}>
@@ -207,12 +204,6 @@ function renderView(view: View): ReactElement {
       return (
         <Suspense fallback={<ViewLoadingState label="Loading diagnostics..." />}>
           <Diagnostics />
-        </Suspense>
-      );
-    case "terminal":
-      return (
-        <Suspense fallback={<ViewLoadingState label="Loading terminal..." />}>
-          <Terminal />
         </Suspense>
       );
     case "assistant":

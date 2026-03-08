@@ -72,6 +72,8 @@ type Service struct {
 	chunks    []chunk
 	tokenIdx  map[string][]int
 	expiresAt time.Time
+	indexedAt time.Time
+	staleWarn time.Time
 	group     singleflight.Group
 }
 
@@ -144,10 +146,11 @@ func (s *Service) Retrieve(ctx context.Context, query string, limit int) []model
 
 	s.ensureLoaded(ctx)
 
-	chunks, tokenIdx := s.snapshotIndex()
+	chunks, tokenIdx, expiresAt, indexedAt := s.snapshotIndex()
 	if len(chunks) == 0 {
 		return nil
 	}
+	s.warnIfStaleIndex(expiresAt, indexedAt)
 
 	queryTerms := tokenize(query)
 	queryLower := strings.ToLower(query)
@@ -224,6 +227,8 @@ func (s *Service) ensureLoaded(ctx context.Context) {
 		s.chunks = chunks
 		s.tokenIdx = buildTokenIndex(chunks)
 		s.expiresAt = s.now().Add(s.refreshInterval)
+		s.indexedAt = s.now()
+		s.staleWarn = time.Time{}
 		s.mu.Unlock()
 		return nil, nil
 	})
@@ -238,10 +243,38 @@ func (s *Service) hasFreshIndex() bool {
 	return len(s.chunks) > 0 && s.now().Before(s.expiresAt)
 }
 
-func (s *Service) snapshotIndex() ([]chunk, map[string][]int) {
+func (s *Service) snapshotIndex() ([]chunk, map[string][]int, time.Time, time.Time) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.chunks, s.tokenIdx
+	return s.chunks, s.tokenIdx, s.expiresAt, s.indexedAt
+}
+
+func (s *Service) warnIfStaleIndex(expiresAt, indexedAt time.Time) {
+	if expiresAt.IsZero() || s.logger == nil {
+		return
+	}
+	now := s.now()
+	if now.Before(expiresAt) {
+		return
+	}
+
+	s.mu.Lock()
+	if !s.staleWarn.IsZero() && now.Sub(s.staleWarn) < 5*time.Minute {
+		s.mu.Unlock()
+		return
+	}
+	s.staleWarn = now
+	s.mu.Unlock()
+
+	age := "unknown"
+	if !indexedAt.IsZero() {
+		age = now.Sub(indexedAt).Round(time.Second).String()
+	}
+	s.logger.Warn("rag index is stale; serving potentially outdated references",
+		"indexed_at", indexedAt,
+		"expires_at", expiresAt,
+		"index_age", age,
+	)
 }
 
 func (s *Service) buildIndex(ctx context.Context) []chunk {

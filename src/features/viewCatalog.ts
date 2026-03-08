@@ -15,7 +15,6 @@ export interface ViewSection {
 
 export interface ViewAccessPolicy {
   assistantEnabled: boolean;
-  terminalEnabled: boolean;
 }
 
 export const VIEW_SECTIONS: ViewSection[] = [
@@ -206,7 +205,7 @@ export const VIEW_SECTIONS: ViewSection[] = [
       {
         id: "predictions",
         label: "Predictions",
-        description: "ML-assisted incident risk scoring for pods and nodes.",
+        description: "Rule-based risk scoring from pod and node health signals.",
         kubectlCommand: "kubectl get events -A --sort-by=.metadata.creationTimestamp",
       },
       {
@@ -221,12 +220,6 @@ export const VIEW_SECTIONS: ViewSection[] = [
     id: "ai",
     label: "Ops",
     items: [
-      {
-        id: "terminal",
-        label: "Terminal",
-        description: "Run shell and kubectl commands in-app.",
-        kubectlCommand: "kubectl get pods -A",
-      },
       {
         id: "assistant",
         label: "Assistant",
@@ -252,9 +245,6 @@ export function getViewItem(view: View): ViewItem {
 export function isViewVisible(view: View, policy: ViewAccessPolicy): boolean {
   if (view === "assistant") {
     return policy.assistantEnabled;
-  }
-  if (view === "terminal") {
-    return policy.terminalEnabled;
   }
   return true;
 }

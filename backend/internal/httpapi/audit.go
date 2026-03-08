@@ -309,8 +309,6 @@ func actionForRequest(method, path string) string {
 		return "resource.restart"
 	case m == http.MethodPost && path == "/api/assistant":
 		return "assistant.ask"
-	case m == http.MethodPost && path == "/api/terminal/exec":
-		return "terminal.exec"
 	default:
 		route := strings.TrimSpace(path)
 		if route == "" {

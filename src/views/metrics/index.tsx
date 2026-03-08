@@ -15,6 +15,7 @@ import {
 } from "recharts";
 import { api } from "../../lib/api";
 import type { ApiMetricsSnapshot, ClusterStats, Node, Pod } from "../../types";
+import { MetricsKpiStrip } from "./components/MetricsKpiStrip";
 
 const DOCKER_BLUE = "#2496ed";
 const CHART_BLUE = "#4f7bff";
@@ -172,14 +173,16 @@ export default function Metrics() {
         />
       </section>
 
-      <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-4">
-        <MetricCard label="Cluster CPU" value={stats?.cluster.cpu ?? "-"} />
-        <MetricCard label="Cluster Memory" value={stats?.cluster.memory ?? "-"} />
-        <MetricCard label="Pods" value={String(stats?.pods.total ?? 0)} />
-        <MetricCard label="Req/min" value={requestRatePerMinute.toFixed(1)} />
-        <MetricCard label="Avg Latency" value={`${(apiMetrics?.avgLatencyMs ?? 0).toFixed(1)}ms`} />
-        <MetricCard label="Error Rate" value={`${errorRate.toFixed(2)}%`} />
-      </section>
+      <MetricsKpiStrip
+        items={[
+          { label: "Cluster CPU", value: stats?.cluster.cpu ?? "-" },
+          { label: "Cluster Memory", value: stats?.cluster.memory ?? "-" },
+          { label: "Pods", value: String(stats?.pods.total ?? 0) },
+          { label: "Req/min", value: requestRatePerMinute.toFixed(1) },
+          { label: "Avg Latency", value: `${(apiMetrics?.avgLatencyMs ?? 0).toFixed(1)}ms` },
+          { label: "Error Rate", value: `${errorRate.toFixed(2)}%` },
+        ]}
+      />
 
       <section className="surface p-4">
         <div className="flex flex-wrap items-center gap-2">
@@ -462,15 +465,6 @@ function SignalCard({ label, value, detail, fill }: { label: string; value: stri
       <div className="mt-3 h-2 rounded-full bg-zinc-800 overflow-hidden">
         <div className="h-full bg-[#4f7bff]" style={{ width: `${fill}%` }} />
       </div>
-    </div>
-  );
-}
-
-function MetricCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="kpi">
-      <p className="text-[11px] uppercase tracking-wide text-zinc-500 font-semibold">{label}</p>
-      <p className="mt-2 text-2xl font-semibold text-zinc-100">{value}</p>
     </div>
   );
 }

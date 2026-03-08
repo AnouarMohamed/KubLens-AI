@@ -20,7 +20,6 @@ func (s *Server) handlePrometheusMetrics(w http.ResponseWriter, _ *http.Request)
 
 	writePrometheusMetric(&b, "kubelens_runtime_auth_enabled", boolToGauge(runtime.AuthEnabled), nil)
 	writePrometheusMetric(&b, "kubelens_runtime_write_actions_enabled", boolToGauge(runtime.WriteActionsEnabled), nil)
-	writePrometheusMetric(&b, "kubelens_runtime_terminal_enabled", boolToGauge(runtime.TerminalEnabled), nil)
 	writePrometheusMetric(&b, "kubelens_runtime_predictor_enabled", boolToGauge(runtime.PredictorEnabled), nil)
 	writePrometheusMetric(&b, "kubelens_runtime_predictor_healthy", boolToGauge(runtime.PredictorHealthy), nil)
 

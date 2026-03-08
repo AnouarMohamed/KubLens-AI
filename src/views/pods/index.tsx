@@ -4,6 +4,7 @@ import { useAuthSession } from "../../context/AuthSessionContext";
 import type { Pod, PodDetail, PodCreateRequest } from "../../types";
 import PodDetailModal from "../../components/pods/PodDetailModal";
 import PodStatusBadge from "../../components/pods/PodStatusBadge";
+import { PodsSummary } from "./components/PodsSummary";
 
 type PodDetailTab = "specs" | "events";
 
@@ -279,6 +280,8 @@ export default function Pods() {
           ))}
         </select>
       </div>
+
+      <PodsSummary pods={pods} filteredCount={filteredPods.length} />
 
       {error && (
         <div className="rounded-md border border-zinc-700 bg-zinc-900/80 px-3 py-2 text-sm text-zinc-200">{error}</div>

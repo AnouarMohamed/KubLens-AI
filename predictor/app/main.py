@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import os
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI, Header, HTTPException, status
 from pydantic import BaseModel, Field
 
 api = FastAPI(title="k8s-ops-predictor", version="1.0.0")
@@ -73,8 +74,18 @@ def healthz() -> dict:
     return {"status": "ok"}
 
 
+def require_predictor_secret(
+    x_predictor_secret: str | None = Header(default=None, alias="X-Predictor-Secret"),
+) -> None:
+    expected = os.getenv("PREDICTOR_SHARED_SECRET", "").strip()
+    if expected == "":
+        return
+    if (x_predictor_secret or "").strip() != expected:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="unauthorized predictor request")
+
+
 @api.post("/predict", response_model=PredictionResponse)
-def predict(request: PredictionRequest) -> PredictionResponse:
+def predict(request: PredictionRequest, _: None = Depends(require_predictor_secret)) -> PredictionResponse:
     warning_events = count_warning_events(request.events)
     items: list[IncidentPrediction] = []
 

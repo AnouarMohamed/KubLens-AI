@@ -6,21 +6,18 @@ import {
   isViewVisible,
   type ViewAccessPolicy,
 } from "../../features/viewCatalog";
-import type { RuntimeStatus, View } from "../../types";
+import type { View } from "../../types";
 
 interface UseViewAccessInput {
-  canTerminal: boolean;
   canAssist: boolean;
-  runtime: RuntimeStatus | null;
 }
 
-export function useViewAccess({ canTerminal, canAssist, runtime }: UseViewAccessInput) {
+export function useViewAccess({ canAssist }: UseViewAccessInput) {
   const policy = useMemo<ViewAccessPolicy>(
     () => ({
       assistantEnabled: canAssist,
-      terminalEnabled: canTerminal && (runtime?.terminalEnabled ?? false),
     }),
-    [canAssist, canTerminal, runtime?.terminalEnabled],
+    [canAssist],
   );
 
   const sections = useMemo(() => filterSectionsByPolicy(VIEW_SECTIONS, policy), [policy]);
@@ -36,13 +33,7 @@ export function useViewAccess({ canTerminal, canAssist, runtime }: UseViewAccess
   };
 }
 
-export function blockedViewMessage(view: View, runtime: RuntimeStatus | null): string {
-  if (view === "terminal") {
-    if (!runtime?.terminalEnabled) {
-      return "Terminal is disabled in this environment.";
-    }
-    return "Terminal access requires admin permission.";
-  }
+export function blockedViewMessage(view: View): string {
   if (view === "assistant") {
     return "Assistant access requires an authenticated session.";
   }

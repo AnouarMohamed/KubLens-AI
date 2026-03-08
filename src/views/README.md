@@ -23,6 +23,5 @@ Current views:
 - `audit/` -> live audit and activity stream view
 - `predictions/` -> incident forecast view
 - `diagnostics/` -> issue analysis view
-- `terminal/` -> shell execution view
 - `opsassistant/` -> assistant workflow
 - `resourcecatalog/` -> generic resource listing/actions

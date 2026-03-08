@@ -19,7 +19,7 @@ Default behavior:
 
 - `APP_MODE=demo`
 - read-focused permissions
-- write actions and terminal disabled
+- write actions disabled
 
 ## 3) Live cluster mode
 
@@ -60,7 +60,6 @@ APP_MODE=dev
 DEV_MODE=true
 AUTH_ENABLED=true
 WRITE_ACTIONS_ENABLED=true
-TERMINAL_ENABLED=true
 ```
 
 For production, keep `DEV_MODE=false` and set explicit `AUTH_TOKENS`.
@@ -76,6 +75,7 @@ Set:
 
 ```text
 PREDICTOR_BASE_URL=http://localhost:8001
+PREDICTOR_SHARED_SECRET=your-shared-secret
 ```
 
 ## 7) Docker compose
@@ -95,8 +95,7 @@ kubectl apply -k k8s/overlays/prod
 
 ## 9) Troubleshooting
 
-- `403` on write/terminal endpoints: role or global feature gate is blocking
-- terminal also requires `WRITE_ACTIONS_ENABLED=true`
+- `403` on write endpoints: role or global feature gate is blocking
 - `N/A` metrics: Metrics Server missing/unhealthy
 - predictions fallback source: predictor unavailable
 - startup error in prod mode: missing `AUTH_TOKENS` with `AUTH_ENABLED=true`

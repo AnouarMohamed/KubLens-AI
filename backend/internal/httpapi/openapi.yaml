@@ -155,17 +155,6 @@ paths:
       responses:
         "200":
           description: Assistant response
-  /terminal/exec:
-    post:
-      operationId: postTerminalExec
-      summary: Execute policy-controlled terminal command
-      responses:
-        "200":
-          description: Command result
-        "400":
-          description: Policy rejection
-        "403":
-          description: Disabled or unauthorized
 components:
   schemas:
     RuntimeStatus:
@@ -177,7 +166,6 @@ components:
         - isRealCluster
         - authEnabled
         - writeActionsEnabled
-        - terminalEnabled
         - predictorEnabled
         - predictorHealthy
         - assistantEnabled
@@ -196,8 +184,6 @@ components:
         authEnabled:
           type: boolean
         writeActionsEnabled:
-          type: boolean
-        terminalEnabled:
           type: boolean
         predictorEnabled:
           type: boolean

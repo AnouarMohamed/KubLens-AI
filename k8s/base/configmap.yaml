@@ -34,12 +34,6 @@ data:
   RATE_LIMIT_REQUESTS: "300"
   RATE_LIMIT_WINDOW_SECONDS: "60"
 
-  TERMINAL_ENABLED: "false"
-  TERMINAL_ALLOWED_PREFIXES: "kubectl,echo,pwd,ls,dir"
-  TERMINAL_DENIED_PREFIXES: "kubectl delete,kubectl apply,kubectl patch,kubectl exec,kubectl cp,kubectl run,helm upgrade,helm uninstall,sh,bash,cmd,powershell"
-  TERMINAL_KUBECTL_ALLOWED_VERBS: "get,describe,top,logs,api-resources,cluster-info,version"
-  TERMINAL_MAX_OUTPUT_BYTES: "20000"
-
   AUDIT_LOG_FILE: ""
   AUDIT_MAX_ITEMS: "500"
 

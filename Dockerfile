@@ -10,7 +10,7 @@ COPY index.html tsconfig.json vite.config.ts ./
 COPY src ./src
 RUN npm run build
 
-FROM golang:1.25-alpine AS go-builder
+FROM golang:1.24-alpine AS go-builder
 WORKDIR /workspace/backend
 
 COPY backend/go.mod backend/go.sum ./
@@ -34,7 +34,6 @@ ENV APP_MODE=demo
 ENV DEV_MODE=false
 ENV AUTH_ENABLED=false
 ENV WRITE_ACTIONS_ENABLED=false
-ENV TERMINAL_ENABLED=false
 ENV APP_VERSION=$APP_VERSION
 ENV APP_COMMIT=$APP_COMMIT
 ENV APP_BUILT_AT=$APP_BUILT_AT

@@ -29,7 +29,6 @@ const VALID_VIEWS = new Set<View>([
   "audit",
   "predictions",
   "diagnostics",
-  "terminal",
   "assistant",
 ]);
 

@@ -3,6 +3,7 @@ import { api } from "../../lib/api";
 import { useAuthSession } from "../../context/AuthSessionContext";
 import type { Node, NodeDetail } from "../../types";
 import NodeDetailModal from "../../components/nodes/NodeDetailModal";
+import { NodesSummary } from "./components/NodesSummary";
 
 export default function Nodes() {
   const { can, isLoading: authLoading } = useAuthSession();
@@ -119,6 +120,8 @@ export default function Nodes() {
       {error && (
         <div className="rounded-md border border-zinc-700 bg-zinc-900/80 px-3 py-2 text-sm text-zinc-200">{error}</div>
       )}
+
+      <NodesSummary nodes={nodes} filteredCount={filteredNodes.length} />
 
       <div className="table-shell">
         <table className="min-w-full text-left text-sm">

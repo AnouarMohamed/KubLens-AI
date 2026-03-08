@@ -46,7 +46,7 @@ func TestAPIContractCoreEndpoints(t *testing.T) {
 			path: "/api/runtime",
 			requiredKeys: []string{
 				"mode", "devMode", "insecure", "isRealCluster", "authEnabled",
-				"writeActionsEnabled", "terminalEnabled", "predictorEnabled", "predictorHealthy",
+				"writeActionsEnabled", "predictorEnabled", "predictorHealthy",
 				"assistantEnabled", "ragEnabled", "alertsEnabled", "warnings",
 			},
 		},

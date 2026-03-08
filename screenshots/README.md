@@ -7,7 +7,6 @@ Suggested names:
 - `overview.png`
 - `metrics.png`
 - `diagnostics.png`
-- `terminal.png`
 - `assistant.png`
 
 Markdown example:

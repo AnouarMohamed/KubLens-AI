@@ -3,6 +3,7 @@ import { getViewItem } from "../../features/viewCatalog";
 import { api } from "../../lib/api";
 import { useAuthSession } from "../../context/AuthSessionContext";
 import type { ResourceRecord, View } from "../../types";
+import { ResourceCatalogSummary } from "./components/ResourceCatalogSummary";
 
 const SCALEABLE_VIEWS = new Set<View>(["deployments", "statefulsets", "jobs"]);
 const RESTARTABLE_VIEWS = new Set<View>(["deployments", "statefulsets", "jobs"]);
@@ -247,6 +248,8 @@ export default function ResourceCatalog({ view }: { view: View }) {
       {error && (
         <div className="rounded-xl border border-zinc-700 bg-zinc-900/80 px-3 py-2 text-sm text-zinc-200">{error}</div>
       )}
+
+      <ResourceCatalogSummary resources={resources} filteredCount={filtered.length} />
 
       <div className="table-shell">
         <table className="min-w-full text-left">

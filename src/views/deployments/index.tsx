@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuthSession } from "../../context/AuthSessionContext";
 import { api } from "../../lib/api";
 import type { ResourceRecord } from "../../types";
+import { DeploymentSummary } from "./components/DeploymentSummary";
 
 interface DeploymentDetail {
   target: ResourceRecord;
@@ -244,6 +245,8 @@ export default function Deployments() {
       {error && (
         <div className="rounded-xl border border-zinc-700 bg-zinc-900/80 px-3 py-2 text-sm text-zinc-200">{error}</div>
       )}
+
+      <DeploymentSummary items={items} filteredCount={filtered.length} />
 
       <div className="table-shell">
         <table className="min-w-full text-left text-sm">

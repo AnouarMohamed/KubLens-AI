@@ -73,3 +73,15 @@ def test_predict_handles_invalid_usage_values() -> None:
 def test_predict_rejects_invalid_contract() -> None:
     response = client.post("/predict", json={"pods": "bad"})
     assert response.status_code == 422
+
+
+def test_predict_requires_shared_secret_when_configured(monkeypatch) -> None:
+    monkeypatch.setenv("PREDICTOR_SHARED_SECRET", "secret-123")
+    payload = {"pods": [], "nodes": [], "events": []}
+
+    unauthorized = client.post("/predict", json=payload)
+    assert unauthorized.status_code == 401
+
+    authorized = client.post("/predict", json=payload, headers={"X-Predictor-Secret": "secret-123"})
+    assert authorized.status_code == 200
+    monkeypatch.delenv("PREDICTOR_SHARED_SECRET", raising=False)

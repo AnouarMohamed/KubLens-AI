@@ -384,8 +384,6 @@ func requiredRole(method, path string) authRole {
 		return roleViewer
 	case cleanMethod == http.MethodPost && path == "/api/clusters/select":
 		return roleViewer
-	case cleanMethod == http.MethodPost && path == "/api/terminal/exec":
-		return roleAdmin
 	case cleanMethod == http.MethodGet || cleanMethod == http.MethodHead:
 		return roleViewer
 	case cleanMethod == http.MethodPost || cleanMethod == http.MethodPut || cleanMethod == http.MethodPatch || cleanMethod == http.MethodDelete:
@@ -420,7 +418,7 @@ func parseRole(role string) authRole {
 func permissionsForRole(role authRole) []string {
 	switch role {
 	case roleAdmin:
-		return []string{"read", "assist", "stream", "write", "terminal"}
+		return []string{"read", "assist", "stream", "write"}
 	case roleOperator:
 		return []string{"read", "assist", "stream", "write"}
 	default:

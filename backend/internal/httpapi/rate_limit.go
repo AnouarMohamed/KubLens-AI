@@ -3,10 +3,16 @@ package httpapi
 import (
 	"net"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+)
+
+const (
+	rateLimiterCompactThreshold = 2048
+	rateLimiterHardBucketLimit  = 4096
 )
 
 type RateLimitConfig struct {
@@ -27,6 +33,7 @@ type rateLimiter struct {
 type rateBucket struct {
 	count     int
 	resetTime time.Time
+	lastSeen  time.Time
 }
 
 func WithRateLimit(config RateLimitConfig) Option {
@@ -93,6 +100,7 @@ func (l *rateLimiter) allow(key string, now time.Time) (bool, int) {
 		bucket = rateBucket{
 			count:     1,
 			resetTime: now.Add(l.window),
+			lastSeen:  now,
 		}
 		l.buckets[key] = bucket
 		l.compact(now)
@@ -108,17 +116,37 @@ func (l *rateLimiter) allow(key string, now time.Time) (bool, int) {
 	}
 
 	bucket.count++
+	bucket.lastSeen = now
 	l.buckets[key] = bucket
 	return true, 0
 }
 
 func (l *rateLimiter) compact(now time.Time) {
-	if len(l.buckets) < 2048 {
+	if len(l.buckets) < rateLimiterCompactThreshold {
 		return
 	}
 	for key, bucket := range l.buckets {
 		if now.After(bucket.resetTime) {
 			delete(l.buckets, key)
 		}
+	}
+	if len(l.buckets) <= rateLimiterHardBucketLimit {
+		return
+	}
+
+	type seenBucket struct {
+		key      string
+		lastSeen time.Time
+	}
+	candidates := make([]seenBucket, 0, len(l.buckets))
+	for key, bucket := range l.buckets {
+		candidates = append(candidates, seenBucket{key: key, lastSeen: bucket.lastSeen})
+	}
+	sort.Slice(candidates, func(i, j int) bool {
+		return candidates[i].lastSeen.Before(candidates[j].lastSeen)
+	})
+
+	for i := 0; i < len(candidates) && len(l.buckets) > rateLimiterHardBucketLimit; i++ {
+		delete(l.buckets, candidates[i].key)
 	}
 }

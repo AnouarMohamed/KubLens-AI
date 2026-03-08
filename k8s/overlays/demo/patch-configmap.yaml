@@ -8,4 +8,3 @@ data:
   DEV_MODE: "false"
   AUTH_ENABLED: "false"
   WRITE_ACTIONS_ENABLED: "false"
-  TERMINAL_ENABLED: "false"

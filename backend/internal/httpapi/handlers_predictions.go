@@ -32,18 +32,20 @@ type predictionProvider interface {
 }
 
 type predictorClient struct {
-	baseURL string
-	client  *http.Client
+	baseURL      string
+	sharedSecret string
+	client       *http.Client
 }
 
-func newPredictorClient(baseURL string, timeout time.Duration) *predictorClient {
+func newPredictorClient(baseURL string, timeout time.Duration, sharedSecret string) *predictorClient {
 	if timeout <= 0 {
 		timeout = defaultPredictorTimeout
 	}
 
 	return &predictorClient{
-		baseURL: strings.TrimRight(strings.TrimSpace(baseURL), "/"),
-		client:  &http.Client{Timeout: timeout},
+		baseURL:      strings.TrimRight(strings.TrimSpace(baseURL), "/"),
+		sharedSecret: strings.TrimSpace(sharedSecret),
+		client:       &http.Client{Timeout: timeout},
 	}
 }
 
@@ -58,6 +60,9 @@ func (p *predictorClient) Predict(ctx context.Context, input predictorRequest) (
 		return model.PredictionsResult{}, err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	if p.sharedSecret != "" {
+		req.Header.Set("X-Predictor-Secret", p.sharedSecret)
+	}
 
 	resp, err := p.client.Do(req)
 	if err != nil {

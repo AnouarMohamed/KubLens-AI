@@ -39,7 +39,6 @@ type Config struct {
 	Predictor PredictorConfig
 	Auth      AuthConfig
 	RateLimit RateLimitConfig
-	Terminal  TerminalConfig
 	Audit     AuditConfig
 	Alerts    AlertsConfig
 
@@ -65,8 +64,9 @@ type AssistantConfig struct {
 }
 
 type PredictorConfig struct {
-	BaseURL string
-	Timeout time.Duration
+	BaseURL      string
+	Timeout      time.Duration
+	SharedSecret string
 }
 
 type AuthConfig struct {
@@ -80,14 +80,6 @@ type RateLimitConfig struct {
 	Enabled  bool
 	Requests int
 	Window   time.Duration
-}
-
-type TerminalConfig struct {
-	Enabled            bool
-	AllowedPrefixes    []string
-	DeniedPrefixes     []string
-	KubectlAllowedVerb []string
-	MaxOutputBytes     int
 }
 
 type AuditConfig struct {
@@ -108,7 +100,6 @@ type profile struct {
 	rateLimitEnabled   bool
 	rateLimitRequests  int
 	rateLimitWindowSec int
-	terminalEnabled    bool
 	writeActions       bool
 	ragEnabled         bool
 }
@@ -145,8 +136,9 @@ func Load() (Config, error) {
 	}
 
 	cfg.Predictor = PredictorConfig{
-		BaseURL: strings.TrimSpace(os.Getenv("PREDICTOR_BASE_URL")),
-		Timeout: parseSecondsAsDuration(os.Getenv("PREDICTOR_TIMEOUT_SECONDS"), 4*time.Second),
+		BaseURL:      strings.TrimSpace(os.Getenv("PREDICTOR_BASE_URL")),
+		Timeout:      parseSecondsAsDuration(os.Getenv("PREDICTOR_TIMEOUT_SECONDS"), 4*time.Second),
+		SharedSecret: strings.TrimSpace(os.Getenv("PREDICTOR_SHARED_SECRET")),
 	}
 
 	authEnabled := parseBoolDefault(os.Getenv("AUTH_ENABLED"), p.authEnabled)
@@ -173,27 +165,6 @@ func Load() (Config, error) {
 		Enabled:  parseBoolDefault(os.Getenv("RATE_LIMIT_ENABLED"), p.rateLimitEnabled),
 		Requests: parseIntDefault(os.Getenv("RATE_LIMIT_REQUESTS"), p.rateLimitRequests),
 		Window:   parseSecondsAsDuration(os.Getenv("RATE_LIMIT_WINDOW_SECONDS"), time.Duration(p.rateLimitWindowSec)*time.Second),
-	}
-
-	allowed := parseCSV(os.Getenv("TERMINAL_ALLOWED_PREFIXES"))
-	if len(allowed) == 0 {
-		allowed = []string{"kubectl", "echo", "pwd", "ls", "dir"}
-	}
-	denied := parseCSV(os.Getenv("TERMINAL_DENIED_PREFIXES"))
-	if len(denied) == 0 {
-		denied = []string{"kubectl delete", "kubectl apply", "kubectl patch", "kubectl exec", "kubectl cp", "kubectl run", "helm upgrade", "helm uninstall", "sh", "bash", "cmd", "powershell"}
-	}
-	kubectlVerbs := parseCSV(os.Getenv("TERMINAL_KUBECTL_ALLOWED_VERBS"))
-	if len(kubectlVerbs) == 0 {
-		kubectlVerbs = []string{"get", "describe", "top", "logs", "api-resources", "cluster-info", "version"}
-	}
-
-	cfg.Terminal = TerminalConfig{
-		Enabled:            parseBoolDefault(os.Getenv("TERMINAL_ENABLED"), p.terminalEnabled),
-		AllowedPrefixes:    allowed,
-		DeniedPrefixes:     denied,
-		KubectlAllowedVerb: kubectlVerbs,
-		MaxOutputBytes:     parseIntDefault(os.Getenv("TERMINAL_MAX_OUTPUT_BYTES"), 20000),
 	}
 
 	cfg.Audit = AuditConfig{
@@ -237,7 +208,6 @@ func RuntimeStatus(cfg Config, isRealCluster bool, alertsEnabled bool) model.Run
 		IsRealCluster:       isRealCluster,
 		AuthEnabled:         cfg.Auth.Enabled,
 		WriteActionsEnabled: cfg.WriteActionsEnabled,
-		TerminalEnabled:     cfg.Terminal.Enabled,
 		PredictorEnabled:    strings.TrimSpace(cfg.Predictor.BaseURL) != "",
 		PredictorHealthy:    true,
 		AssistantEnabled:    cfg.Assistant.Provider != "" && cfg.Assistant.Provider != "none",
@@ -261,17 +231,6 @@ func validate(cfg Config) error {
 
 	if cfg.WriteActionsEnabled && !cfg.Auth.Enabled {
 		return errors.New("WRITE_ACTIONS_ENABLED=true requires AUTH_ENABLED=true")
-	}
-
-	if cfg.Terminal.Enabled && !cfg.Auth.Enabled {
-		return errors.New("TERMINAL_ENABLED=true requires AUTH_ENABLED=true")
-	}
-	if cfg.Terminal.Enabled && !cfg.WriteActionsEnabled {
-		return errors.New("TERMINAL_ENABLED=true requires WRITE_ACTIONS_ENABLED=true")
-	}
-
-	if cfg.Terminal.MaxOutputBytes < 1024 {
-		return errors.New("TERMINAL_MAX_OUTPUT_BYTES must be >= 1024")
 	}
 
 	if cfg.Assistant.Provider != "" && cfg.Assistant.Provider != "none" && cfg.Assistant.Provider != "openai_compatible" {
@@ -302,7 +261,6 @@ func profileForMode(mode Mode) profile {
 			rateLimitEnabled:   true,
 			rateLimitRequests:  500,
 			rateLimitWindowSec: 60,
-			terminalEnabled:    false,
 			writeActions:       false,
 			ragEnabled:         true,
 		}
@@ -312,7 +270,6 @@ func profileForMode(mode Mode) profile {
 			rateLimitEnabled:   true,
 			rateLimitRequests:  300,
 			rateLimitWindowSec: 60,
-			terminalEnabled:    false,
 			writeActions:       false,
 			ragEnabled:         true,
 		}
@@ -322,7 +279,6 @@ func profileForMode(mode Mode) profile {
 			rateLimitEnabled:   true,
 			rateLimitRequests:  300,
 			rateLimitWindowSec: 60,
-			terminalEnabled:    false,
 			writeActions:       false,
 			ragEnabled:         true,
 		}
@@ -333,9 +289,6 @@ func anonymousPermissionsFor(cfg Config) []string {
 	permissions := []string{"read", "assist", "stream"}
 	if cfg.WriteActionsEnabled {
 		permissions = append(permissions, "write")
-	}
-	if cfg.Terminal.Enabled {
-		permissions = append(permissions, "terminal")
 	}
 	return permissions
 }

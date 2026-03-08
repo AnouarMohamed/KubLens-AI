@@ -24,8 +24,6 @@ import type {
   ResourceManifest,
   ResourceList,
   ScaleRequest,
-  TerminalExecRequest,
-  TerminalExecResponse,
 } from "../types";
 
 const API_PREFIX = "/api";
@@ -192,11 +190,6 @@ export const api = {
     requestJson<AssistantResponse>(apiPath("assistant"), {
       method: "POST",
       body: JSON.stringify({ message }),
-    }),
-  execTerminal: (payload: TerminalExecRequest) =>
-    requestJson<TerminalExecResponse>(apiPath("terminal", "exec"), {
-      method: "POST",
-      body: JSON.stringify(payload),
     }),
 };
 

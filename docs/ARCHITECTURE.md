@@ -27,8 +27,7 @@
 
 1. Route-level role requirement (`viewer`/`operator`/`admin`)
 2. Global write gate (`WRITE_ACTIONS_ENABLED`)
-3. Terminal-specific policy gate (`TERMINAL_*` rules)
-4. Audit event persisted with actor + route + outcome
+3. Audit event persisted with actor + route + outcome
 
 ## Operational visibility endpoints
 

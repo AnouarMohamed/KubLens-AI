@@ -14,7 +14,7 @@ It combines inventory, diagnostics, predictions, assistant guidance, audit histo
 - Diagnostics engine (rule-based risk scoring + recommendations)
 - Predictor service (FastAPI) with backend fallback behavior
 - Assistant with deterministic flow + optional provider + docs RAG grounding
-- Role-based auth session, audit trail, rate limiting, and terminal policy controls
+- Role-based auth session, audit trail, and rate limiting controls
 - Health/readiness endpoints (`/api/healthz`, `/api/readyz`) and published API contract (`/api/openapi.yaml`)
 - Multi-cluster selection (`/api/clusters`, `/api/clusters/select`)
 - Kubernetes deployment base + `dev`/`demo`/`prod` overlays with RBAC, NetworkPolicy, PDB, HPA
@@ -25,8 +25,6 @@ Secure defaults are now enforced:
 
 - `APP_MODE` defaults to `demo`
 - `WRITE_ACTIONS_ENABLED=false` by default
-- `TERMINAL_ENABLED=false` by default
-- terminal requires both `TERMINAL_ENABLED=true` and `WRITE_ACTIONS_ENABLED=true`
 - no fallback auth tokens unless `DEV_MODE=true`
 - `prod` mode requires auth and explicit tokens
 
@@ -34,16 +32,16 @@ When running in `dev`/`demo` or insecure combinations, the UI shows a warning ba
 
 ## Mode matrix
 
-| Mode   | Intended use               | Auth default | Write actions | Terminal |
-| ------ | -------------------------- | ------------ | ------------- | -------- |
-| `dev`  | local engineering          | off          | off           | off      |
-| `demo` | safe showcase/read-focused | off          | off           | off      |
-| `prod` | controlled operations      | on           | off           | off      |
+| Mode   | Intended use               | Auth default | Write actions |
+| ------ | -------------------------- | ------------ | ------------- |
+| `dev`  | local engineering          | off          | off           |
+| `demo` | safe showcase/read-focused | off          | off           |
+| `prod` | controlled operations      | on           | off           |
 
 Notes:
 
-- writes and terminal are opt-in in every mode.
-- enabling writes/terminal without auth is rejected at startup.
+- writes are opt-in in every mode.
+- enabling writes without auth is rejected at startup.
 
 ## Architecture
 
@@ -81,7 +79,7 @@ npm run dev
 In this mode:
 
 - data can be mock if no kubeconfig is supplied
-- mutating actions and terminal are blocked unless explicitly enabled
+- mutating actions are blocked unless explicitly enabled
 
 ## Run with a real cluster + real metrics
 
@@ -136,7 +134,7 @@ viewer:viewer:token1,operator:operator:token2,admin:admin:token3
 
 - `viewer`: read-only + assistant/stream
 - `operator`: viewer + write actions (if globally enabled)
-- `admin`: operator + terminal (if enabled)
+- `admin`: operator + administrative policies
 
 ### Auth transport hardening
 
@@ -144,21 +142,6 @@ viewer:viewer:token1,operator:operator:token2,admin:admin:token3
 - `X-Auth-Token` is disabled by default and should remain off (`AUTH_ALLOW_HEADER_TOKEN=false`).
 - Cookie-authenticated mutating requests enforce same-origin checks using `Origin`/`Referer`.
 - Optional cross-domain frontends can be allowlisted with `AUTH_TRUSTED_CSRF_DOMAINS`.
-
-## Terminal policy
-
-When terminal is enabled, command execution is constrained by:
-
-- allow prefixes (`TERMINAL_ALLOWED_PREFIXES`)
-- deny prefixes (`TERMINAL_DENIED_PREFIXES`)
-- kubectl verb allowlist (`TERMINAL_KUBECTL_ALLOWED_VERBS`)
-- forbidden shell operators
-- command timeout cap
-- output size cap (`TERMINAL_MAX_OUTPUT_BYTES`)
-
-Default allowed command roots are intentionally narrow:
-
-- `kubectl`, `echo`, `pwd`, `ls`, `dir`
 
 ## Predictor service
 
@@ -180,6 +163,7 @@ Set backend endpoint:
 
 ```text
 PREDICTOR_BASE_URL=http://localhost:8001
+PREDICTOR_SHARED_SECRET=your-shared-secret
 ```
 
 ## Docker
@@ -241,9 +225,8 @@ CI validates:
   - verify predictor URL and readiness (`/api/readyz`)
 - CPU/memory as `N/A`:
   - metrics server likely unavailable; validate with `kubectl top`
-- `403` for writes or terminal:
+- `403` for write actions:
   - expected unless both role and global feature flags allow it
-  - terminal also requires `WRITE_ACTIONS_ENABLED=true`
 - Auth in prod fails on startup:
   - set `AUTH_ENABLED=true` and provide `AUTH_TOKENS` (or secret in k8s)
 

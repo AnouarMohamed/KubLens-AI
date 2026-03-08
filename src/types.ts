@@ -107,7 +107,6 @@ export interface RuntimeStatus {
   isRealCluster: boolean;
   authEnabled: boolean;
   writeActionsEnabled: boolean;
-  terminalEnabled: boolean;
   predictorEnabled: boolean;
   predictorHealthy: boolean;
   predictorLastError?: string;
@@ -307,22 +306,6 @@ export interface StreamEvent<T = unknown> {
   payload: T;
 }
 
-export interface TerminalExecRequest {
-  command: string;
-  cwd?: string;
-  timeoutSeconds?: number;
-}
-
-export interface TerminalExecResponse {
-  command: string;
-  cwd: string;
-  stdout: string;
-  stderr: string;
-  exitCode: number;
-  durationMs: number;
-  timestamp: string;
-}
-
 export type View =
   | "overview"
   | "pods"
@@ -349,5 +332,4 @@ export type View =
   | "audit"
   | "predictions"
   | "diagnostics"
-  | "assistant"
-  | "terminal";
+  | "assistant";

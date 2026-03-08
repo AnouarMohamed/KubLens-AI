@@ -8,5 +8,4 @@ data:
   DEV_MODE: "true"
   AUTH_ENABLED: "true"
   WRITE_ACTIONS_ENABLED: "true"
-  TERMINAL_ENABLED: "true"
   RATE_LIMIT_REQUESTS: "600"

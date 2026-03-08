@@ -38,7 +38,7 @@ describe("useSearchNavigation", () => {
     );
 
     act(() => {
-      result.current.setSearch("terminal");
+      result.current.setSearch("not-a-real-view");
     });
     act(() => {
       result.current.submitSearch();

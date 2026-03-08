@@ -38,12 +38,6 @@ test("auth role matrix and policy gates", async ({ page }) => {
     data: { namespace: "default", name: "e2e-viewer-attempt", image: "nginx:latest" },
   });
   expect(viewerWrite.status()).toBe(403);
-
-  const viewerTerminal = await request.post("/api/terminal/exec", {
-    headers: { Authorization: `Bearer ${viewerToken}` },
-    data: { command: "kubectl get pods -A" },
-  });
-  expect(viewerTerminal.status()).toBe(403);
   await logoutSession(request);
 
   await loginWithToken(request, operatorToken);
@@ -58,12 +52,6 @@ test("auth role matrix and policy gates", async ({ page }) => {
   await expectStatus(operatorWrite, 200);
   const operatorWritePayload = await operatorWrite.json();
   expect(operatorWritePayload.success).toBe(true);
-
-  const operatorTerminal = await request.post("/api/terminal/exec", {
-    headers: { Authorization: `Bearer ${operatorToken}` },
-    data: { command: "kubectl get pods -A" },
-  });
-  expect(operatorTerminal.status()).toBe(403);
 
   await request.delete(`/api/pods/default/${operatorPodName}`, {
     headers: { Authorization: `Bearer ${operatorToken}` },
@@ -80,13 +68,5 @@ test("auth role matrix and policy gates", async ({ page }) => {
     data: { namespace: "default", name: "csrf-block", image: "nginx:latest" },
   });
   expect(csrfBlocked.status()).toBe(403);
-
-  const adminTerminal = await request.post("/api/terminal/exec", {
-    headers: { Authorization: `Bearer ${adminToken}` },
-    data: { command: "kubectl get pods -A" },
-  });
-  expect(adminTerminal.status()).toBe(200);
-  const adminTerminalPayload = await adminTerminal.json();
-  expect(typeof adminTerminalPayload.exitCode).toBe("number");
   await logoutSession(request);
 });

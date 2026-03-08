@@ -26,6 +26,10 @@ spec:
           ports:
             - name: http
               containerPort: 8001
+          envFrom:
+            - secretRef:
+                name: k8s-ops-secret
+                optional: true
           readinessProbe:
             httpGet:
               path: /healthz

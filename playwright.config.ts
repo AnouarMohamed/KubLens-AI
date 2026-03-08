@@ -31,7 +31,7 @@ export default defineConfig({
       command: "npm run dev:api",
       url: "http://127.0.0.1:3000/api/runtime",
       timeout: 180_000,
-      // Always start a fresh API server for e2e so auth/write/terminal env is deterministic.
+      // Always start a fresh API server for deterministic e2e env settings.
       reuseExistingServer: false,
       env: {
         ...process.env,
@@ -40,8 +40,6 @@ export default defineConfig({
         AUTH_ENABLED: "true",
         AUTH_TOKENS: "viewer:viewer:e2e-viewer-token,operator:operator:e2e-operator-token,admin:admin:e2e-admin-token",
         WRITE_ACTIONS_ENABLED: "true",
-        TERMINAL_ENABLED: "true",
-        TERMINAL_ALLOWED_PREFIXES: "kubectl,echo,pwd,ls,dir",
       },
     },
     {

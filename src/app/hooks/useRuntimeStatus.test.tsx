@@ -29,7 +29,6 @@ describe("useRuntimeStatus", () => {
       isRealCluster: false,
       authEnabled: false,
       writeActionsEnabled: false,
-      terminalEnabled: false,
       predictorEnabled: true,
       predictorHealthy: true,
       assistantEnabled: false,

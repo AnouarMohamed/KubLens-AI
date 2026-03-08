@@ -228,7 +228,6 @@ func TestActionEndpoints(t *testing.T) {
 		nil,
 		logger,
 		WithWriteActionsEnabled(true),
-		WithTerminalPolicy(TerminalPolicy{Enabled: true}),
 		WithAuth(AuthConfig{
 			Enabled: true,
 			Tokens: []AuthToken{
@@ -291,12 +290,6 @@ func TestActionEndpoints(t *testing.T) {
 			name:   "rollback resource",
 			method: http.MethodPost,
 			path:   "/api/resources/deployments/production/payment-gateway/rollback",
-		},
-		{
-			name:   "terminal exec",
-			method: http.MethodPost,
-			path:   "/api/terminal/exec",
-			body:   `{"command":"echo ok"}`,
 		},
 	}
 

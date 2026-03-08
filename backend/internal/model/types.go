@@ -151,7 +151,6 @@ type RuntimeStatus struct {
 	IsRealCluster       bool     `json:"isRealCluster"`
 	AuthEnabled         bool     `json:"authEnabled"`
 	WriteActionsEnabled bool     `json:"writeActionsEnabled"`
-	TerminalEnabled     bool     `json:"terminalEnabled"`
 	PredictorEnabled    bool     `json:"predictorEnabled"`
 	PredictorHealthy    bool     `json:"predictorHealthy"`
 	PredictorLastError  string   `json:"predictorLastError,omitempty"`
@@ -287,22 +286,6 @@ type ResourceManifest struct {
 type ActionResult struct {
 	Success bool   `json:"success"`
 	Message string `json:"message"`
-}
-
-type TerminalExecRequest struct {
-	Command        string `json:"command"`
-	Cwd            string `json:"cwd,omitempty"`
-	TimeoutSeconds int    `json:"timeoutSeconds,omitempty"`
-}
-
-type TerminalExecResponse struct {
-	Command    string `json:"command"`
-	Cwd        string `json:"cwd"`
-	Stdout     string `json:"stdout"`
-	Stderr     string `json:"stderr"`
-	ExitCode   int    `json:"exitCode"`
-	DurationMs int64  `json:"durationMs"`
-	Timestamp  string `json:"timestamp"`
 }
 
 type SessionUser struct {

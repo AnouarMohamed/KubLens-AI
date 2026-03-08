@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import { api } from "../lib/api";
 import type { AuthSession } from "../types";
 
-type Permission = "read" | "write" | "terminal" | "assist" | "stream";
+type Permission = "read" | "write" | "assist" | "stream";
 
 interface AuthSessionContextValue {
   session: AuthSession | null;

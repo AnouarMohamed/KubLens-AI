@@ -44,7 +44,6 @@ type Server struct {
 	runtime   model.RuntimeStatus
 	auth      authRuntime
 	limiter   rateLimiter
-	terminal  terminalRuntimePolicy
 	writesOn  bool
 	anonPerms []string
 	audit     *auditLog
@@ -108,12 +107,12 @@ func WithDocsRetriever(retriever docsRetriever) Option {
 	}
 }
 
-func WithPredictor(baseURL string, timeout time.Duration) Option {
+func WithPredictor(baseURL string, timeout time.Duration, sharedSecret string) Option {
 	return func(s *Server) {
 		if baseURL == "" {
 			return
 		}
-		s.predictor = newPredictorClient(baseURL, timeout)
+		s.predictor = newPredictorClient(baseURL, timeout, sharedSecret)
 		s.predictorHealthMu.Lock()
 		s.predictorHealth.enabled = true
 		s.predictorHealthMu.Unlock()
@@ -198,7 +197,6 @@ func newServer(clusterSvc ClusterReader, now func() time.Time, logger *slog.Logg
 			Mode:                "demo",
 			Insecure:            true,
 			WriteActionsEnabled: false,
-			TerminalEnabled:     false,
 			PredictorHealthy:    true,
 		},
 	}
@@ -206,9 +204,6 @@ func newServer(clusterSvc ClusterReader, now func() time.Time, logger *slog.Logg
 		Enabled:  true,
 		Requests: 300,
 		Window:   time.Minute,
-	})
-	server.terminal.configure(TerminalPolicy{
-		Enabled: false,
 	})
 
 	for _, opt := range opts {
@@ -271,7 +266,6 @@ func (s *Server) Router(distDir string) http.Handler {
 		api.Get("/predictions", s.handlePredictions)
 		api.Get("/predictive-incidents", s.handlePredictions) // Backward-compatible alias for older frontend builds.
 		api.Post("/assistant", s.handleAssistant)
-		api.Post("/terminal/exec", s.handleTerminalExec)
 	})
 
 	attachStatic(r, distDir)
