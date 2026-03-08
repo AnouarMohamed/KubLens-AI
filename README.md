@@ -15,6 +15,7 @@ It combines inventory, diagnostics, predictions, assistant guidance, audit histo
 - Predictor service (FastAPI) with backend fallback behavior
 - Assistant with deterministic flow + optional provider + docs RAG grounding
 - Role-based auth session, audit trail, rate limiting, and terminal policy controls
+- Health/readiness endpoints (`/api/healthz`, `/api/readyz`) and published API contract (`/api/openapi.yaml`)
 - Multi-cluster selection (`/api/clusters`, `/api/clusters/select`)
 - Kubernetes deployment base + `dev`/`demo`/`prod` overlays with RBAC, NetworkPolicy, PDB, HPA
 
@@ -25,6 +26,7 @@ Secure defaults are now enforced:
 - `APP_MODE` defaults to `demo`
 - `WRITE_ACTIONS_ENABLED=false` by default
 - `TERMINAL_ENABLED=false` by default
+- terminal requires both `TERMINAL_ENABLED=true` and `WRITE_ACTIONS_ENABLED=true`
 - no fallback auth tokens unless `DEV_MODE=true`
 - `prod` mode requires auth and explicit tokens
 
@@ -154,6 +156,10 @@ When terminal is enabled, command execution is constrained by:
 - command timeout cap
 - output size cap (`TERMINAL_MAX_OUTPUT_BYTES`)
 
+Default allowed command roots are intentionally narrow:
+
+- `kubectl`, `echo`, `pwd`, `ls`, `dir`
+
 ## Predictor service
 
 The predictor is a first-class service (`predictor/`):
@@ -210,6 +216,8 @@ npm run test:web
 npm run test:e2e
 npm run test:predictor
 npm run verify:release
+npm run verify:changelog
+npm run verify:openapi
 npm run build
 ```
 
@@ -221,6 +229,8 @@ CI validates:
 - Playwright auth role-matrix E2E
 - predictor lint/tests
 - release/version consistency across package, Docker, and k8s manifests
+- changelog/version discipline
+- OpenAPI contract validation
 - Docker builds (dashboard + predictor)
 - kustomize + manifest schema validation
 
@@ -228,11 +238,12 @@ CI validates:
 
 - `404` on predictions:
   - verify backend is running latest code
-  - verify predictor URL and service health (`/healthz`)
+  - verify predictor URL and readiness (`/api/readyz`)
 - CPU/memory as `N/A`:
   - metrics server likely unavailable; validate with `kubectl top`
 - `403` for writes or terminal:
   - expected unless both role and global feature flags allow it
+  - terminal also requires `WRITE_ACTIONS_ENABLED=true`
 - Auth in prod fails on startup:
   - set `AUTH_ENABLED=true` and provide `AUTH_TOKENS` (or secret in k8s)
 

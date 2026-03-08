@@ -1,0 +1,238 @@
+openapi: 3.0.3
+info:
+  title: KubeLens API
+  version: v0.2.0
+  description: Core API contract for KubeLens dashboard and automation clients.
+servers:
+  - url: /api
+paths:
+  /healthz:
+    get:
+      operationId: getHealth
+      summary: Liveness probe
+      responses:
+        "200":
+          description: Service is alive
+  /readyz:
+    get:
+      operationId: getReadiness
+      summary: Readiness probe with dependency checks
+      responses:
+        "200":
+          description: Service ready
+        "503":
+          description: Service degraded or dependency unavailable
+  /openapi.yaml:
+    get:
+      operationId: getOpenAPISpec
+      summary: OpenAPI contract in YAML format
+      responses:
+        "200":
+          description: OpenAPI document
+  /runtime:
+    get:
+      operationId: getRuntimeStatus
+      summary: Runtime posture and capability flags
+      responses:
+        "200":
+          description: Runtime status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RuntimeStatus"
+  /metrics/prometheus:
+    get:
+      operationId: getPrometheusMetrics
+      summary: Prometheus exposition for API and runtime metrics
+      responses:
+        "200":
+          description: Prometheus text format
+  /auth/session:
+    get:
+      operationId: getAuthSession
+      summary: Active auth session
+      responses:
+        "200":
+          description: Session details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthSession"
+  /auth/login:
+    post:
+      operationId: postAuthLogin
+      summary: Establish cookie session from token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token:
+                  type: string
+      responses:
+        "200":
+          description: Authenticated session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthSession"
+        "401":
+          description: Invalid token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /clusters:
+    get:
+      operationId: getClusters
+      summary: List available cluster contexts
+      responses:
+        "200":
+          description: Cluster contexts
+  /clusters/select:
+    post:
+      operationId: postSelectCluster
+      summary: Switch active cluster context
+      responses:
+        "200":
+          description: Selected context
+  /pods:
+    get:
+      operationId: listPods
+      summary: List pods across namespaces
+      responses:
+        "200":
+          description: Pod list
+    post:
+      operationId: createPod
+      summary: Create pod
+      responses:
+        "200":
+          description: Action result
+        "403":
+          description: Forbidden
+  /nodes:
+    get:
+      operationId: listNodes
+      summary: List nodes
+      responses:
+        "200":
+          description: Node list
+  /stats:
+    get:
+      operationId: getStats
+      summary: Cluster stats summary
+      responses:
+        "200":
+          description: Stats
+  /diagnostics:
+    get:
+      operationId: getDiagnostics
+      summary: Deterministic diagnostics analysis
+      responses:
+        "200":
+          description: Diagnostics payload
+  /predictions:
+    get:
+      operationId: getPredictions
+      summary: Incident risk predictions
+      parameters:
+        - in: query
+          name: force
+          schema:
+            type: boolean
+          required: false
+      responses:
+        "200":
+          description: Prediction payload
+  /assistant:
+    post:
+      operationId: postAssistant
+      summary: Assistant question/answer endpoint
+      responses:
+        "200":
+          description: Assistant response
+  /terminal/exec:
+    post:
+      operationId: postTerminalExec
+      summary: Execute policy-controlled terminal command
+      responses:
+        "200":
+          description: Command result
+        "400":
+          description: Policy rejection
+        "403":
+          description: Disabled or unauthorized
+components:
+  schemas:
+    RuntimeStatus:
+      type: object
+      required:
+        - mode
+        - devMode
+        - insecure
+        - isRealCluster
+        - authEnabled
+        - writeActionsEnabled
+        - terminalEnabled
+        - predictorEnabled
+        - predictorHealthy
+        - assistantEnabled
+        - ragEnabled
+        - alertsEnabled
+        - warnings
+      properties:
+        mode:
+          type: string
+        devMode:
+          type: boolean
+        insecure:
+          type: boolean
+        isRealCluster:
+          type: boolean
+        authEnabled:
+          type: boolean
+        writeActionsEnabled:
+          type: boolean
+        terminalEnabled:
+          type: boolean
+        predictorEnabled:
+          type: boolean
+        predictorHealthy:
+          type: boolean
+        predictorLastError:
+          type: string
+        assistantEnabled:
+          type: boolean
+        ragEnabled:
+          type: boolean
+        alertsEnabled:
+          type: boolean
+        warnings:
+          type: array
+          items:
+            type: string
+    AuthSession:
+      type: object
+      required:
+        - enabled
+        - authenticated
+        - permissions
+      properties:
+        enabled:
+          type: boolean
+        authenticated:
+          type: boolean
+        permissions:
+          type: array
+          items:
+            type: string
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string

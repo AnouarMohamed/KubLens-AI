@@ -21,6 +21,20 @@ func TestAPIContractCoreEndpoints(t *testing.T) {
 		requiredKeys []string
 	}{
 		{
+			name: "healthz",
+			path: "/api/healthz",
+			requiredKeys: []string{
+				"status", "timestamp", "version", "commit",
+			},
+		},
+		{
+			name: "readyz",
+			path: "/api/readyz",
+			requiredKeys: []string{
+				"status", "timestamp", "checks", "build",
+			},
+		},
+		{
 			name: "version",
 			path: "/api/version",
 			requiredKeys: []string{
@@ -32,7 +46,7 @@ func TestAPIContractCoreEndpoints(t *testing.T) {
 			path: "/api/runtime",
 			requiredKeys: []string{
 				"mode", "devMode", "insecure", "isRealCluster", "authEnabled",
-				"writeActionsEnabled", "terminalEnabled", "predictorEnabled",
+				"writeActionsEnabled", "terminalEnabled", "predictorEnabled", "predictorHealthy",
 				"assistantEnabled", "ragEnabled", "alertsEnabled", "warnings",
 			},
 		},

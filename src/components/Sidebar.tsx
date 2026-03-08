@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
-import { VIEW_SECTIONS } from "../features/viewCatalog";
+import { VIEW_SECTIONS, type ViewSection } from "../features/viewCatalog";
 import { ApiError, api } from "../lib/api";
 import type { BuildInfo, ClusterStats, View } from "../types";
 
 interface SidebarProps {
   currentView: View;
   onViewChange: (view: View) => void;
+  sections?: ViewSection[];
 }
 
-export default function Sidebar({ currentView, onViewChange }: SidebarProps) {
+export default function Sidebar({ currentView, onViewChange, sections = VIEW_SECTIONS }: SidebarProps) {
   const [isReal, setIsReal] = useState(false);
   const [stats, setStats] = useState<ClusterStats | null>(null);
   const [build, setBuild] = useState<BuildInfo | null>(null);
@@ -86,7 +87,7 @@ export default function Sidebar({ currentView, onViewChange }: SidebarProps) {
         </header>
 
         <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-5 scrollbar-hide">
-          {VIEW_SECTIONS.map((section) => (
+          {sections.map((section) => (
             <section key={section.id}>
               <p className="px-2 pb-2 text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
                 {section.label}

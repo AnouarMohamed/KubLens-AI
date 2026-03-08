@@ -153,10 +153,27 @@ type RuntimeStatus struct {
 	WriteActionsEnabled bool     `json:"writeActionsEnabled"`
 	TerminalEnabled     bool     `json:"terminalEnabled"`
 	PredictorEnabled    bool     `json:"predictorEnabled"`
+	PredictorHealthy    bool     `json:"predictorHealthy"`
+	PredictorLastError  string   `json:"predictorLastError,omitempty"`
 	AssistantEnabled    bool     `json:"assistantEnabled"`
 	RAGEnabled          bool     `json:"ragEnabled"`
 	AlertsEnabled       bool     `json:"alertsEnabled"`
 	Warnings            []string `json:"warnings"`
+}
+
+type HealthCheck struct {
+	Name        string `json:"name"`
+	OK          bool   `json:"ok"`
+	Message     string `json:"message"`
+	LastSuccess string `json:"lastSuccess,omitempty"`
+	LastFailure string `json:"lastFailure,omitempty"`
+}
+
+type HealthStatus struct {
+	Status    string        `json:"status"`
+	Timestamp string        `json:"timestamp"`
+	Checks    []HealthCheck `json:"checks"`
+	Build     BuildInfo     `json:"build"`
 }
 
 type PodStats struct {

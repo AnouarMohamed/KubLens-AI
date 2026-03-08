@@ -96,6 +96,14 @@ kubectl apply -k k8s/overlays/prod
 ## 9) Troubleshooting
 
 - `403` on write/terminal endpoints: role or global feature gate is blocking
+- terminal also requires `WRITE_ACTIONS_ENABLED=true`
 - `N/A` metrics: Metrics Server missing/unhealthy
 - predictions fallback source: predictor unavailable
 - startup error in prod mode: missing `AUTH_TOKENS` with `AUTH_ENABLED=true`
+
+## 10) Operational endpoints
+
+- Liveness: `GET /api/healthz`
+- Readiness with dependency checks: `GET /api/readyz`
+- OpenAPI contract: `GET /api/openapi.yaml`
+- Prometheus metrics export: `GET /api/metrics/prometheus`

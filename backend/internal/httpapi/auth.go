@@ -102,6 +102,10 @@ func (s *Server) authMiddleware(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
+		if r.URL.Path == "/api/healthz" || r.URL.Path == "/api/readyz" || r.URL.Path == "/api/openapi.yaml" {
+			next.ServeHTTP(w, r)
+			return
+		}
 
 		if r.URL.Path == "/api/auth/session" {
 			if !s.auth.enabled {
@@ -141,7 +145,7 @@ func (s *Server) authMiddleware(next http.Handler) http.Handler {
 			writeError(w, http.StatusForbidden, "insufficient role for this action")
 			return
 		}
-		if required >= roleOperator && !s.writesOn && r.URL.Path != "/api/terminal/exec" {
+		if required >= roleOperator && !s.writesOn {
 			writeError(w, http.StatusForbidden, "mutating operations are disabled for this environment")
 			return
 		}

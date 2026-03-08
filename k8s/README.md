@@ -12,6 +12,11 @@ This directory uses a **base + overlays** structure.
 
 Each overlay includes explicit RBAC manifests (`clusterrole.yaml`, `clusterrolebinding.yaml`) so `kubectl kustomize` and CI validation work with root-only load restrictions.
 
+RBAC note:
+
+- Overlays intentionally do not grant `secrets` read access by default.
+- If secret inventory is required in your environment, extend overlay RBAC explicitly.
+
 ## Deploy
 
 ### Dev overlay

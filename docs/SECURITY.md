@@ -12,6 +12,7 @@
 - Bearer token auth with role-based permissions
 - Global write-action feature gate
 - Terminal execution off by default, admin-only when enabled
+- Terminal requires global write enablement and admin role when enabled
 - Terminal deny/allow policy + timeout + output cap
 - Per-route audit logging with actor attribution
 - Request rate limiting

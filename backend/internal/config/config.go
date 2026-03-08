@@ -177,7 +177,7 @@ func Load() (Config, error) {
 
 	allowed := parseCSV(os.Getenv("TERMINAL_ALLOWED_PREFIXES"))
 	if len(allowed) == 0 {
-		allowed = []string{"kubectl", "helm", "kustomize", "echo", "pwd", "ls", "dir"}
+		allowed = []string{"kubectl", "echo", "pwd", "ls", "dir"}
 	}
 	denied := parseCSV(os.Getenv("TERMINAL_DENIED_PREFIXES"))
 	if len(denied) == 0 {
@@ -239,6 +239,7 @@ func RuntimeStatus(cfg Config, isRealCluster bool, alertsEnabled bool) model.Run
 		WriteActionsEnabled: cfg.WriteActionsEnabled,
 		TerminalEnabled:     cfg.Terminal.Enabled,
 		PredictorEnabled:    strings.TrimSpace(cfg.Predictor.BaseURL) != "",
+		PredictorHealthy:    true,
 		AssistantEnabled:    cfg.Assistant.Provider != "" && cfg.Assistant.Provider != "none",
 		RAGEnabled:          cfg.Assistant.RAGEnabled,
 		AlertsEnabled:       alertsEnabled,
@@ -264,6 +265,9 @@ func validate(cfg Config) error {
 
 	if cfg.Terminal.Enabled && !cfg.Auth.Enabled {
 		return errors.New("TERMINAL_ENABLED=true requires AUTH_ENABLED=true")
+	}
+	if cfg.Terminal.Enabled && !cfg.WriteActionsEnabled {
+		return errors.New("TERMINAL_ENABLED=true requires WRITE_ACTIONS_ENABLED=true")
 	}
 
 	if cfg.Terminal.MaxOutputBytes < 1024 {

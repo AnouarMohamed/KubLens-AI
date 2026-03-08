@@ -24,6 +24,8 @@ data:
   ASSISTANT_RAG_ENABLED: "true"
 
   AUTH_ENABLED: "false"
+  AUTH_ALLOW_HEADER_TOKEN: "false"
+  AUTH_TRUSTED_CSRF_DOMAINS: ""
   AUTH_TOKENS: ""
 
   WRITE_ACTIONS_ENABLED: "false"
@@ -33,7 +35,7 @@ data:
   RATE_LIMIT_WINDOW_SECONDS: "60"
 
   TERMINAL_ENABLED: "false"
-  TERMINAL_ALLOWED_PREFIXES: "kubectl,helm,kustomize,echo,pwd,ls,dir"
+  TERMINAL_ALLOWED_PREFIXES: "kubectl,echo,pwd,ls,dir"
   TERMINAL_DENIED_PREFIXES: "kubectl delete,kubectl apply,kubectl patch,kubectl exec,kubectl cp,kubectl run,helm upgrade,helm uninstall,sh,bash,cmd,powershell"
   TERMINAL_KUBECTL_ALLOWED_VERBS: "get,describe,top,logs,api-resources,cluster-info,version"
   TERMINAL_MAX_OUTPUT_BYTES: "20000"

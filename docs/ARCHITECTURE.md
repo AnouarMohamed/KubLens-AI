@@ -29,3 +29,11 @@
 2. Global write gate (`WRITE_ACTIONS_ENABLED`)
 3. Terminal-specific policy gate (`TERMINAL_*` rules)
 4. Audit event persisted with actor + route + outcome
+
+## Operational visibility endpoints
+
+- `/api/healthz`: liveness signal
+- `/api/readyz`: readiness + dependency checks (cluster/predictor/auth posture)
+- `/api/metrics`: JSON request telemetry snapshot
+- `/api/metrics/prometheus`: Prometheus exposition format
+- `/api/openapi.yaml`: published API contract

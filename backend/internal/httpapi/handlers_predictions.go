@@ -104,10 +104,12 @@ func (s *Server) handlePredictions(w http.ResponseWriter, r *http.Request) {
 	if s.predictor != nil {
 		predictions, err := s.predictor.Predict(r.Context(), request)
 		if err == nil {
+			s.recordPredictorSuccess()
 			s.storePredictions(predictions)
 			writeJSON(w, http.StatusOK, predictions)
 			return
 		}
+		s.recordPredictorFailure(err)
 		s.logger.Warn("predictor service unavailable, using local fallback", "error", err.Error())
 	}
 

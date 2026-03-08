@@ -13,6 +13,11 @@ export interface ViewSection {
   items: ViewItem[];
 }
 
+export interface ViewAccessPolicy {
+  assistantEnabled: boolean;
+  terminalEnabled: boolean;
+}
+
 export const VIEW_SECTIONS: ViewSection[] = [
   {
     id: "overview",
@@ -244,15 +249,37 @@ export function getViewItem(view: View): ViewItem {
   return VIEW_MAP[view];
 }
 
-export function findViewByQuery(query: string): ViewItem | null {
+export function isViewVisible(view: View, policy: ViewAccessPolicy): boolean {
+  if (view === "assistant") {
+    return policy.assistantEnabled;
+  }
+  if (view === "terminal") {
+    return policy.terminalEnabled;
+  }
+  return true;
+}
+
+export function filterSectionsByPolicy(sections: ViewSection[], policy: ViewAccessPolicy): ViewSection[] {
+  return sections
+    .map((section) => ({
+      ...section,
+      items: section.items.filter((item) => isViewVisible(item.id, policy)),
+    }))
+    .filter((section) => section.items.length > 0);
+}
+
+export function flattenViewItems(sections: ViewSection[]): ViewItem[] {
+  return sections.flatMap((section) => section.items);
+}
+
+export function findViewByQuery(query: string, items: ViewItem[] = Object.values(VIEW_MAP)): ViewItem | null {
   const normalized = query.trim().toLowerCase();
   if (normalized === "") {
     return null;
   }
 
   return (
-    Object.values(VIEW_MAP).find(
-      (item) => item.label.toLowerCase().includes(normalized) || item.id.toLowerCase().includes(normalized),
-    ) ?? null
+    items.find((item) => item.label.toLowerCase().includes(normalized) || item.id.toLowerCase().includes(normalized)) ??
+    null
   );
 }

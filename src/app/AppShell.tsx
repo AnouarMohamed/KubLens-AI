@@ -1,10 +1,7 @@
 import { Suspense, lazy, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import Sidebar from "../components/Sidebar";
-import Dashboard from "../views/dashboard";
-import { findViewByQuery, getViewItem } from "../features/viewCatalog";
-import { api } from "../lib/api";
+import { getViewItem } from "../features/viewCatalog";
 import { useAuthSession } from "../context/AuthSessionContext";
-import type { View } from "../types";
 import { HeaderBar } from "./components/HeaderBar";
 import { WorkspacePanels } from "./components/WorkspacePanels";
 import { ModeBanner } from "./components/ModeBanner";
@@ -13,6 +10,12 @@ import { useNotifications } from "./hooks/useNotifications";
 import { useUserSettings } from "./hooks/useUserSettings";
 import { useClusterContexts } from "./hooks/useClusterContexts";
 import { useRuntimeStatus } from "./hooks/useRuntimeStatus";
+import { useClusterSwitcher } from "./hooks/useClusterSwitcher";
+import { useSearchNavigation } from "./hooks/useSearchNavigation";
+import { blockedViewMessage, useViewAccess } from "./hooks/useViewAccess";
+import { useTransientMessage } from "./hooks/useTransientMessage";
+import type { View } from "../types";
+import Dashboard from "../views/dashboard";
 
 const Metrics = lazy(() => import("../views/metrics"));
 const Audit = lazy(() => import("../views/audit"));
@@ -27,55 +30,6 @@ const ResourceCatalog = lazy(() => import("../views/resourcecatalog"));
 
 type Panel = "none" | "notifications" | "settings" | "profile";
 
-const PRIMARY_VIEWS: Partial<Record<View, ReactElement>> = {
-  overview: <Dashboard />,
-  pods: (
-    <Suspense fallback={<ViewLoadingState label="Loading pods..." />}>
-      <Pods />
-    </Suspense>
-  ),
-  deployments: (
-    <Suspense fallback={<ViewLoadingState label="Loading deployments..." />}>
-      <Deployments />
-    </Suspense>
-  ),
-  nodes: (
-    <Suspense fallback={<ViewLoadingState label="Loading nodes..." />}>
-      <Nodes />
-    </Suspense>
-  ),
-  metrics: (
-    <Suspense fallback={<ViewLoadingState label="Loading metrics..." />}>
-      <Metrics />
-    </Suspense>
-  ),
-  audit: (
-    <Suspense fallback={<ViewLoadingState label="Loading audit trail..." />}>
-      <Audit />
-    </Suspense>
-  ),
-  predictions: (
-    <Suspense fallback={<ViewLoadingState label="Loading predictions..." />}>
-      <Predictions />
-    </Suspense>
-  ),
-  diagnostics: (
-    <Suspense fallback={<ViewLoadingState label="Loading diagnostics..." />}>
-      <Diagnostics />
-    </Suspense>
-  ),
-  terminal: (
-    <Suspense fallback={<ViewLoadingState label="Loading terminal..." />}>
-      <Terminal />
-    </Suspense>
-  ),
-  assistant: (
-    <Suspense fallback={<ViewLoadingState label="Loading assistant..." />}>
-      <OpsAssistant />
-    </Suspense>
-  ),
-};
-
 export function AppShell() {
   const {
     session: authSession,
@@ -87,13 +41,9 @@ export function AppShell() {
   } = useAuthSession();
   const { currentView, setCurrentView } = useCurrentView();
   const { settings, setSettings } = useUserSettings();
-  const [search, setSearch] = useState("");
-  const [searchMessage, setSearchMessage] = useState<string | null>(null);
   const [panel, setPanel] = useState<Panel>("none");
   const [authToken, setAuthToken] = useState("");
   const [authMessage, setAuthMessage] = useState<string | null>(null);
-  const [clusterRefreshKey, setClusterRefreshKey] = useState(0);
-  const [isSwitchingCluster, setIsSwitchingCluster] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
 
   const canRead = can("read");
@@ -106,16 +56,25 @@ export function AppShell() {
     canStream: can("stream"),
   });
 
+  const { message: transientMessage, showMessage } = useTransientMessage();
+  const { sections, searchableItems, isAllowed } = useViewAccess({
+    canTerminal: can("terminal"),
+    canAssist: can("assist"),
+    runtime,
+  });
+  const { search, setSearch, submitSearch } = useSearchNavigation({
+    items: searchableItems,
+    setCurrentView,
+    onMessage: (message) => showMessage(message, 1500),
+  });
+  const { clusterRefreshKey, isSwitchingCluster, selectCluster } = useClusterSwitcher({
+    clusterContexts,
+    setClusterContexts,
+    onMessage: (message) => showMessage(message, 1800),
+  });
+
   const currentViewMeta = getViewItem(currentView);
-  const renderedView = useMemo(
-    () =>
-      PRIMARY_VIEWS[currentView] ?? (
-        <Suspense fallback={<ViewLoadingState label="Loading resources..." />}>
-          <ResourceCatalog view={currentView} />
-        </Suspense>
-      ),
-    [currentView],
-  );
+  const renderedView = useMemo(() => renderView(currentView), [currentView]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -124,7 +83,6 @@ export function AppShell() {
         searchRef.current?.focus();
         return;
       }
-
       if (event.key === "Escape") {
         setPanel("none");
       }
@@ -138,61 +96,20 @@ export function AppShell() {
     if (authLoading) {
       return;
     }
-    if (currentView === "terminal" && !can("terminal")) {
+    if (!isAllowed(currentView)) {
       setCurrentView("overview");
-      setSearchMessage("Terminal access requires admin permission.");
-      window.setTimeout(() => setSearchMessage(null), 1800);
+      showMessage(blockedViewMessage(currentView, runtime), 1800);
     }
-    if (currentView === "assistant" && !can("assist")) {
-      setCurrentView("overview");
-      setSearchMessage("Assistant access requires an authenticated session.");
-      window.setTimeout(() => setSearchMessage(null), 1800);
-    }
-  }, [authLoading, can, currentView, setCurrentView]);
-
-  const handleSearchSubmit = () => {
-    const found = findViewByQuery(search);
-    if (!found) {
-      setSearchMessage("No matching section found.");
-      window.setTimeout(() => setSearchMessage(null), 1500);
-      return;
-    }
-
-    setCurrentView(found.id);
-    setSearch("");
-    setSearchMessage(`Opened ${found.label}.`);
-    window.setTimeout(() => setSearchMessage(null), 1500);
-  };
-
-  const handleSelectCluster = async (nextCluster: string) => {
-    if (!clusterContexts || nextCluster === clusterContexts.selected) {
-      return;
-    }
-    setIsSwitchingCluster(true);
-    try {
-      const response = await api.selectCluster(nextCluster);
-      setClusterContexts((current) =>
-        current
-          ? {
-              ...current,
-              selected: response.selected,
-            }
-          : current,
-      );
-      setClusterRefreshKey((value) => value + 1);
-      setSearchMessage(`Switched to cluster: ${response.selected}`);
-      window.setTimeout(() => setSearchMessage(null), 1500);
-    } catch (err) {
-      setSearchMessage(err instanceof Error ? err.message : "Failed to switch cluster");
-      window.setTimeout(() => setSearchMessage(null), 1800);
-    } finally {
-      setIsSwitchingCluster(false);
-    }
-  };
+  }, [authLoading, currentView, isAllowed, runtime, setCurrentView, showMessage]);
 
   return (
     <div className={`flex h-screen text-zinc-100 ${settings.denseMode ? "text-[13px]" : "text-sm"}`}>
-      <Sidebar key={`sidebar-${clusterRefreshKey}`} currentView={currentView} onViewChange={setCurrentView} />
+      <Sidebar
+        key={`sidebar-${clusterRefreshKey}`}
+        currentView={currentView}
+        onViewChange={setCurrentView}
+        sections={sections}
+      />
 
       <main className="flex-1 flex flex-col overflow-hidden p-4 pl-0">
         <div className="app-shell flex-1 flex flex-col overflow-hidden">
@@ -203,8 +120,8 @@ export function AppShell() {
             isSwitchingCluster={isSwitchingCluster}
             search={search}
             onSearchChange={setSearch}
-            onSearchSubmit={handleSearchSubmit}
-            onSelectCluster={handleSelectCluster}
+            onSearchSubmit={submitSearch}
+            onSelectCluster={selectCluster}
             onToggleNotifications={() => setPanel((value) => (value === "notifications" ? "none" : "notifications"))}
             onToggleSettings={() => setPanel((value) => (value === "settings" ? "none" : "settings"))}
             onToggleProfile={() => setPanel((value) => (value === "profile" ? "none" : "profile"))}
@@ -213,9 +130,9 @@ export function AppShell() {
 
           <ModeBanner runtime={runtime} />
 
-          {searchMessage && (
+          {transientMessage && (
             <div className="px-6 py-2 bg-[#2496ed]/16 text-zinc-100 text-xs tracking-wide border-b border-[#2496ed]/30">
-              {searchMessage}
+              {transientMessage}
             </div>
           )}
 
@@ -244,6 +161,73 @@ export function AppShell() {
       </main>
     </div>
   );
+}
+
+function renderView(view: View): ReactElement {
+  switch (view) {
+    case "overview":
+      return <Dashboard />;
+    case "pods":
+      return (
+        <Suspense fallback={<ViewLoadingState label="Loading pods..." />}>
+          <Pods />
+        </Suspense>
+      );
+    case "deployments":
+      return (
+        <Suspense fallback={<ViewLoadingState label="Loading deployments..." />}>
+          <Deployments />
+        </Suspense>
+      );
+    case "nodes":
+      return (
+        <Suspense fallback={<ViewLoadingState label="Loading nodes..." />}>
+          <Nodes />
+        </Suspense>
+      );
+    case "metrics":
+      return (
+        <Suspense fallback={<ViewLoadingState label="Loading metrics..." />}>
+          <Metrics />
+        </Suspense>
+      );
+    case "audit":
+      return (
+        <Suspense fallback={<ViewLoadingState label="Loading audit trail..." />}>
+          <Audit />
+        </Suspense>
+      );
+    case "predictions":
+      return (
+        <Suspense fallback={<ViewLoadingState label="Loading predictions..." />}>
+          <Predictions />
+        </Suspense>
+      );
+    case "diagnostics":
+      return (
+        <Suspense fallback={<ViewLoadingState label="Loading diagnostics..." />}>
+          <Diagnostics />
+        </Suspense>
+      );
+    case "terminal":
+      return (
+        <Suspense fallback={<ViewLoadingState label="Loading terminal..." />}>
+          <Terminal />
+        </Suspense>
+      );
+    case "assistant":
+      return (
+        <Suspense fallback={<ViewLoadingState label="Loading assistant..." />}>
+          <OpsAssistant />
+        </Suspense>
+      );
+    default:
+      return (
+        <Suspense fallback={<ViewLoadingState label="Loading resources..." />}>
+          <ResourceCatalog view={view} />
+        </Suspense>
+      );
+  }
 }
 
 function ViewLoadingState({ label }: { label: string }) {

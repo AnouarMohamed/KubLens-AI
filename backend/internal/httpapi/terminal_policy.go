@@ -31,7 +31,7 @@ func (p *terminalRuntimePolicy) configure(config TerminalPolicy) {
 	p.enabled = config.Enabled
 	p.allowed = normalizeAllowedPrefixes(config.AllowedPrefixes)
 	if len(p.allowed) == 0 {
-		p.allowed = []string{"kubectl", "helm", "kustomize", "echo", "pwd", "ls", "dir"}
+		p.allowed = []string{"kubectl", "echo", "pwd", "ls", "dir"}
 	}
 	p.denied = normalizeAllowedPrefixes(config.DeniedPrefixes)
 	if len(p.denied) == 0 {

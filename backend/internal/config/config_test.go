@@ -77,6 +77,18 @@ func TestTerminalRequiresAuth(t *testing.T) {
 	}
 }
 
+func TestTerminalRequiresWriteActions(t *testing.T) {
+	clearConfigEnv(t)
+	t.Setenv("AUTH_ENABLED", "true")
+	t.Setenv("AUTH_TOKENS", "admin:admin:secret-token")
+	t.Setenv("TERMINAL_ENABLED", "true")
+	t.Setenv("WRITE_ACTIONS_ENABLED", "false")
+
+	if _, err := Load(); err == nil {
+		t.Fatal("expected error when terminal enabled without write actions")
+	}
+}
+
 func TestProdDisallowsHeaderTokenAuth(t *testing.T) {
 	clearConfigEnv(t)
 	t.Setenv("APP_MODE", "prod")

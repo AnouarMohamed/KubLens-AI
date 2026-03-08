@@ -236,6 +236,36 @@ func TestMutationBlockedWhenWriteActionsDisabled(t *testing.T) {
 	}
 }
 
+func TestTerminalBlockedWhenWriteActionsDisabled(t *testing.T) {
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	server := newServer(
+		testClusterReader{},
+		nil,
+		logger,
+		WithAuth(AuthConfig{
+			Enabled: true,
+			Tokens: []AuthToken{
+				{Token: "admin-token", User: "admin", Role: "admin"},
+			},
+		}),
+		WithWriteActionsEnabled(false),
+		WithTerminalPolicy(TerminalPolicy{
+			Enabled:         true,
+			AllowedPrefixes: []string{"kubectl"},
+		}),
+	)
+	router := server.Router("")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/terminal/exec", strings.NewReader(`{"command":"kubectl get pods -A"}`))
+	req.Header.Set("Authorization", "Bearer admin-token")
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+	if rr.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403", rr.Code)
+	}
+}
+
 func TestRuntimeEndpoint(t *testing.T) {
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
 	server := newServer(
@@ -248,6 +278,7 @@ func TestRuntimeEndpoint(t *testing.T) {
 			AuthEnabled:         false,
 			WriteActionsEnabled: false,
 			TerminalEnabled:     false,
+			PredictorHealthy:    true,
 		}),
 	)
 	router := server.Router("")

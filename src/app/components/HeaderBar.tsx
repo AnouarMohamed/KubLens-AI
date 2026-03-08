@@ -40,9 +40,22 @@ export function HeaderBar({
 
       <div className="flex items-center gap-2">
         {runtime && (
-          <span className="rounded-md border border-zinc-600 px-2 py-1 text-[11px] uppercase tracking-wide text-zinc-300">
-            {runtime.mode} / {runtime.isRealCluster ? "real" : "mock"}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="rounded-md border border-zinc-600 px-2 py-1 text-[11px] uppercase tracking-wide text-zinc-300">
+              {runtime.mode} / {runtime.isRealCluster ? "real" : "mock"}
+            </span>
+            {runtime.predictorEnabled && (
+              <span
+                className={`rounded-md border px-2 py-1 text-[11px] uppercase tracking-wide ${
+                  runtime.predictorHealthy
+                    ? "border-emerald-500/50 text-emerald-300"
+                    : "border-amber-500/50 text-amber-300"
+                }`}
+              >
+                predictor {runtime.predictorHealthy ? "ok" : "degraded"}
+              </span>
+            )}
+          </div>
         )}
         {clusterContexts && clusterContexts.items.length > 1 && (
           <select

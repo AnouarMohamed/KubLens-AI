@@ -59,11 +59,21 @@ type Server struct {
 	predictionsTTL   time.Duration
 	predictionsMu    sync.RWMutex
 	predictionsCache predictionsCacheEntry
+
+	predictorHealthMu sync.RWMutex
+	predictorHealth   predictorHealthState
 }
 
 type predictionsCacheEntry struct {
 	data      model.PredictionsResult
 	expiresAt time.Time
+}
+
+type predictorHealthState struct {
+	enabled     bool
+	lastSuccess time.Time
+	lastFailure time.Time
+	lastError   string
 }
 
 type docsRetriever interface {
@@ -104,6 +114,9 @@ func WithPredictor(baseURL string, timeout time.Duration) Option {
 			return
 		}
 		s.predictor = newPredictorClient(baseURL, timeout)
+		s.predictorHealthMu.Lock()
+		s.predictorHealth.enabled = true
+		s.predictorHealthMu.Unlock()
 	}
 }
 
@@ -186,6 +199,7 @@ func newServer(clusterSvc ClusterReader, now func() time.Time, logger *slog.Logg
 			Insecure:            true,
 			WriteActionsEnabled: false,
 			TerminalEnabled:     false,
+			PredictorHealthy:    true,
 		},
 	}
 	server.limiter.configure(RateLimitConfig{
@@ -217,6 +231,9 @@ func (s *Server) Router(distDir string) http.Handler {
 	r.Use(s.auditMiddleware)
 
 	r.Route("/api", func(api chi.Router) {
+		api.Get("/healthz", s.handleHealthz)
+		api.Get("/readyz", s.handleReadyz)
+		api.Get("/openapi.yaml", s.handleOpenAPIYAML)
 		api.Get("/auth/session", s.handleAuthSession)
 		api.Post("/auth/login", s.handleAuthLogin)
 		api.Post("/auth/logout", s.handleAuthLogout)
@@ -226,6 +243,7 @@ func (s *Server) Router(distDir string) http.Handler {
 		api.Get("/runtime", s.handleRuntime)
 		api.Get("/cluster-info", s.handleClusterInfo)
 		api.Get("/metrics", s.handleMetrics)
+		api.Get("/metrics/prometheus", s.handlePrometheusMetrics)
 		api.Post("/alerts/dispatch", s.handleAlertDispatch)
 		api.Post("/alerts/test", s.handleAlertTest)
 		api.Get("/audit", s.handleAuditLog)

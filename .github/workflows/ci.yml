@@ -27,6 +27,9 @@ jobs:
       - name: Verify changelog discipline
         run: npm run verify:changelog
 
+      - name: Verify OpenAPI contract
+        run: npm run verify:openapi
+
   frontend:
     runs-on: ubuntu-latest
     steps:
@@ -119,9 +122,9 @@ jobs:
         run: npm ci
 
       - name: Install Playwright browser
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install --with-deps chromium firefox
 
-      - name: Run E2E smoke tests
+      - name: Run E2E suite
         run: npm run test:e2e
 
   manifests:

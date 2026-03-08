@@ -109,10 +109,27 @@ export interface RuntimeStatus {
   writeActionsEnabled: boolean;
   terminalEnabled: boolean;
   predictorEnabled: boolean;
+  predictorHealthy: boolean;
+  predictorLastError?: string;
   assistantEnabled: boolean;
   ragEnabled: boolean;
   alertsEnabled: boolean;
   warnings: string[];
+}
+
+export interface HealthCheck {
+  name: string;
+  ok: boolean;
+  message: string;
+  lastSuccess?: string;
+  lastFailure?: string;
+}
+
+export interface HealthStatus {
+  status: "ok" | "degraded" | "not-ready" | string;
+  timestamp: string;
+  checks: HealthCheck[];
+  build: BuildInfo;
 }
 
 export interface SessionUser {

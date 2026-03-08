@@ -305,6 +305,19 @@ func TestStreamRejectsQueryTokenAuthentication(t *testing.T) {
 	}
 }
 
+func TestHealthEndpointsBypassAuth(t *testing.T) {
+	router := newAuthTestServer().Router("")
+
+	for _, path := range []string{"/api/healthz", "/api/readyz", "/api/openapi.yaml"} {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		rr := httptest.NewRecorder()
+		router.ServeHTTP(rr, req)
+		if rr.Code != http.StatusOK {
+			t.Fatalf("%s status code = %d, want 200", path, rr.Code)
+		}
+	}
+}
+
 func TestAuditCapturesMutatingActions(t *testing.T) {
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
 	server := newServer(
