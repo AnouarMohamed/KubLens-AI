@@ -22,9 +22,9 @@ export function ModeBanner({ runtime }: { runtime: RuntimeStatus | null }) {
     warnings.length > 0 ? warnings : ["Security-sensitive features are restricted in this mode."];
 
   return (
-    <div className="border-b border-amber-300/40 bg-amber-300/20 px-6 py-2 text-xs text-zinc-900">
+    <div className="border-b border-amber-300 bg-amber-100 px-6 py-2 text-xs text-amber-950">
       <p className="font-semibold uppercase tracking-wide">{runtime.mode.toUpperCase()} Mode Warning</p>
-      <p className="mt-0.5">{resolvedWarnings.join(" ")}</p>
+      <p className="mt-0.5 text-amber-900">{resolvedWarnings.join(" ")}</p>
     </div>
   );
 }

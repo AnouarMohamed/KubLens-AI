@@ -44,7 +44,7 @@ export function WorkspacePanels({
   }
 
   return (
-    <aside className="absolute top-20 right-4 h-[calc(100%-6rem)] w-[30rem] app-shell overflow-hidden">
+    <aside className="absolute top-20 right-4 z-40 h-[calc(100%-6rem)] w-[30rem] app-shell overflow-hidden">
       {panel === "notifications" && (
         <PanelShell title="Notifications" subtitle="Event stream from cluster activity">
           {notificationError && <p className="text-sm text-zinc-200">{notificationError}</p>}

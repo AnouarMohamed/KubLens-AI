@@ -109,7 +109,7 @@ export function AppShell() {
       />
 
       <main className="flex-1 flex flex-col overflow-hidden p-4 pl-0">
-        <div className="app-shell flex-1 flex flex-col overflow-hidden">
+        <div className="app-shell relative flex-1 flex flex-col overflow-hidden">
           <HeaderBar
             currentViewMeta={currentViewMeta}
             clusterContexts={clusterContexts}
