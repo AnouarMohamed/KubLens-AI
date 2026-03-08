@@ -216,12 +216,12 @@ func (r *routedCluster) PodEvents(ctx context.Context, namespace, name string) [
 	return reader.PodEvents(ctx, namespace, name)
 }
 
-func (r *routedCluster) PodLogs(ctx context.Context, namespace, name string) string {
+func (r *routedCluster) PodLogs(ctx context.Context, namespace, name, container string, lines int) string {
 	reader := r.selectReader(ctx)
 	if reader == nil {
 		return ""
 	}
-	return reader.PodLogs(ctx, namespace, name)
+	return reader.PodLogs(ctx, namespace, name, container, lines)
 }
 
 func (r *routedCluster) PodDetail(ctx context.Context, namespace, name string) (model.PodDetail, error) {

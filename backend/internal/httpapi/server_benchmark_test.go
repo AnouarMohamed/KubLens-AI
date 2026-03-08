@@ -116,7 +116,7 @@ func (b benchmarkClusterReader) PodEvents(context.Context, string, string) []mod
 	return b.events
 }
 
-func (b benchmarkClusterReader) PodLogs(context.Context, string, string) string {
+func (b benchmarkClusterReader) PodLogs(context.Context, string, string, string, int) string {
 	return b.logs
 }
 

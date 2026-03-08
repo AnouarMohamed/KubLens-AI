@@ -76,8 +76,8 @@ func (p *OpenAICompatibleProvider) Generate(ctx context.Context, in Input) (stri
 	body, err := json.Marshal(chatCompletionsRequest{
 		Model: p.model,
 		Messages: []chatMessage{
-			{Role: "system", Content: systemPrompt()},
-			{Role: "user", Content: userPrompt(in)},
+			{Role: "system", Content: SystemPrompt()},
+			{Role: "user", Content: UserPrompt(in)},
 		},
 		Temperature: p.temperature,
 		MaxTokens:   p.maxTokens,
@@ -121,16 +121,107 @@ func (p *OpenAICompatibleProvider) Generate(ctx context.Context, in Input) (stri
 	return answer, nil
 }
 
+func (p *OpenAICompatibleProvider) Chat(ctx context.Context, req ChatRequest) (ChatResponse, error) {
+	model := strings.TrimSpace(req.Model)
+	if model == "" {
+		model = p.model
+	}
+	temperature := req.Temperature
+	if temperature == 0 {
+		temperature = p.temperature
+	}
+	maxTokens := req.MaxTokens
+	if maxTokens <= 0 {
+		maxTokens = p.maxTokens
+	}
+
+	messages := make([]chatMessage, 0, len(req.Messages))
+	for _, msg := range req.Messages {
+		messages = append(messages, chatMessage{
+			Role:       msg.Role,
+			Content:    msg.Content,
+			ToolCalls:  mapToolCalls(msg.ToolCalls),
+			ToolCallID: msg.ToolCallID,
+		})
+	}
+
+	tools := make([]toolDefinition, 0, len(req.Tools))
+	for _, tool := range req.Tools {
+		tools = append(tools, toolDefinition{
+			Type: "function",
+			Function: toolFunction{
+				Name:        tool.Name,
+				Description: tool.Description,
+				Parameters:  tool.Parameters,
+			},
+		})
+	}
+
+	payload := chatCompletionsRequest{
+		Model:       model,
+		Messages:    messages,
+		Temperature: temperature,
+		MaxTokens:   maxTokens,
+	}
+	if len(tools) > 0 {
+		payload.Tools = tools
+		payload.ToolChoice = "auto"
+	}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return ChatResponse{}, fmt.Errorf("encode request: %w", err)
+	}
+
+	reqHTTP, err := http.NewRequestWithContext(ctx, http.MethodPost, p.baseURL+"/chat/completions", bytes.NewReader(body))
+	if err != nil {
+		return ChatResponse{}, fmt.Errorf("build request: %w", err)
+	}
+
+	reqHTTP.Header.Set("Authorization", "Bearer "+p.apiKey)
+	reqHTTP.Header.Set("Content-Type", "application/json")
+	reqHTTP.Header.Set("Accept", "application/json")
+
+	resp, err := p.client.Do(reqHTTP)
+	if err != nil {
+		return ChatResponse{}, fmt.Errorf("request provider: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		payload, _ := io.ReadAll(io.LimitReader(resp.Body, 16<<10))
+		return ChatResponse{}, fmt.Errorf("provider status %d: %s", resp.StatusCode, strings.TrimSpace(string(payload)))
+	}
+
+	var out chatCompletionsResponse
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return ChatResponse{}, fmt.Errorf("decode provider response: %w", err)
+	}
+	if len(out.Choices) == 0 {
+		return ChatResponse{}, errors.New("provider returned no choices")
+	}
+
+	msg := out.Choices[0].Message
+	return ChatResponse{
+		Content:   strings.TrimSpace(msg.Content),
+		ToolCalls: readToolCalls(msg.ToolCalls),
+	}, nil
+}
+
 type chatCompletionsRequest struct {
 	Model       string        `json:"model"`
 	Messages    []chatMessage `json:"messages"`
 	Temperature float64       `json:"temperature,omitempty"`
 	MaxTokens   int           `json:"max_tokens,omitempty"`
+	Tools       []toolDefinition `json:"tools,omitempty"`
+	ToolChoice  any             `json:"tool_choice,omitempty"`
 }
 
 type chatMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+	Role       string     `json:"role"`
+	Content    string     `json:"content,omitempty"`
+	ToolCalls  []toolCall `json:"tool_calls,omitempty"`
+	ToolCallID string     `json:"tool_call_id,omitempty"`
 }
 
 type chatCompletionsResponse struct {
@@ -139,52 +230,57 @@ type chatCompletionsResponse struct {
 	} `json:"choices"`
 }
 
-func systemPrompt() string {
-	return strings.Join([]string{
-		"You are a senior Kubernetes SRE assistant.",
-		"Use only provided data; do not invent cluster facts.",
-		"Be concise and action-oriented.",
-		"Output sections in markdown:",
-		"1) Most likely root cause",
-		"2) Evidence",
-		"3) Verify now (kubectl commands)",
-		"4) Safe fix plan",
-		"If data is insufficient, state what is missing.",
-	}, "\n")
+type toolDefinition struct {
+	Type     string       `json:"type"`
+	Function toolFunction `json:"function"`
 }
 
-func userPrompt(in Input) string {
-	docRefs := make([]string, 0, len(in.DocumentationRefs))
-	for _, ref := range in.DocumentationRefs {
-		docRefs = append(docRefs, fmt.Sprintf("- %s (%s)", ref.Title, ref.URL))
-	}
+type toolFunction struct {
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	Parameters  any    `json:"parameters,omitempty"`
+}
 
-	return strings.Join([]string{
-		"User request:",
-		in.UserMessage,
-		"",
-		"Detected intent:",
-		in.Intent,
-		"",
-		"Deterministic baseline answer:",
-		in.LocalAnswer,
-		"",
-		"Diagnostics summary:",
-		in.DiagnosticsSummary,
-		"",
-		"Priority actions:",
-		in.PriorityActions,
-		"",
-		"Referenced resources:",
-		strings.Join(in.ReferencedResources, ", "),
-		"",
-		"Cluster snapshot brief:",
-		in.ClusterSnapshotBrief,
-		"",
-		"Documentation context:",
-		in.DocumentationContext,
-		"",
-		"Documentation references:",
-		strings.Join(docRefs, "\n"),
-	}, "\n")
+type toolCall struct {
+	ID       string            `json:"id"`
+	Type     string            `json:"type"`
+	Function toolCallFunction  `json:"function"`
+}
+
+type toolCallFunction struct {
+	Name      string `json:"name"`
+	Arguments string `json:"arguments"`
+}
+
+func mapToolCalls(in []ToolCall) []toolCall {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]toolCall, 0, len(in))
+	for _, call := range in {
+		out = append(out, toolCall{
+			ID:   call.ID,
+			Type: "function",
+			Function: toolCallFunction{
+				Name:      call.Name,
+				Arguments: call.Arguments,
+			},
+		})
+	}
+	return out
+}
+
+func readToolCalls(in []toolCall) []ToolCall {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]ToolCall, 0, len(in))
+	for _, call := range in {
+		out = append(out, ToolCall{
+			ID:        call.ID,
+			Name:      call.Function.Name,
+			Arguments: call.Function.Arguments,
+		})
+	}
+	return out
 }

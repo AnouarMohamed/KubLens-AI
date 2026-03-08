@@ -78,14 +78,38 @@ PREDICTOR_BASE_URL=http://localhost:8001
 PREDICTOR_SHARED_SECRET=your-shared-secret
 ```
 
-## 7) Docker compose
+## 7) Ops assistant (optional)
+
+Local Ollama:
+
+```bash
+curl -fsSL https://ollama.com/install.sh | sh
+ollama pull llama3.2
+```
+
+```text
+ASSISTANT_PROVIDER=openai_compatible
+ASSISTANT_API_BASE_URL=http://localhost:11434/v1
+ASSISTANT_MODEL=llama3.2
+ASSISTANT_API_KEY=ollama
+ASSISTANT_RAG_ENABLED=true
+```
+
+RAG embeddings (optional):
+
+```text
+ASSISTANT_EMBEDDING_MODEL=nomic-embed-text
+ASSISTANT_EMBEDDING_BASE_URL=http://localhost:11434/v1
+```
+
+## 8) Docker compose
 
 ```bash
 npm run docker:up
 npm run docker:down
 ```
 
-## 8) Kubernetes overlays
+## 9) Kubernetes overlays
 
 ```bash
 kubectl apply -k k8s/overlays/dev
@@ -93,7 +117,7 @@ kubectl apply -k k8s/overlays/demo
 kubectl apply -k k8s/overlays/prod
 ```
 
-## 9) Tracing (optional)
+## 10) Tracing (optional)
 
 Set OTLP exporter env vars (local or deployment):
 
@@ -113,16 +137,17 @@ kubectl apply -k k8s/overlays/tracing
 kubectl -n kubernetes-operations-dashboard port-forward svc/k8s-ops-jaeger 16686:16686
 ```
 
-## 10) Troubleshooting
+## 11) Troubleshooting
 
 - `403` on write endpoints: role or global feature gate is blocking
 - `N/A` metrics: Metrics Server missing/unhealthy
 - predictions fallback source: predictor unavailable
 - startup error in prod mode: missing `AUTH_TOKENS` with `AUTH_ENABLED=true`
 
-## 11) Operational endpoints
+## 12) Operational endpoints
 
 - Liveness: `GET /api/healthz`
 - Readiness with dependency checks: `GET /api/readyz`
 - OpenAPI contract: `GET /api/openapi.yaml`
 - Prometheus metrics export: `GET /api/metrics/prometheus`
+- Pod logs (tail): `GET /api/pods/{namespace}/{name}/logs?lines=50&container=name`

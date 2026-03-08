@@ -58,7 +58,12 @@ func Build(cfg config.Config) (Result, error) {
 		warnings = append(warnings, fmt.Sprintf("assistant provider warning: %v", providerErr))
 	}
 
-	ragger := rag.NewService(rag.Config{Enabled: cfg.Assistant.RAGEnabled})
+	ragger := rag.NewService(rag.Config{
+		Enabled:          cfg.Assistant.RAGEnabled,
+		EmbeddingModel:   cfg.Assistant.EmbeddingModel,
+		EmbeddingBaseURL: cfg.Assistant.EmbeddingBaseURL,
+		EmbeddingAPIKey:  cfg.Assistant.EmbeddingAPIKey,
+	})
 	alertDispatcher := alerts.New(alerts.Config{
 		AlertmanagerURL:     cfg.Alerts.AlertmanagerURL,
 		SlackWebhookURL:     cfg.Alerts.SlackWebhookURL,

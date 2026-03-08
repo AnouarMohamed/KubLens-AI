@@ -176,8 +176,10 @@ func (s *Server) handlePodEvents(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handlePodLogs(w http.ResponseWriter, r *http.Request) {
 	namespace := chi.URLParam(r, "namespace")
 	name := chi.URLParam(r, "name")
+	container := strings.TrimSpace(r.URL.Query().Get("container"))
+	lines := parsePositiveIntWithMax(r.URL.Query().Get("lines"), 50, 500)
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	_, _ = w.Write([]byte(s.cluster.PodLogs(r.Context(), namespace, name)))
+	_, _ = w.Write([]byte(s.cluster.PodLogs(r.Context(), namespace, name, container, lines)))
 }
 
 func (s *Server) handleRestartPod(w http.ResponseWriter, r *http.Request) {
@@ -391,6 +393,17 @@ func parsePercent(raw string) (float64, bool) {
 
 func formatPercent(value float64) string {
 	return strconv.Itoa(int(value+0.5)) + "%"
+}
+
+func parsePositiveIntWithMax(raw string, fallback int, max int) int {
+	value, err := strconv.Atoi(strings.TrimSpace(raw))
+	if err != nil || value <= 0 {
+		return fallback
+	}
+	if max > 0 && value > max {
+		return max
+	}
+	return value
 }
 
 func handleActionError(w http.ResponseWriter, err error, notFoundMessage string) {

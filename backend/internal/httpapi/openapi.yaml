@@ -114,6 +114,40 @@ paths:
           description: Action result
         "403":
           description: Forbidden
+  /pods/{namespace}/{name}/logs:
+    get:
+      operationId: getPodLogs
+      summary: Fetch pod logs
+      parameters:
+        - in: path
+          name: namespace
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: name
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: lines
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 50
+        - in: query
+          name: container
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Pod log output
+          content:
+            text/plain:
+              schema:
+                type: string
   /nodes:
     get:
       operationId: listNodes

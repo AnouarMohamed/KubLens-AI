@@ -1,7 +1,11 @@
 package rag
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
 	htmlpkg "html"
 	"io"
 	"log/slog"
@@ -19,13 +23,15 @@ import (
 )
 
 const (
-	defaultRefreshInterval = 6 * time.Hour
-	defaultHTTPTimeout     = 8 * time.Second
-	defaultMaxBodyBytes    = int64(1 << 20) // 1MB
-	defaultResultLimit     = 3
-	maxResultLimit         = 8
-	defaultChunkSize       = 900
-	defaultChunkOverlap    = 140
+	defaultRefreshInterval  = 6 * time.Hour
+	defaultHTTPTimeout      = 8 * time.Second
+	defaultMaxBodyBytes     = int64(1 << 20) // 1MB
+	defaultResultLimit      = 3
+	maxResultLimit          = 8
+	defaultChunkSize        = 900
+	defaultChunkOverlap     = 140
+	defaultEmbeddingBatch   = 24
+	defaultEmbeddingBaseURL = "https://api.openai.com/v1"
 )
 
 var (
@@ -51,12 +57,15 @@ type SourceDoc struct {
 }
 
 type Config struct {
-	Enabled         bool
-	Sources         []SourceDoc
-	RefreshInterval time.Duration
-	HTTPTimeout     time.Duration
-	MaxBodyBytes    int64
-	Logger          *slog.Logger
+	Enabled          bool
+	Sources          []SourceDoc
+	RefreshInterval  time.Duration
+	HTTPTimeout      time.Duration
+	MaxBodyBytes     int64
+	EmbeddingModel   string
+	EmbeddingBaseURL string
+	EmbeddingAPIKey  string
+	Logger           *slog.Logger
 }
 
 type Service struct {
@@ -67,6 +76,7 @@ type Service struct {
 	client          *http.Client
 	logger          *slog.Logger
 	now             func() time.Time
+	embedder        embedder
 
 	mu        sync.RWMutex
 	chunks    []chunk
@@ -84,6 +94,7 @@ type chunk struct {
 	text      string
 	textLower string
 	tokenSet  map[string]struct{}
+	embedding []float32
 }
 
 func NewService(cfg Config) *Service {
@@ -112,6 +123,21 @@ func NewService(cfg Config) *Service {
 		sources = defaultSources()
 	}
 
+	var embedderInstance embedder
+	if cfg.Enabled && strings.TrimSpace(cfg.EmbeddingModel) != "" {
+		embeddingClient, err := newOpenAIEmbedder(embeddingConfig{
+			BaseURL:    cfg.EmbeddingBaseURL,
+			APIKey:     cfg.EmbeddingAPIKey,
+			Model:      cfg.EmbeddingModel,
+			HTTPClient: &http.Client{Timeout: timeout},
+		})
+		if err != nil {
+			logger.Warn("rag embedding disabled", "error", err.Error())
+		} else {
+			embedderInstance = embeddingClient
+		}
+	}
+
 	return &Service{
 		enabled:         cfg.Enabled,
 		sources:         append([]SourceDoc(nil), sources...),
@@ -120,6 +146,7 @@ func NewService(cfg Config) *Service {
 		client:          &http.Client{Timeout: timeout},
 		logger:          logger,
 		now:             time.Now,
+		embedder:        embedderInstance,
 	}
 }
 
@@ -151,6 +178,10 @@ func (s *Service) Retrieve(ctx context.Context, query string, limit int) []model
 		return nil
 	}
 	s.warnIfStaleIndex(expiresAt, indexedAt)
+
+	if refs, ok := s.retrieveWithEmbeddings(ctx, query, chunks, limit); ok {
+		return refs
+	}
 
 	queryTerms := tokenize(query)
 	queryLower := strings.ToLower(query)
@@ -298,6 +329,7 @@ func (s *Service) buildIndex(ctx context.Context) []chunk {
 		}
 	}
 
+	s.applyEmbeddings(ctx, out)
 	return out
 }
 
@@ -312,6 +344,7 @@ func (s *Service) fallbackIndex() []chunk {
 			out = append(out, item)
 		}
 	}
+	s.applyEmbeddings(context.Background(), out)
 	return out
 }
 
@@ -334,6 +367,103 @@ func newChunk(source SourceDoc, raw string) chunk {
 		textLower: lower,
 		tokenSet:  tokenSet,
 	}
+}
+
+func (s *Service) applyEmbeddings(ctx context.Context, chunks []chunk) {
+	if s.embedder == nil || len(chunks) == 0 {
+		return
+	}
+
+	texts := make([]string, len(chunks))
+	for i, item := range chunks {
+		texts[i] = item.text
+	}
+
+	for start := 0; start < len(texts); start += defaultEmbeddingBatch {
+		end := start + defaultEmbeddingBatch
+		if end > len(texts) {
+			end = len(texts)
+		}
+		embeddings, err := s.embedder.Embed(ctx, texts[start:end])
+		if err != nil {
+			if s.logger != nil {
+				s.logger.Warn("rag embeddings failed", "error", err.Error())
+			}
+			return
+		}
+		if len(embeddings) != end-start {
+			if s.logger != nil {
+				s.logger.Warn("rag embeddings incomplete", "expected", end-start, "got", len(embeddings))
+			}
+			return
+		}
+		for i := range embeddings {
+			chunks[start+i].embedding = embeddings[i]
+		}
+	}
+}
+
+func (s *Service) retrieveWithEmbeddings(ctx context.Context, query string, chunks []chunk, limit int) ([]model.DocumentationReference, bool) {
+	if s.embedder == nil {
+		return nil, false
+	}
+
+	embeddings, err := s.embedder.Embed(ctx, []string{query})
+	if err != nil || len(embeddings) == 0 {
+		if s.logger != nil && err != nil {
+			s.logger.Warn("rag query embedding failed", "error", err.Error())
+		}
+		return nil, false
+	}
+	queryEmbedding := embeddings[0]
+	if len(queryEmbedding) == 0 {
+		return nil, false
+	}
+
+	type scored struct {
+		chunk chunk
+		score float64
+	}
+
+	ranked := make([]scored, 0, len(chunks))
+	for _, item := range chunks {
+		if len(item.embedding) == 0 || len(item.embedding) != len(queryEmbedding) {
+			continue
+		}
+		score := cosineSimilarity(queryEmbedding, item.embedding)
+		ranked = append(ranked, scored{chunk: item, score: score})
+	}
+
+	if len(ranked) == 0 {
+		return nil, false
+	}
+
+	sort.SliceStable(ranked, func(i, j int) bool {
+		if ranked[i].score == ranked[j].score {
+			return ranked[i].chunk.title < ranked[j].chunk.title
+		}
+		return ranked[i].score > ranked[j].score
+	})
+
+	refs := make([]model.DocumentationReference, 0, limit)
+	seenURL := map[string]struct{}{}
+	for _, item := range ranked {
+		if len(refs) >= limit {
+			break
+		}
+		if _, exists := seenURL[item.chunk.url]; exists {
+			continue
+		}
+		seenURL[item.chunk.url] = struct{}{}
+		refs = append(refs, model.DocumentationReference{
+			Title:   item.chunk.title,
+			URL:     item.chunk.url,
+			Source:  item.chunk.source,
+			Snippet: bestSnippet(item.chunk.text, tokenize(query), 260),
+		})
+	}
+
+	return refs, true
 }
 
 func (s *Service) fetchSourceText(ctx context.Context, source SourceDoc) (string, error) {
@@ -594,4 +724,117 @@ func defaultSources() []SourceDoc {
 			Fallback: "Docker supports memory and CPU constraints. Memory limits can trigger OOM kills. CPU quotas and shares affect scheduling fairness and performance.",
 		},
 	}
+}
+
+type embedder interface {
+	Embed(ctx context.Context, inputs []string) ([][]float32, error)
+}
+
+type embeddingConfig struct {
+	BaseURL    string
+	APIKey     string
+	Model      string
+	HTTPClient *http.Client
+}
+
+type openAIEmbedder struct {
+	baseURL string
+	apiKey  string
+	model   string
+	client  *http.Client
+}
+
+func newOpenAIEmbedder(cfg embeddingConfig) (*openAIEmbedder, error) {
+	baseURL := strings.TrimRight(strings.TrimSpace(cfg.BaseURL), "/")
+	if baseURL == "" {
+		baseURL = defaultEmbeddingBaseURL
+	}
+	if strings.TrimSpace(cfg.Model) == "" {
+		return nil, errors.New("missing embedding model")
+	}
+	client := cfg.HTTPClient
+	if client == nil {
+		client = &http.Client{Timeout: defaultHTTPTimeout}
+	}
+	return &openAIEmbedder{
+		baseURL: baseURL,
+		apiKey:  strings.TrimSpace(cfg.APIKey),
+		model:   cfg.Model,
+		client:  client,
+	}, nil
+}
+
+func (e *openAIEmbedder) Embed(ctx context.Context, inputs []string) ([][]float32, error) {
+	if len(inputs) == 0 {
+		return nil, nil
+	}
+
+	payload, err := json.Marshal(map[string]any{
+		"model": e.model,
+		"input": inputs,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("encode embedding request: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, e.baseURL+"/embeddings", bytes.NewReader(payload))
+	if err != nil {
+		return nil, fmt.Errorf("build embedding request: %w", err)
+	}
+
+	if e.apiKey != "" {
+		req.Header.Set("Authorization", "Bearer "+e.apiKey)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := e.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("request embeddings: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode > 299 {
+		payload, _ := io.ReadAll(io.LimitReader(resp.Body, 16<<10))
+		return nil, fmt.Errorf("embedding status %d: %s", resp.StatusCode, strings.TrimSpace(string(payload)))
+	}
+
+	var out struct {
+		Data []struct {
+			Embedding []float32 `json:"embedding"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return nil, fmt.Errorf("decode embeddings: %w", err)
+	}
+	if len(out.Data) == 0 {
+		return nil, errors.New("empty embeddings response")
+	}
+
+	result := make([][]float32, 0, len(out.Data))
+	for _, item := range out.Data {
+		result = append(result, item.Embedding)
+	}
+	return result, nil
+}
+
+func cosineSimilarity(a []float32, b []float32) float64 {
+	if len(a) == 0 || len(b) == 0 || len(a) != len(b) {
+		return 0
+	}
+	var dot float64
+	var sumA float64
+	var sumB float64
+	for i := range a {
+		ai := float64(a[i])
+		bi := float64(b[i])
+		dot += ai * bi
+		sumA += ai * ai
+		sumB += bi * bi
+	}
+	denom := math.Sqrt(sumA) * math.Sqrt(sumB)
+	if denom == 0 {
+		return 0
+	}
+	return dot / denom
 }

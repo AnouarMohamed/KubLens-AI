@@ -168,7 +168,17 @@ export const api = {
   getPodDetail: (namespace: string, name: string) => requestJson<PodDetail>(apiPath("pods", namespace, name)),
   getPodEvents: (namespace: string, name: string) =>
     requestJson<K8sEvent[]>(apiPath("pods", namespace, name, "events")),
-  getPodLogs: (namespace: string, name: string) => requestText(apiPath("pods", namespace, name, "logs")),
+  getPodLogs: (namespace: string, name: string, lines = 50, container?: string) => {
+    const params = new URLSearchParams();
+    if (lines > 0) {
+      params.set("lines", String(lines));
+    }
+    if (container && container.trim() !== "") {
+      params.set("container", container.trim());
+    }
+    const suffix = params.toString();
+    return requestText(`${apiPath("pods", namespace, name, "logs")}${suffix ? `?${suffix}` : ""}`);
+  },
   restartPod: (namespace: string, name: string) =>
     requestJson<ActionResult>(apiPath("pods", namespace, name, "restart"), {
       method: "POST",

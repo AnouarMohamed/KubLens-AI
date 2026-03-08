@@ -28,7 +28,7 @@ type ClusterReader interface {
 	RestartResource(ctx context.Context, kind, namespace, name string) (model.ActionResult, error)
 	RollbackResource(ctx context.Context, kind, namespace, name string) (model.ActionResult, error)
 	PodEvents(ctx context.Context, namespace, name string) []model.K8sEvent
-	PodLogs(ctx context.Context, namespace, name string) string
+	PodLogs(ctx context.Context, namespace, name, container string, lines int) string
 	PodDetail(ctx context.Context, namespace, name string) (model.PodDetail, error)
 	NodeDetail(ctx context.Context, name string) (model.NodeDetail, error)
 	CreatePod(ctx context.Context, req model.PodCreateRequest) (model.ActionResult, error)

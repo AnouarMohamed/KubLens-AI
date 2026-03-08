@@ -144,7 +144,7 @@ func (altClusterReader) PodEvents(context.Context, string, string) []model.K8sEv
 	return nil
 }
 
-func (altClusterReader) PodLogs(context.Context, string, string) string {
+func (altClusterReader) PodLogs(context.Context, string, string, string, int) string {
 	return ""
 }
 

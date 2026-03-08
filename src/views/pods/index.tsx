@@ -108,7 +108,7 @@ export default function Pods() {
 
       setIsBusy(true);
       try {
-        const logs = await api.getPodLogs(namespace, podName);
+        const logs = await api.getPodLogs(namespace, podName, 50);
         setLogPodName(`${namespace}/${podName}`);
         setLogText(logs);
         setError(null);

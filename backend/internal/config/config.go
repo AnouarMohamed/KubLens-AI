@@ -53,15 +53,18 @@ type ClusterConfig struct {
 }
 
 type AssistantConfig struct {
-	Provider      string
-	Timeout       time.Duration
-	APIBaseURL    string
-	APIKey        string
-	Model         string
-	Temperature   float64
-	MaxTokens     int
-	RAGEnabled    bool
-	PromptTimeout time.Duration
+	Provider         string
+	Timeout          time.Duration
+	APIBaseURL       string
+	APIKey           string
+	Model            string
+	Temperature      float64
+	MaxTokens        int
+	RAGEnabled       bool
+	PromptTimeout    time.Duration
+	EmbeddingModel   string
+	EmbeddingBaseURL string
+	EmbeddingAPIKey  string
 }
 
 type PredictorConfig struct {
@@ -132,16 +135,28 @@ func Load() (Config, error) {
 		BuiltAt: defaultIfEmpty(strings.TrimSpace(os.Getenv("APP_BUILT_AT")), now.Format(time.RFC3339)),
 	}
 
+	embeddingAPIKey := strings.TrimSpace(os.Getenv("ASSISTANT_EMBEDDING_API_KEY"))
+	if embeddingAPIKey == "" {
+		embeddingAPIKey = strings.TrimSpace(os.Getenv("ASSISTANT_API_KEY"))
+	}
+	embeddingBaseURL := strings.TrimSpace(os.Getenv("ASSISTANT_EMBEDDING_BASE_URL"))
+	if embeddingBaseURL == "" {
+		embeddingBaseURL = strings.TrimSpace(os.Getenv("ASSISTANT_API_BASE_URL"))
+	}
+
 	cfg.Assistant = AssistantConfig{
-		Provider:      strings.ToLower(strings.TrimSpace(defaultIfEmpty(os.Getenv("ASSISTANT_PROVIDER"), "none"))),
-		Timeout:       parseSecondsAsDuration(os.Getenv("ASSISTANT_TIMEOUT_SECONDS"), 8*time.Second),
-		APIBaseURL:    strings.TrimSpace(defaultIfEmpty(os.Getenv("ASSISTANT_API_BASE_URL"), "https://api.openai.com/v1")),
-		APIKey:        strings.TrimSpace(os.Getenv("ASSISTANT_API_KEY")),
-		Model:         strings.TrimSpace(os.Getenv("ASSISTANT_MODEL")),
-		Temperature:   parseFloatDefault(os.Getenv("ASSISTANT_TEMPERATURE"), 0.2),
-		MaxTokens:     parseIntDefault(os.Getenv("ASSISTANT_MAX_TOKENS"), 700),
-		RAGEnabled:    parseBoolDefault(os.Getenv("ASSISTANT_RAG_ENABLED"), p.ragEnabled),
-		PromptTimeout: parseSecondsAsDuration(os.Getenv("ASSISTANT_PROMPT_TIMEOUT_SECONDS"), 8*time.Second),
+		Provider:         strings.ToLower(strings.TrimSpace(defaultIfEmpty(os.Getenv("ASSISTANT_PROVIDER"), "none"))),
+		Timeout:          parseSecondsAsDuration(os.Getenv("ASSISTANT_TIMEOUT_SECONDS"), 8*time.Second),
+		APIBaseURL:       strings.TrimSpace(defaultIfEmpty(os.Getenv("ASSISTANT_API_BASE_URL"), "https://api.openai.com/v1")),
+		APIKey:           strings.TrimSpace(os.Getenv("ASSISTANT_API_KEY")),
+		Model:            strings.TrimSpace(os.Getenv("ASSISTANT_MODEL")),
+		Temperature:      parseFloatDefault(os.Getenv("ASSISTANT_TEMPERATURE"), 0.2),
+		MaxTokens:        parseIntDefault(os.Getenv("ASSISTANT_MAX_TOKENS"), 700),
+		RAGEnabled:       parseBoolDefault(os.Getenv("ASSISTANT_RAG_ENABLED"), p.ragEnabled),
+		PromptTimeout:    parseSecondsAsDuration(os.Getenv("ASSISTANT_PROMPT_TIMEOUT_SECONDS"), 8*time.Second),
+		EmbeddingModel:   strings.TrimSpace(os.Getenv("ASSISTANT_EMBEDDING_MODEL")),
+		EmbeddingBaseURL: embeddingBaseURL,
+		EmbeddingAPIKey:  embeddingAPIKey,
 	}
 
 	cfg.Predictor = PredictorConfig{

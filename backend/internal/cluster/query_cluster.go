@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -191,7 +192,7 @@ func (s *Service) PodEvents(ctx context.Context, namespace, name string) []model
 	return events
 }
 
-func (s *Service) PodLogs(ctx context.Context, namespace, name string) string {
+func (s *Service) PodLogs(ctx context.Context, namespace, name, container string, lines int) string {
 	if s.inMockMode() {
 		return mockPodLogs(name)
 	}
@@ -199,8 +200,15 @@ func (s *Service) PodLogs(ctx context.Context, namespace, name string) string {
 	callCtx, cancel := s.withTimeout(ctx)
 	defer cancel()
 
-	tailLines := int64(150)
-	req := s.client.CoreV1().Pods(namespace).GetLogs(name, &corev1.PodLogOptions{TailLines: &tailLines})
+	if lines <= 0 {
+		lines = 150
+	}
+	tailLines := int64(lines)
+	opts := &corev1.PodLogOptions{TailLines: &tailLines}
+	if trimmed := strings.TrimSpace(container); trimmed != "" {
+		opts.Container = trimmed
+	}
+	req := s.client.CoreV1().Pods(namespace).GetLogs(name, opts)
 	stream, err := req.Stream(callCtx)
 	if err != nil {
 		return mockPodLogs(name)

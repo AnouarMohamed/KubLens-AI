@@ -554,7 +554,7 @@ func (testClusterReader) PodEvents(context.Context, string, string) []model.K8sE
 	return []model.K8sEvent{{Reason: "BackOff"}}
 }
 
-func (testClusterReader) PodLogs(context.Context, string, string) string {
+func (testClusterReader) PodLogs(context.Context, string, string, string, int) string {
 	return "dependency connection timeout"
 }
 

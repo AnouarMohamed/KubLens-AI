@@ -158,13 +158,35 @@ Confidence scores are evidence-based: signal count, metric coverage, warning cor
 Optional. Configure any OpenAI-compatible provider:
 
 ```env
-ASSISTANT_PROVIDER=openai
+ASSISTANT_PROVIDER=openai_compatible
 ASSISTANT_API_KEY=sk-...
 ASSISTANT_MODEL=gpt-4o
 ASSISTANT_RAG_ENABLED=true   # grounds responses in Kubernetes docs
 ```
 
 Leave `ASSISTANT_PROVIDER=none` to disable entirely.
+
+Local Ollama (no code changes required):
+
+```bash
+curl -fsSL https://ollama.com/install.sh | sh
+ollama pull llama3.2
+```
+
+```env
+ASSISTANT_PROVIDER=openai_compatible
+ASSISTANT_API_BASE_URL=http://localhost:11434/v1
+ASSISTANT_MODEL=llama3.2
+ASSISTANT_API_KEY=ollama
+```
+
+RAG embeddings (optional):
+
+```env
+ASSISTANT_EMBEDDING_MODEL=nomic-embed-text
+ASSISTANT_EMBEDDING_BASE_URL=http://localhost:11434/v1
+# ASSISTANT_EMBEDDING_API_KEY defaults to ASSISTANT_API_KEY
+```
 
 ---
 
@@ -227,8 +249,13 @@ PREDICTOR_BASE_URL=
 PREDICTOR_SHARED_SECRET=
 
 ASSISTANT_PROVIDER=none
+ASSISTANT_API_BASE_URL=
 ASSISTANT_API_KEY=
 ASSISTANT_MODEL=
+ASSISTANT_RAG_ENABLED=true
+ASSISTANT_EMBEDDING_MODEL=
+ASSISTANT_EMBEDDING_BASE_URL=
+ASSISTANT_EMBEDDING_API_KEY=
 
 RATE_LIMIT_ENABLED=true
 RATE_LIMIT_REQUESTS=300
