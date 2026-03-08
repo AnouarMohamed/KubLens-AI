@@ -114,8 +114,10 @@ func toHTTPAuth(cfg config.AuthConfig) httpapi.AuthConfig {
 	}
 
 	return httpapi.AuthConfig{
-		Enabled: cfg.Enabled,
-		Tokens:  tokens,
+		Enabled:            cfg.Enabled,
+		AllowHeaderToken:   cfg.AllowHeaderToken,
+		TrustedCSRFDomains: cfg.TrustedCSRFDomains,
+		Tokens:             tokens,
 	}
 }
 

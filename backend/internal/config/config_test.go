@@ -77,6 +77,18 @@ func TestTerminalRequiresAuth(t *testing.T) {
 	}
 }
 
+func TestProdDisallowsHeaderTokenAuth(t *testing.T) {
+	clearConfigEnv(t)
+	t.Setenv("APP_MODE", "prod")
+	t.Setenv("AUTH_ENABLED", "true")
+	t.Setenv("AUTH_TOKENS", "admin:admin:secret-token")
+	t.Setenv("AUTH_ALLOW_HEADER_TOKEN", "true")
+
+	if _, err := Load(); err == nil {
+		t.Fatal("expected error when prod mode enables AUTH_ALLOW_HEADER_TOKEN")
+	}
+}
+
 func clearConfigEnv(t *testing.T) {
 	t.Helper()
 
@@ -102,6 +114,8 @@ func clearConfigEnv(t *testing.T) {
 		"PREDICTOR_BASE_URL",
 		"PREDICTOR_TIMEOUT_SECONDS",
 		"AUTH_ENABLED",
+		"AUTH_ALLOW_HEADER_TOKEN",
+		"AUTH_TRUSTED_CSRF_DOMAINS",
 		"AUTH_TOKENS",
 		"RATE_LIMIT_ENABLED",
 		"RATE_LIMIT_REQUESTS",

@@ -6,3 +6,5 @@ dist
 coverage
 .pytest_cache
 predictor/.pytest_cache
+test-results
+playwright-report

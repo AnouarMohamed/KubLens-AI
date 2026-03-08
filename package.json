@@ -13,6 +13,7 @@
     "test:go": "node scripts/go-task.mjs -C backend test ./...",
     "test:web": "vitest run",
     "test:web:watch": "vitest",
+    "test:e2e": "playwright test",
     "test:predictor": "python -m pytest predictor/tests -q",
     "fmt:go": "gofmt -w backend/cmd backend/internal",
     "tidy:go": "node scripts/go-task.mjs -C backend mod tidy",
@@ -27,6 +28,7 @@
     "lint:eslint": "eslint .",
     "lint:structure": "node scripts/structure-lint.mjs",
     "lint:predictor": "python -m ruff check predictor/app predictor/tests",
+    "verify:release": "node scripts/verify-release.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "npm run lint:types && npm run lint:eslint && npm run lint:structure && npm run format:check"
@@ -39,6 +41,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.22.0",
+    "@playwright/test": "^1.54.2",
     "@tailwindcss/vite": "^4.1.14",
     "@types/node": "^22.14.0",
     "@vitejs/plugin-react": "^5.0.4",

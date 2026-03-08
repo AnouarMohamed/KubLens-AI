@@ -16,3 +16,5 @@ predictor/__pycache__/
 predictor/app/__pycache__/
 predictor/.pytest_cache/
 predictor/tests/__pycache__/
+playwright-report/
+test-results/

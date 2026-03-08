@@ -2,7 +2,10 @@ package httpapi
 
 import (
 	"context"
+	"errors"
 	"net/http"
+	"net/url"
+	"slices"
 	"strings"
 	"time"
 
@@ -12,8 +15,10 @@ import (
 )
 
 type AuthConfig struct {
-	Enabled bool
-	Tokens  []AuthToken
+	Enabled            bool
+	Tokens             []AuthToken
+	AllowHeaderToken   bool
+	TrustedCSRFDomains []string
 }
 
 type AuthToken struct {
@@ -36,10 +41,21 @@ type principal struct {
 }
 
 type authRuntime struct {
-	enabled    bool
-	tokens     map[string]principal
-	cookieName string
+	enabled            bool
+	allowHeaderToken   bool
+	trustedCSRFDomains []string
+	tokens             map[string]principal
+	cookieName         string
 }
+
+type authChannel int
+
+const (
+	authChannelUnknown authChannel = iota
+	authChannelBearer
+	authChannelHeader
+	authChannelCookie
+)
 
 type principalContextKey struct{}
 
@@ -51,6 +67,8 @@ func WithAuth(config AuthConfig) Option {
 
 func (a *authRuntime) configure(config AuthConfig) {
 	a.enabled = config.Enabled
+	a.allowHeaderToken = config.AllowHeaderToken
+	a.trustedCSRFDomains = normalizeDomains(config.TrustedCSRFDomains)
 	a.tokens = make(map[string]principal, len(config.Tokens))
 	if strings.TrimSpace(a.cookieName) == "" {
 		a.cookieName = "kubelens_auth"
@@ -91,7 +109,7 @@ func (s *Server) authMiddleware(next http.Handler) http.Handler {
 				return
 			}
 
-			if p, err := s.authenticate(r); err == "" {
+			if p, _, err := s.authenticate(r); err == "" {
 				next.ServeHTTP(w, r.WithContext(withPrincipal(r.Context(), p)))
 				return
 			}
@@ -101,14 +119,15 @@ func (s *Server) authMiddleware(next http.Handler) http.Handler {
 		}
 
 		var (
-			p   principal
-			err string
+			p       principal
+			channel authChannel
+			err     string
 		)
 
 		if !s.auth.enabled {
 			p = principal{user: "local-viewer", role: roleViewer}
 		} else {
-			p, err = s.authenticate(r)
+			p, channel, err = s.authenticate(r)
 			if err != "" {
 				s.recordAuthFailure(r, http.StatusUnauthorized, "unauthenticated")
 				writeError(w, http.StatusUnauthorized, err)
@@ -126,28 +145,52 @@ func (s *Server) authMiddleware(next http.Handler) http.Handler {
 			writeError(w, http.StatusForbidden, "mutating operations are disabled for this environment")
 			return
 		}
+		if isMutatingMethod(r.Method) && channel == authChannelCookie {
+			if err := validateCSRFSameOrigin(r, s.auth.trustedCSRFDomains); err != nil {
+				s.recordAuthFailure(r, http.StatusForbidden, "csrf_blocked")
+				writeError(w, http.StatusForbidden, err.Error())
+				return
+			}
+		}
 
 		next.ServeHTTP(w, r.WithContext(withPrincipal(r.Context(), p)))
 	})
 }
 
-func (s *Server) authenticate(r *http.Request) (principal, string) {
+func (s *Server) authenticate(r *http.Request) (principal, authChannel, string) {
 	token := strings.TrimSpace(readBearerToken(r.Header.Get("Authorization")))
 	if token == "" {
-		token = strings.TrimSpace(r.Header.Get("X-Auth-Token"))
+		if s.auth.allowHeaderToken {
+			token = strings.TrimSpace(r.Header.Get("X-Auth-Token"))
+		}
+		if token != "" {
+			p, ok := s.auth.tokens[token]
+			if !ok {
+				return principal{}, authChannelHeader, "invalid bearer token"
+			}
+			return p, authChannelHeader, ""
+		}
+	} else {
+		p, ok := s.auth.tokens[token]
+		if !ok {
+			return principal{}, authChannelBearer, "invalid bearer token"
+		}
+		return p, authChannelBearer, ""
 	}
 	if token == "" {
 		token = strings.TrimSpace(s.readAuthCookie(r))
+		if token != "" {
+			p, ok := s.auth.tokens[token]
+			if !ok {
+				return principal{}, authChannelCookie, "invalid bearer token"
+			}
+			return p, authChannelCookie, ""
+		}
 	}
 	if token == "" {
-		return principal{}, "missing bearer token"
+		return principal{}, authChannelUnknown, "missing bearer token"
 	}
-
-	p, ok := s.auth.tokens[token]
-	if !ok {
-		return principal{}, "invalid bearer token"
-	}
-	return p, ""
+	return principal{}, authChannelUnknown, "invalid bearer token"
 }
 
 type authLoginRequest struct {
@@ -252,6 +295,74 @@ func readBearerToken(raw string) string {
 	return parts[1]
 }
 
+func isMutatingMethod(method string) bool {
+	switch strings.ToUpper(strings.TrimSpace(method)) {
+	case http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete:
+		return true
+	default:
+		return false
+	}
+}
+
+func normalizeDomains(raw []string) []string {
+	out := make([]string, 0, len(raw))
+	for _, domain := range raw {
+		normalized := strings.ToLower(strings.TrimSpace(domain))
+		if normalized == "" {
+			continue
+		}
+		if !slices.Contains(out, normalized) {
+			out = append(out, normalized)
+		}
+	}
+	return out
+}
+
+func validateCSRFSameOrigin(r *http.Request, trustedDomains []string) error {
+	origin := strings.TrimSpace(r.Header.Get("Origin"))
+	referer := strings.TrimSpace(r.Header.Get("Referer"))
+	targetHost := strings.ToLower(strings.TrimSpace(r.Host))
+	if targetHost == "" {
+		return errors.New("host header is required")
+	}
+
+	if origin != "" {
+		parsed, err := url.Parse(origin)
+		if err != nil || parsed.Host == "" {
+			return errors.New("invalid request origin")
+		}
+		if hostAllowed(strings.ToLower(parsed.Host), targetHost, trustedDomains) {
+			return nil
+		}
+		return errors.New("cross-site request blocked")
+	}
+
+	if referer != "" {
+		parsed, err := url.Parse(referer)
+		if err != nil || parsed.Host == "" {
+			return errors.New("invalid request referer")
+		}
+		if hostAllowed(strings.ToLower(parsed.Host), targetHost, trustedDomains) {
+			return nil
+		}
+		return errors.New("cross-site request blocked")
+	}
+
+	return errors.New("csrf protection requires origin or referer header")
+}
+
+func hostAllowed(candidate, host string, trustedDomains []string) bool {
+	if candidate == host {
+		return true
+	}
+	for _, domain := range trustedDomains {
+		if candidate == domain {
+			return true
+		}
+	}
+	return false
+}
+
 func withPrincipal(ctx context.Context, p principal) context.Context {
 	return context.WithValue(ctx, principalContextKey{}, p)
 }
@@ -345,10 +456,10 @@ func (s *Server) recordAuthFailure(r *http.Request, status int, action string) {
 		Timestamp: s.now().UTC().Format(time.RFC3339),
 		RequestID: middleware.GetReqID(r.Context()),
 		Method:    r.Method,
-		Path:      r.URL.Path,
+		Path:      sanitizeAuditPath(r.URL.Path),
 		Action:    action,
 		Status:    status,
-		ClientIP:  r.RemoteAddr,
+		ClientIP:  sanitizeClientIP(r.RemoteAddr),
 		Success:   false,
 	})
 }

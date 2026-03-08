@@ -70,8 +70,10 @@ type PredictorConfig struct {
 }
 
 type AuthConfig struct {
-	Enabled bool
-	Tokens  []AuthToken
+	Enabled            bool
+	AllowHeaderToken   bool
+	TrustedCSRFDomains []string
+	Tokens             []AuthToken
 }
 
 type RateLimitConfig struct {
@@ -160,7 +162,12 @@ func Load() (Config, error) {
 			return Config{}, errors.New("AUTH_ENABLED=true requires AUTH_TOKENS unless DEV_MODE=true")
 		}
 	}
-	cfg.Auth = AuthConfig{Enabled: authEnabled, Tokens: tokens}
+	cfg.Auth = AuthConfig{
+		Enabled:            authEnabled,
+		AllowHeaderToken:   parseBoolDefault(os.Getenv("AUTH_ALLOW_HEADER_TOKEN"), devMode),
+		TrustedCSRFDomains: parseCSV(os.Getenv("AUTH_TRUSTED_CSRF_DOMAINS")),
+		Tokens:             tokens,
+	}
 
 	cfg.RateLimit = RateLimitConfig{
 		Enabled:  parseBoolDefault(os.Getenv("RATE_LIMIT_ENABLED"), p.rateLimitEnabled),
@@ -246,6 +253,9 @@ func validate(cfg Config) error {
 
 	if cfg.Mode == ModeProd && !cfg.Auth.Enabled {
 		return errors.New("APP_MODE=prod requires AUTH_ENABLED=true")
+	}
+	if cfg.Mode == ModeProd && cfg.Auth.AllowHeaderToken {
+		return errors.New("APP_MODE=prod does not allow AUTH_ALLOW_HEADER_TOKEN=true")
 	}
 
 	if cfg.WriteActionsEnabled && !cfg.Auth.Enabled {

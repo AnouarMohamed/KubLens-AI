@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -156,13 +157,13 @@ func (s *Server) auditMiddleware(next http.Handler) http.Handler {
 			Timestamp:  s.now().UTC().Format(time.RFC3339),
 			RequestID:  middleware.GetReqID(r.Context()),
 			Method:     r.Method,
-			Path:       r.URL.Path,
+			Path:       sanitizeAuditPath(r.URL.Path),
 			Route:      routePattern(r),
 			Action:     actionForRequest(r.Method, r.URL.Path),
 			Status:     status,
 			DurationMs: s.now().Sub(start).Milliseconds(),
 			Bytes:      int64(ww.BytesWritten()),
-			ClientIP:   r.RemoteAddr,
+			ClientIP:   sanitizeClientIP(r.RemoteAddr),
 			Success:    status < http.StatusBadRequest,
 		}
 		if p, ok := principalFromContext(r.Context()); ok {
@@ -200,6 +201,26 @@ func parsePositiveInt(raw string, fallback int) int {
 		return fallback
 	}
 	return n
+}
+
+func sanitizeAuditPath(path string) string {
+	trimmed := strings.TrimSpace(path)
+	if trimmed == "" {
+		return "/"
+	}
+	return trimmed
+}
+
+func sanitizeClientIP(raw string) string {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return ""
+	}
+	host, _, err := net.SplitHostPort(trimmed)
+	if err == nil {
+		return host
+	}
+	return trimmed
 }
 
 func newFileAuditSink(path string) (*fileAuditSink, error) {

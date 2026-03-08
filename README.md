@@ -135,6 +135,13 @@ viewer:viewer:token1,operator:operator:token2,admin:admin:token3
 - `operator`: viewer + write actions (if globally enabled)
 - `admin`: operator + terminal (if enabled)
 
+### Auth transport hardening
+
+- `Authorization: Bearer <token>` is the primary auth path.
+- `X-Auth-Token` is disabled by default and should remain off (`AUTH_ALLOW_HEADER_TOKEN=false`).
+- Cookie-authenticated mutating requests enforce same-origin checks using `Origin`/`Referer`.
+- Optional cross-domain frontends can be allowlisted with `AUTH_TRUSTED_CSRF_DOMAINS`.
+
 ## Terminal policy
 
 When terminal is enabled, command execution is constrained by:
@@ -199,7 +206,9 @@ Details: [k8s/README.md](k8s/README.md)
 npm run lint
 npm run test:go
 npm run test:web
+npm run test:e2e
 npm run test:predictor
+npm run verify:release
 npm run build
 ```
 
@@ -207,7 +216,9 @@ CI validates:
 
 - frontend lint/tests/build
 - backend tests + gofmt check
+- Playwright smoke E2E
 - predictor lint/tests
+- release/version consistency across package, Docker, and k8s manifests
 - Docker builds (dashboard + predictor)
 - kustomize + manifest schema validation
 
