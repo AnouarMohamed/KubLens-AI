@@ -31,7 +31,8 @@ export default defineConfig({
       command: "npm run dev:api",
       url: "http://127.0.0.1:3000/api/runtime",
       timeout: 180_000,
-      reuseExistingServer: !process.env.CI,
+      // Always start a fresh API server for e2e so auth/write/terminal env is deterministic.
+      reuseExistingServer: false,
       env: {
         ...process.env,
         APP_MODE: "dev",

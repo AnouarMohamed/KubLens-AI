@@ -14,8 +14,18 @@ async function logoutSession(request: APIRequestContext) {
   expect(response.status()).toBe(200);
 }
 
+function uniquePodName(prefix: string): string {
+  return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 10_000)}`;
+}
+
+async function expectStatus(response: Awaited<ReturnType<APIRequestContext["post"]>>, status: number) {
+  const body = await response.text();
+  expect(response.status(), `Expected ${status}, got ${response.status()} with body: ${body}`).toBe(status);
+}
+
 test("auth role matrix and policy gates", async ({ page }) => {
   const request = page.request;
+  const operatorPodName = uniquePodName("e2e-operator-write");
 
   await loginWithToken(request, viewerToken);
   let session = await request.get("/api/auth/session");
@@ -43,9 +53,9 @@ test("auth role matrix and policy gates", async ({ page }) => {
 
   const operatorWrite = await request.post("/api/pods", {
     headers: { Authorization: `Bearer ${operatorToken}` },
-    data: { namespace: "default", name: "e2e-operator-write", image: "nginx:latest" },
+    data: { namespace: "default", name: operatorPodName, image: "nginx:latest" },
   });
-  expect(operatorWrite.status()).toBe(200);
+  await expectStatus(operatorWrite, 200);
   const operatorWritePayload = await operatorWrite.json();
   expect(operatorWritePayload.success).toBe(true);
 
@@ -54,6 +64,10 @@ test("auth role matrix and policy gates", async ({ page }) => {
     data: { command: "kubectl get pods -A" },
   });
   expect(operatorTerminal.status()).toBe(403);
+
+  await request.delete(`/api/pods/default/${operatorPodName}`, {
+    headers: { Authorization: `Bearer ${operatorToken}` },
+  });
   await logoutSession(request);
 
   await loginWithToken(request, adminToken);
