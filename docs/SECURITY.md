@@ -29,3 +29,8 @@
 - Keep write actions disabled unless operationally required
 - Rotate auth tokens and avoid static long-lived credentials
 - Restrict network egress beyond provided defaults where possible
+
+See also:
+
+- `docs/THREAT_MODEL.md`
+- `docs/OPERATIONS_VERIFICATION.md`

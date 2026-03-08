@@ -29,6 +29,7 @@
     "lint:structure": "node scripts/structure-lint.mjs",
     "lint:predictor": "python -m ruff check predictor/app predictor/tests",
     "verify:release": "node scripts/verify-release.mjs",
+    "verify:changelog": "node scripts/verify-changelog.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "npm run lint:types && npm run lint:eslint && npm run lint:structure && npm run format:check"

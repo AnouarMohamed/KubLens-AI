@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -123,6 +124,163 @@ func TestAPIContractCollections(t *testing.T) {
 		}
 		assertHasKeys(t, first, "id", "resourceKind", "resource", "riskScore", "confidence", "summary", "recommendation")
 	})
+}
+
+func TestAPIContractMutatingActionResultShape(t *testing.T) {
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	server := newServer(
+		testClusterReader{},
+		nil,
+		logger,
+		WithWriteActionsEnabled(true),
+		WithAuth(AuthConfig{
+			Enabled: true,
+			Tokens: []AuthToken{
+				{Token: "operator-token", User: "operator", Role: "operator"},
+			},
+		}),
+	)
+	router := server.Router("")
+
+	tests := []struct {
+		name   string
+		method string
+		path   string
+		body   string
+	}{
+		{
+			name:   "create pod",
+			method: http.MethodPost,
+			path:   "/api/pods",
+			body:   `{"namespace":"default","name":"contract-pod","image":"nginx:latest"}`,
+		},
+		{
+			name:   "restart pod",
+			method: http.MethodPost,
+			path:   "/api/pods/default/contract-pod/restart",
+		},
+		{
+			name:   "delete pod",
+			method: http.MethodDelete,
+			path:   "/api/pods/default/contract-pod",
+		},
+		{
+			name:   "cordon node",
+			method: http.MethodPost,
+			path:   "/api/nodes/node-1/cordon",
+		},
+		{
+			name:   "apply yaml",
+			method: http.MethodPut,
+			path:   "/api/resources/deployments/default/payment-gateway/yaml",
+			body:   `{"yaml":"apiVersion: apps/v1\nkind: Deployment"}`,
+		},
+		{
+			name:   "scale resource",
+			method: http.MethodPost,
+			path:   "/api/resources/deployments/default/payment-gateway/scale",
+			body:   `{"replicas":2}`,
+		},
+		{
+			name:   "restart resource",
+			method: http.MethodPost,
+			path:   "/api/resources/deployments/default/payment-gateway/restart",
+		},
+		{
+			name:   "rollback resource",
+			method: http.MethodPost,
+			path:   "/api/resources/deployments/default/payment-gateway/rollback",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
+			req.Header.Set("Authorization", "Bearer operator-token")
+			if tc.body != "" {
+				req.Header.Set("Content-Type", "application/json")
+			}
+			rr := httptest.NewRecorder()
+			router.ServeHTTP(rr, req)
+			if rr.Code != http.StatusOK {
+				t.Fatalf("status code = %d, want 200", rr.Code)
+			}
+
+			var payload map[string]any
+			if err := json.NewDecoder(rr.Body).Decode(&payload); err != nil {
+				t.Fatalf("decode response: %v", err)
+			}
+			assertHasKeys(t, payload, "success", "message")
+		})
+	}
+}
+
+func TestAPIContractErrorShapeForAuthFailures(t *testing.T) {
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	server := newServer(
+		testClusterReader{},
+		nil,
+		logger,
+		WithAuth(AuthConfig{
+			Enabled: true,
+			Tokens: []AuthToken{
+				{Token: "viewer-token", User: "viewer", Role: "viewer"},
+			},
+		}),
+		WithWriteActionsEnabled(true),
+	)
+	router := server.Router("")
+
+	tests := []struct {
+		name       string
+		path       string
+		authHeader string
+		wantStatus int
+	}{
+		{
+			name:       "missing token",
+			path:       "/api/pods",
+			authHeader: "",
+			wantStatus: http.StatusUnauthorized,
+		},
+		{
+			name:       "invalid token",
+			path:       "/api/pods",
+			authHeader: "Bearer invalid-token",
+			wantStatus: http.StatusUnauthorized,
+		},
+		{
+			name:       "insufficient role",
+			path:       "/api/pods",
+			authHeader: "Bearer viewer-token",
+			wantStatus: http.StatusForbidden,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, tc.path, strings.NewReader(`{"namespace":"default","name":"x","image":"nginx"}`))
+			req.Header.Set("Content-Type", "application/json")
+			if tc.authHeader != "" {
+				req.Header.Set("Authorization", tc.authHeader)
+			}
+			rr := httptest.NewRecorder()
+			router.ServeHTTP(rr, req)
+
+			if rr.Code != tc.wantStatus {
+				t.Fatalf("status code = %d, want %d", rr.Code, tc.wantStatus)
+			}
+
+			var payload map[string]any
+			if err := json.NewDecoder(rr.Body).Decode(&payload); err != nil {
+				t.Fatalf("decode response: %v", err)
+			}
+			assertHasKeys(t, payload, "error")
+			if _, ok := payload["success"]; ok {
+				t.Fatalf("error payload must not include success key: %#v", payload)
+			}
+		})
+	}
 }
 
 func assertHasKeys(t *testing.T, payload map[string]any, keys ...string) {

@@ -23,6 +23,16 @@ export default defineConfig({
       url: "http://127.0.0.1:3000/api/runtime",
       timeout: 180_000,
       reuseExistingServer: !process.env.CI,
+      env: {
+        ...process.env,
+        APP_MODE: "dev",
+        DEV_MODE: "false",
+        AUTH_ENABLED: "true",
+        AUTH_TOKENS: "viewer:viewer:e2e-viewer-token,operator:operator:e2e-operator-token,admin:admin:e2e-admin-token",
+        WRITE_ACTIONS_ENABLED: "true",
+        TERMINAL_ENABLED: "true",
+        TERMINAL_ALLOWED_PREFIXES: "kubectl,echo,pwd,ls,dir",
+      },
     },
     {
       command: "npm run dev:web -- --host 127.0.0.1 --port 5173",

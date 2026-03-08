@@ -24,6 +24,9 @@ jobs:
       - name: Verify release/version consistency
         run: npm run verify:release
 
+      - name: Verify changelog discipline
+        run: npm run verify:changelog
+
   frontend:
     runs-on: ubuntu-latest
     steps:

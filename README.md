@@ -57,6 +57,7 @@ flowchart LR
 ```
 
 More details: [Architecture](docs/ARCHITECTURE.md)
+Security references: [Security](docs/SECURITY.md), [Threat Model](docs/THREAT_MODEL.md), [Ops Verification](docs/OPERATIONS_VERIFICATION.md)
 
 ## Run locally
 
@@ -217,6 +218,7 @@ CI validates:
 - frontend lint/tests/build
 - backend tests + gofmt check
 - Playwright smoke E2E
+- Playwright auth role-matrix E2E
 - predictor lint/tests
 - release/version consistency across package, Docker, and k8s manifests
 - Docker builds (dashboard + predictor)
@@ -233,6 +235,11 @@ CI validates:
   - expected unless both role and global feature flags allow it
 - Auth in prod fails on startup:
   - set `AUTH_ENABLED=true` and provide `AUTH_TOKENS` (or secret in k8s)
+
+## Maintainer workflow
+
+- Change summary and release history are tracked in [CHANGELOG.md](CHANGELOG.md).
+- PR expectations and merge checklist are defined in [.github/pull_request_template.md](.github/pull_request_template.md).
 
 ## Screenshots
 

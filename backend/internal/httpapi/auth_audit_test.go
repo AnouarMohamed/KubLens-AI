@@ -254,6 +254,45 @@ func TestCookieMutationAllowsSameOrigin(t *testing.T) {
 	}
 }
 
+func TestCookieMutationRejectsMissingOriginAndReferer(t *testing.T) {
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	server := newServer(
+		testClusterReader{},
+		nil,
+		logger,
+		WithWriteActionsEnabled(true),
+		WithAuth(AuthConfig{
+			Enabled: true,
+			Tokens: []AuthToken{
+				{Token: "operator-token", User: "operator", Role: "operator"},
+			},
+		}),
+	)
+	router := server.Router("")
+
+	loginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(`{"token":"operator-token"}`))
+	loginReq.Header.Set("Content-Type", "application/json")
+	loginResp := httptest.NewRecorder()
+	router.ServeHTTP(loginResp, loginReq)
+	if loginResp.Code != http.StatusOK {
+		t.Fatalf("login status = %d, want 200", loginResp.Code)
+	}
+	cookies := loginResp.Result().Cookies()
+	if len(cookies) == 0 {
+		t.Fatal("expected auth cookie")
+	}
+
+	mutateReq := httptest.NewRequest(http.MethodPost, "/api/pods", strings.NewReader(`{"namespace":"default","name":"demo","image":"nginx:latest"}`))
+	mutateReq.Header.Set("Content-Type", "application/json")
+	mutateReq.AddCookie(cookies[0])
+	mutateResp := httptest.NewRecorder()
+	router.ServeHTTP(mutateResp, mutateReq)
+
+	if mutateResp.Code != http.StatusForbidden {
+		t.Fatalf("mutation status = %d, want 403", mutateResp.Code)
+	}
+}
+
 func TestStreamRejectsQueryTokenAuthentication(t *testing.T) {
 	router := newAuthTestServer().Router("")
 
