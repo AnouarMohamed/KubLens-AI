@@ -92,10 +92,10 @@ flowchart TD
 
 ## Operational endpoints
 
-| Endpoint | Description |
-|---|---|
-| `/api/healthz` | Liveness signal |
-| `/api/readyz` | Readiness + dependency checks — 503 if degraded |
-| `/api/metrics` | JSON request telemetry |
-| `/api/metrics/prometheus` | Prometheus exposition format |
-| `/api/openapi.yaml` | Published API contract |
+| Endpoint                  | Description                                     |
+| ------------------------- | ----------------------------------------------- |
+| `/api/healthz`            | Liveness signal                                 |
+| `/api/readyz`             | Readiness + dependency checks — 503 if degraded |
+| `/api/metrics`            | JSON request telemetry                          |
+| `/api/metrics/prometheus` | Prometheus exposition format                    |
+| `/api/openapi.yaml`       | Published API contract                          |
