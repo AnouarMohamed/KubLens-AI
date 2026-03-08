@@ -209,12 +209,12 @@ func (p *OpenAICompatibleProvider) Chat(ctx context.Context, req ChatRequest) (C
 }
 
 type chatCompletionsRequest struct {
-	Model       string        `json:"model"`
-	Messages    []chatMessage `json:"messages"`
-	Temperature float64       `json:"temperature,omitempty"`
-	MaxTokens   int           `json:"max_tokens,omitempty"`
+	Model       string           `json:"model"`
+	Messages    []chatMessage    `json:"messages"`
+	Temperature float64          `json:"temperature,omitempty"`
+	MaxTokens   int              `json:"max_tokens,omitempty"`
 	Tools       []toolDefinition `json:"tools,omitempty"`
-	ToolChoice  any             `json:"tool_choice,omitempty"`
+	ToolChoice  any              `json:"tool_choice,omitempty"`
 }
 
 type chatMessage struct {
@@ -242,9 +242,9 @@ type toolFunction struct {
 }
 
 type toolCall struct {
-	ID       string            `json:"id"`
-	Type     string            `json:"type"`
-	Function toolCallFunction  `json:"function"`
+	ID       string           `json:"id"`
+	Type     string           `json:"type"`
+	Function toolCallFunction `json:"function"`
 }
 
 type toolCallFunction struct {
