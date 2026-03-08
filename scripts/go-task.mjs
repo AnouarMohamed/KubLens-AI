@@ -3,9 +3,9 @@ import { mkdirSync } from "node:fs";
 import path from "node:path";
 
 const root = process.cwd();
-const cacheDir = path.join(root, ".gocache");
-const modCacheDir = path.join(root, ".gomodcache");
-const tmpDir = path.join(root, ".tmp-go");
+const cacheDir = process.env.GOCACHE || path.join(root, ".gocache");
+const modCacheDir = process.env.GOMODCACHE || path.join(root, ".gomodcache");
+const tmpDir = process.env.GOTMPDIR || path.join(root, ".tmp-go");
 
 for (const dir of [cacheDir, modCacheDir, tmpDir]) {
   mkdirSync(dir, { recursive: true });
