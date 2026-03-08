@@ -4,9 +4,64 @@ import os
 from datetime import datetime, timezone
 
 from fastapi import Depends, FastAPI, Header, HTTPException, status
+from opentelemetry import trace
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+from opentelemetry.propagate import set_global_textmap
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.sdk.trace.sampling import ParentBased, TraceIdRatioBased
+from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
 from pydantic import BaseModel, Field
 
 api = FastAPI(title="k8s-ops-predictor", version="1.0.0")
+
+
+def configure_telemetry(app: FastAPI) -> None:
+    endpoint = os.getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT") or os.getenv(
+        "OTEL_EXPORTER_OTLP_ENDPOINT", ""
+    )
+    endpoint = endpoint.strip()
+    if endpoint == "":
+        return
+
+    protocol = os.getenv("OTEL_EXPORTER_OTLP_TRACES_PROTOCOL") or os.getenv(
+        "OTEL_EXPORTER_OTLP_PROTOCOL", ""
+    )
+    protocol = protocol.strip().lower() or "grpc"
+
+    insecure_raw = os.getenv("OTEL_EXPORTER_OTLP_TRACES_INSECURE") or os.getenv(
+        "OTEL_EXPORTER_OTLP_INSECURE", "true"
+    )
+    insecure = insecure_raw.strip().lower() in {"1", "true", "yes", "on"}
+
+    service_name = os.getenv("OTEL_SERVICE_NAME", "k8s-ops-predictor").strip() or "k8s-ops-predictor"
+    sample_raw = os.getenv("OTEL_TRACES_SAMPLE_RATIO", "1.0").strip()
+    try:
+        sample_ratio = float(sample_raw)
+    except ValueError:
+        sample_ratio = 1.0
+    sample_ratio = max(0.0, min(1.0, sample_ratio))
+
+    resource = Resource.create({"service.name": service_name})
+    provider = TracerProvider(resource=resource, sampler=ParentBased(TraceIdRatioBased(sample_ratio)))
+
+    if protocol in {"http", "http/protobuf"}:
+        from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter as OTLPHTTPSpanExporter
+
+        exporter = OTLPHTTPSpanExporter(endpoint=endpoint)
+    else:
+        from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter as OTLPGRPCSpanExporter
+
+        exporter = OTLPGRPCSpanExporter(endpoint=endpoint, insecure=insecure)
+
+    provider.add_span_processor(BatchSpanProcessor(exporter))
+    trace.set_tracer_provider(provider)
+    set_global_textmap(TraceContextTextMapPropagator())
+    FastAPIInstrumentor.instrument_app(app)
+
+
+configure_telemetry(api)
 
 
 class PodSummary(BaseModel):

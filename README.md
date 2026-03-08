@@ -174,6 +174,34 @@ Leave `ASSISTANT_PROVIDER=none` to disable entirely.
 
 ---
 
+## Tracing (OpenTelemetry)
+
+The API and predictor emit OpenTelemetry traces when an OTLP endpoint is configured.
+
+Environment variables:
+
+```text
+OTEL_EXPORTER_OTLP_ENDPOINT=host:port
+OTEL_EXPORTER_OTLP_PROTOCOL=grpc
+OTEL_EXPORTER_OTLP_INSECURE=true
+OTEL_SERVICE_NAME=kubelens-backend
+OTEL_PREDICTOR_SERVICE_NAME=kubelens-predictor
+OTEL_TRACES_SAMPLE_RATIO=1
+```
+
+Kubernetes tracing overlay (includes in-cluster Jaeger):
+
+```bash
+kubectl apply -k k8s/overlays/tracing
+kubectl -n kubernetes-operations-dashboard port-forward svc/k8s-ops-jaeger 16686:16686
+```
+
+Trace expectation:
+
+- browser -> API -> k8s client -> predictor should appear as a single timeline in Jaeger.
+
+---
+
 ## Configuration reference
 
 Copy `.env.example` to `.env` and set what you need. Key variables:

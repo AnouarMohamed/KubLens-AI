@@ -41,6 +41,7 @@ type Config struct {
 	RateLimit RateLimitConfig
 	Audit     AuditConfig
 	Alerts    AlertsConfig
+	Tracing   TracingConfig
 
 	WriteActionsEnabled  bool
 	AnonymousPermissions []string
@@ -93,6 +94,14 @@ type AlertsConfig struct {
 	SlackWebhookURL     string
 	PagerDutyEventsURL  string
 	PagerDutyRoutingKey string
+}
+
+type TracingConfig struct {
+	Endpoint    string
+	Protocol    string
+	Insecure    bool
+	ServiceName string
+	SampleRatio float64
 }
 
 type profile struct {
@@ -178,6 +187,36 @@ func Load() (Config, error) {
 		SlackWebhookURL:     strings.TrimSpace(os.Getenv("SLACK_WEBHOOK_URL")),
 		PagerDutyEventsURL:  strings.TrimSpace(defaultIfEmpty(os.Getenv("PAGERDUTY_EVENTS_URL"), "https://events.pagerduty.com/v2/enqueue")),
 		PagerDutyRoutingKey: strings.TrimSpace(os.Getenv("PAGERDUTY_ROUTING_KEY")),
+	}
+
+	tracingEndpoint := firstNonEmpty(
+		os.Getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"),
+		os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"),
+	)
+	tracingProtocol := firstNonEmpty(
+		os.Getenv("OTEL_EXPORTER_OTLP_TRACES_PROTOCOL"),
+		os.Getenv("OTEL_EXPORTER_OTLP_PROTOCOL"),
+	)
+	tracingInsecure := parseBoolDefault(
+		firstNonEmpty(
+			os.Getenv("OTEL_EXPORTER_OTLP_TRACES_INSECURE"),
+			os.Getenv("OTEL_EXPORTER_OTLP_INSECURE"),
+		),
+		true,
+	)
+	tracingService := defaultIfEmpty(strings.TrimSpace(os.Getenv("OTEL_SERVICE_NAME")), "kubelens-backend")
+	tracingSample := parseFloatDefault(os.Getenv("OTEL_TRACES_SAMPLE_RATIO"), 1.0)
+	if tracingSample < 0 {
+		tracingSample = 0
+	} else if tracingSample > 1 {
+		tracingSample = 1
+	}
+	cfg.Tracing = TracingConfig{
+		Endpoint:    strings.TrimSpace(tracingEndpoint),
+		Protocol:    strings.TrimSpace(tracingProtocol),
+		Insecure:    tracingInsecure,
+		ServiceName: tracingService,
+		SampleRatio: tracingSample,
 	}
 
 	cfg.WriteActionsEnabled = parseBoolDefault(os.Getenv("WRITE_ACTIONS_ENABLED"), p.writeActions)
@@ -432,4 +471,13 @@ func defaultIfEmpty(value, fallback string) string {
 		return fallback
 	}
 	return value
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
 }

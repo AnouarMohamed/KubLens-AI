@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: k8s-ops-jaeger
+  namespace: kubernetes-operations-dashboard
+  labels:
+    app.kubernetes.io/name: k8s-ops-jaeger
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: k8s-ops-jaeger
+  ports:
+    - name: ui
+      port: 16686
+      targetPort: ui
+    - name: otlp-grpc
+      port: 4317
+      targetPort: otlp-grpc
+    - name: otlp-http
+      port: 4318
+      targetPort: otlp-http

@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"net/http"
 	"strings"
 	"sync"
 	"time"
 
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"golang.org/x/sync/singleflight"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
@@ -80,6 +82,9 @@ func NewService(kubeconfigData string) (*Service, error) {
 	restConfig, err := clientcmd.RESTConfigFromKubeConfig(rawConfig)
 	if err != nil {
 		return svc, fmt.Errorf("invalid kubeconfig payload, using mock mode: %w", err)
+	}
+	restConfig.WrapTransport = func(rt http.RoundTripper) http.RoundTripper {
+		return otelhttp.NewTransport(rt)
 	}
 
 	clientset, err := kubernetes.NewForConfig(restConfig)

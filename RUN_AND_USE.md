@@ -93,14 +93,34 @@ kubectl apply -k k8s/overlays/demo
 kubectl apply -k k8s/overlays/prod
 ```
 
-## 9) Troubleshooting
+## 9) Tracing (optional)
+
+Set OTLP exporter env vars (local or deployment):
+
+```text
+OTEL_EXPORTER_OTLP_ENDPOINT=host:port
+OTEL_EXPORTER_OTLP_PROTOCOL=grpc
+OTEL_EXPORTER_OTLP_INSECURE=true
+OTEL_SERVICE_NAME=kubelens-backend
+OTEL_PREDICTOR_SERVICE_NAME=kubelens-predictor
+OTEL_TRACES_SAMPLE_RATIO=1
+```
+
+Kubernetes tracing overlay (includes Jaeger):
+
+```bash
+kubectl apply -k k8s/overlays/tracing
+kubectl -n kubernetes-operations-dashboard port-forward svc/k8s-ops-jaeger 16686:16686
+```
+
+## 10) Troubleshooting
 
 - `403` on write endpoints: role or global feature gate is blocking
 - `N/A` metrics: Metrics Server missing/unhealthy
 - predictions fallback source: predictor unavailable
 - startup error in prod mode: missing `AUTH_TOKENS` with `AUTH_ENABLED=true`
 
-## 10) Operational endpoints
+## 11) Operational endpoints
 
 - Liveness: `GET /api/healthz`
 - Readiness with dependency checks: `GET /api/readyz`

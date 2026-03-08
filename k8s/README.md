@@ -8,6 +8,7 @@ This directory uses a **base + overlays** structure.
 - `overlays/dev`: development profile (operator RBAC + dev config)
 - `overlays/demo`: read-focused demo profile (readonly RBAC)
 - `overlays/prod`: production profile (auth required + stricter defaults)
+- `overlays/tracing`: demo profile with OpenTelemetry wired to the in-cluster Jaeger backend
 - `secret.example.yaml`: secrets template
 
 Each overlay includes explicit RBAC manifests (`clusterrole.yaml`, `clusterrolebinding.yaml`) so `kubectl kustomize` and CI validation work with root-only load restrictions.
@@ -47,12 +48,25 @@ kubectl apply -f k8s/secret.yaml
 kubectl apply -k k8s/overlays/prod
 ```
 
+### Tracing overlay
+
+```bash
+kubectl apply -k k8s/overlays/tracing
+```
+
+Jaeger UI access (port-forward):
+
+```bash
+kubectl -n kubernetes-operations-dashboard port-forward svc/k8s-ops-jaeger 16686:16686
+```
+
 ## Validate manifests locally
 
 ```bash
 kubectl kustomize k8s/overlays/dev > /dev/null
 kubectl kustomize k8s/overlays/demo > /dev/null
 kubectl kustomize k8s/overlays/prod > /dev/null
+kubectl kustomize k8s/overlays/tracing > /dev/null
 ```
 
 CI also validates rendered manifests with `kubeconform`.

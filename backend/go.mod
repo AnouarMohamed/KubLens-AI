@@ -4,6 +4,10 @@ go 1.25.0
 
 require (
 	github.com/go-chi/chi/v5 v5.2.3
+	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.49.0
+	go.opentelemetry.io/otel v1.24.0
+	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.24.0
+	go.opentelemetry.io/otel/sdk v1.24.0
 	golang.org/x/sync v0.19.0
 	k8s.io/api v0.34.1
 	k8s.io/apimachinery v0.34.1

@@ -1,10 +1,12 @@
 package bootstrap
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"kubelens-backend/internal/ai"
@@ -12,17 +14,30 @@ import (
 	"kubelens-backend/internal/cluster"
 	"kubelens-backend/internal/config"
 	"kubelens-backend/internal/httpapi"
+	"kubelens-backend/internal/observability"
 	"kubelens-backend/internal/rag"
 )
 
 type Result struct {
-	Server   *http.Server
-	Warnings []string
+	Server          *http.Server
+	Warnings        []string
+	ShutdownTracing func(context.Context) error
 }
 
 func Build(cfg config.Config) (Result, error) {
-	clusterSvc, initErr := cluster.NewService(cfg.Cluster.KubeconfigData)
 	warnings := make([]string, 0, 8)
+
+	shutdownTracing := func(context.Context) error { return nil }
+	if strings.TrimSpace(cfg.Tracing.Endpoint) != "" {
+		shutdown, err := observability.InitTracing(context.Background(), cfg.Tracing)
+		if err != nil {
+			warnings = append(warnings, fmt.Sprintf("tracing init warning: %v", err))
+		} else {
+			shutdownTracing = shutdown
+		}
+	}
+
+	clusterSvc, initErr := cluster.NewService(cfg.Cluster.KubeconfigData)
 	if initErr != nil {
 		warnings = append(warnings, fmt.Sprintf("cluster initialization warning: %v", initErr))
 	}
@@ -91,8 +106,9 @@ func Build(cfg config.Config) (Result, error) {
 	}
 
 	return Result{
-		Server:   server,
-		Warnings: warnings,
+		Server:          server,
+		Warnings:        warnings,
+		ShutdownTracing: shutdownTracing,
 	}, nil
 }
 

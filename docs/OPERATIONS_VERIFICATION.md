@@ -68,3 +68,11 @@ Expected:
 
 - Core navigation smoke passes
 - Auth role matrix checks pass (viewer/operator/admin policy behavior)
+
+## 7. Tracing verification (optional)
+
+If OTEL export is enabled:
+
+1. Open the Jaeger UI and select service `kubelens-backend`.
+2. Trigger a prediction request (`GET /api/predictions`).
+3. Verify the trace shows browser → API → k8s client → predictor as a single timeline.

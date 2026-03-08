@@ -10,6 +10,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 
 	"kubelens-backend/internal/ai"
 	"kubelens-backend/internal/model"
@@ -269,5 +270,15 @@ func (s *Server) Router(distDir string) http.Handler {
 	})
 
 	attachStatic(r, distDir)
-	return r
+	return otelhttp.NewHandler(
+		r,
+		"http.server",
+		otelhttp.WithSpanNameFormatter(func(operation string, r *http.Request) string {
+			route := routePattern(r)
+			if route == "" {
+				route = r.URL.Path
+			}
+			return r.Method + " " + route
+		}),
+	)
 }

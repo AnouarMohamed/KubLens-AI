@@ -11,6 +11,10 @@ import (
 	"strings"
 	"time"
 
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
+
 	"kubelens-backend/internal/model"
 )
 
@@ -44,7 +48,10 @@ func newPredictorClient(baseURL string, timeout time.Duration, sharedSecret stri
 	return &predictorClient{
 		baseURL:      strings.TrimRight(strings.TrimSpace(baseURL), "/"),
 		sharedSecret: strings.TrimSpace(sharedSecret),
-		client:       &http.Client{Timeout: timeout},
+		client: &http.Client{
+			Timeout:   timeout,
+			Transport: otelhttp.NewTransport(http.DefaultTransport),
+		},
 	}
 }
 
@@ -62,6 +69,7 @@ func (p *predictorClient) Predict(ctx context.Context, input predictorRequest) (
 	if p.sharedSecret != "" {
 		req.Header.Set("X-Predictor-Secret", p.sharedSecret)
 	}
+	otel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(req.Header))
 
 	resp, err := p.client.Do(req)
 	if err != nil {
