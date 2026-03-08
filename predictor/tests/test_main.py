@@ -1,5 +1,5 @@
 from fastapi.testclient import TestClient
-from predictor.app.main import api
+from predictor.app.main import K8sEvent, api, confidence_from_evidence, count_resource_warning_events
 
 client = TestClient(api)
 
@@ -85,3 +85,48 @@ def test_predict_requires_shared_secret_when_configured(monkeypatch) -> None:
     authorized = client.post("/predict", json=payload, headers={"X-Predictor-Secret": "secret-123"})
     assert authorized.status_code == 200
     monkeypatch.delenv("PREDICTOR_SHARED_SECRET", raising=False)
+
+
+def test_confidence_from_evidence_rewards_richer_signals() -> None:
+    sparse = confidence_from_evidence(
+        strong_status=False,
+        signal_count=1,
+        metric_known=0,
+        metric_signal_count=0,
+        warning_matches=0,
+        restart_signal=False,
+    )
+    rich = confidence_from_evidence(
+        strong_status=True,
+        signal_count=4,
+        metric_known=2,
+        metric_signal_count=2,
+        warning_matches=3,
+        restart_signal=True,
+    )
+
+    assert rich > sparse
+
+
+def test_count_resource_warning_events_matches_message_and_count() -> None:
+    events = [
+        K8sEvent(
+            type="Warning",
+            reason="BackOff",
+            age="1m",
+            **{"from": "kubelet"},
+            message="pod payment-gateway in namespace production restarted repeatedly",
+            count=3,
+        ),
+        K8sEvent(
+            type="Warning",
+            reason="Failed",
+            age="2m",
+            **{"from": "kubelet"},
+            message="node node-worker-3 kubelet not ready",
+            count=2,
+        ),
+    ]
+
+    assert count_resource_warning_events(events, "payment-gateway", "production") == 3
+    assert count_resource_warning_events(events, "node-worker-3", None) == 2

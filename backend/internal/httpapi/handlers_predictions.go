@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math"
 	"net/http"
 	"sort"
 	"strconv"
@@ -144,11 +143,15 @@ func (s *Server) invalidatePredictionsCache() {
 
 func buildLocalPredictions(pods []model.PodSummary, nodes []model.NodeSummary, events []model.K8sEvent, now time.Time) model.PredictionsResult {
 	items := make([]model.IncidentPrediction, 0, len(pods)+len(nodes))
-	eventPressure := countWarningEvents(events)
 
 	for _, pod := range pods {
 		score := 0
 		signals := make([]model.PredictionSignal, 0, 4)
+		resourceWarnings := countResourceWarningEvents(events, pod.Name, pod.Namespace)
+		cpuMilli, cpuKnown := parseCPUMilli(pod.CPU)
+		memMi, memKnown := parseMemoryMi(pod.Memory)
+		cpuSignal := false
+		memSignal := false
 
 		switch pod.Status {
 		case model.PodStatusFailed:
@@ -171,18 +174,20 @@ func buildLocalPredictions(pods []model.PodSummary, nodes []model.NodeSummary, e
 			signals = append(signals, model.PredictionSignal{Key: "restarts", Value: strconv.Itoa(int(pod.Restarts))})
 		}
 
-		if cpuMilli := parseCPUMilli(pod.CPU); cpuMilli >= 400 {
+		if cpuKnown && cpuMilli >= 400 {
 			score += 10
 			signals = append(signals, model.PredictionSignal{Key: "cpu", Value: pod.CPU})
+			cpuSignal = true
 		}
 
-		if memMi := parseMemoryMi(pod.Memory); memMi >= 512 {
+		if memKnown && memMi >= 512 {
 			score += 10
 			signals = append(signals, model.PredictionSignal{Key: "memory", Value: pod.Memory})
+			memSignal = true
 		}
 
-		if eventPressure > 0 && pod.Status != model.PodStatusRunning {
-			score += minInt(12, eventPressure/2)
+		if resourceWarnings > 0 && pod.Status != model.PodStatusRunning {
+			score += minInt(12, resourceWarnings*2)
 		}
 
 		score = clampInt(score, 0, 100)
@@ -197,7 +202,14 @@ func buildLocalPredictions(pods []model.PodSummary, nodes []model.NodeSummary, e
 			recommendation = "Investigate crash causes, validate probes, and consider rollback to last healthy revision."
 		}
 
-		confidence := clampInt(45+int(math.Round(float64(score)*0.45)), 50, 95)
+		confidence := confidenceFromEvidence(evidenceProfile{
+			strongStatus:      pod.Status == model.PodStatusFailed || pod.Status == model.PodStatusPending,
+			signalCount:       len(signals),
+			metricKnown:       boolToInt(cpuKnown) + boolToInt(memKnown),
+			metricSignalCount: boolToInt(cpuSignal) + boolToInt(memSignal),
+			warningMatches:    resourceWarnings,
+			restartSignal:     pod.Restarts > 0,
+		})
 		items = append(items, model.IncidentPrediction{
 			ID:             "pod-" + pod.ID,
 			ResourceKind:   "Pod",
@@ -214,20 +226,31 @@ func buildLocalPredictions(pods []model.PodSummary, nodes []model.NodeSummary, e
 	for _, node := range nodes {
 		score := 0
 		signals := make([]model.PredictionSignal, 0, 3)
+		cpu, cpuKnown := parsePercent(node.CPUUsage)
+		mem, memKnown := parsePercent(node.MemUsage)
+		resourceWarnings := countResourceWarningEvents(events, node.Name, "")
+		cpuSignal := false
+		memSignal := false
 
 		if node.Status == model.NodeStatusNotReady {
 			score += 75
 			signals = append(signals, model.PredictionSignal{Key: "status", Value: "NotReady"})
 		}
 
-		if cpu, ok := parsePercent(node.CPUUsage); ok && cpu >= 90 {
+		if cpuKnown && cpu >= 90 {
 			score += 20
 			signals = append(signals, model.PredictionSignal{Key: "cpuUsage", Value: node.CPUUsage})
+			cpuSignal = true
 		}
 
-		if mem, ok := parsePercent(node.MemUsage); ok && mem >= 90 {
+		if memKnown && mem >= 90 {
 			score += 20
 			signals = append(signals, model.PredictionSignal{Key: "memUsage", Value: node.MemUsage})
+			memSignal = true
+		}
+
+		if resourceWarnings > 0 && node.Status != model.NodeStatusReady {
+			score += minInt(10, resourceWarnings*2)
 		}
 
 		score = clampInt(score, 0, 100)
@@ -235,7 +258,13 @@ func buildLocalPredictions(pods []model.PodSummary, nodes []model.NodeSummary, e
 			continue
 		}
 
-		confidence := clampInt(50+score/2, 55, 96)
+		confidence := confidenceFromEvidence(evidenceProfile{
+			strongStatus:      node.Status == model.NodeStatusNotReady,
+			signalCount:       len(signals),
+			metricKnown:       boolToInt(cpuKnown) + boolToInt(memKnown),
+			metricSignalCount: boolToInt(cpuSignal) + boolToInt(memSignal),
+			warningMatches:    resourceWarnings,
+		})
 		items = append(items, model.IncidentPrediction{
 			ID:             "node-" + strings.ToLower(node.Name),
 			ResourceKind:   "Node",
@@ -266,48 +295,101 @@ func buildLocalPredictions(pods []model.PodSummary, nodes []model.NodeSummary, e
 	}
 }
 
-func countWarningEvents(events []model.K8sEvent) int {
+func countResourceWarningEvents(events []model.K8sEvent, resource, namespace string) int {
+	resourceName := strings.ToLower(strings.TrimSpace(resource))
+	namespaceName := strings.ToLower(strings.TrimSpace(namespace))
 	total := 0
+
 	for _, event := range events {
 		eventType := strings.ToLower(strings.TrimSpace(event.Type))
 		reason := strings.ToLower(strings.TrimSpace(event.Reason))
-		if eventType == "warning" {
-			total++
+		if eventType != "warning" && reason != "backoff" && reason != "failed" && reason != "unhealthy" && reason != "oomkilled" {
 			continue
 		}
-		if reason == "backoff" || reason == "failed" || reason == "unhealthy" || reason == "oomkilled" {
+
+		haystack := strings.ToLower(strings.TrimSpace(event.Reason + " " + event.Message + " " + event.From))
+		resourceMatch := resourceName != "" && strings.Contains(haystack, resourceName)
+		namespaceMatch := namespaceName != "" && strings.Contains(haystack, namespaceName)
+		if !resourceMatch && !namespaceMatch {
+			continue
+		}
+
+		if event.Count > 1 {
+			total += int(event.Count)
+		} else {
 			total++
 		}
 	}
+
 	return total
 }
 
-func parseCPUMilli(raw string) int {
+type evidenceProfile struct {
+	strongStatus      bool
+	signalCount       int
+	metricKnown       int
+	metricSignalCount int
+	warningMatches    int
+	restartSignal     bool
+}
+
+func confidenceFromEvidence(profile evidenceProfile) int {
+	confidence := 35
+	if profile.strongStatus {
+		confidence += 18
+	}
+
+	confidence += minInt(24, profile.signalCount*6)
+	confidence += minInt(16, profile.metricKnown*8)
+	confidence += minInt(10, profile.metricSignalCount*5)
+	confidence += minInt(12, profile.warningMatches*3)
+	if profile.restartSignal {
+		confidence += 6
+	}
+
+	if profile.signalCount <= 1 {
+		confidence -= 8
+	}
+	if profile.metricKnown == 0 && !profile.strongStatus {
+		confidence -= 10
+	}
+
+	return clampInt(confidence, 35, 96)
+}
+
+func boolToInt(value bool) int {
+	if value {
+		return 1
+	}
+	return 0
+}
+
+func parseCPUMilli(raw string) (int, bool) {
 	value := strings.TrimSpace(strings.ToLower(raw))
 	if value == "" || value == "n/a" {
-		return 0
+		return 0, false
 	}
 
 	if strings.HasSuffix(value, "m") {
 		numeric := strings.TrimSuffix(value, "m")
 		parsed, err := strconv.ParseFloat(numeric, 64)
 		if err != nil {
-			return 0
+			return 0, false
 		}
-		return int(parsed)
+		return int(parsed), true
 	}
 
 	parsed, err := strconv.ParseFloat(value, 64)
 	if err != nil {
-		return 0
+		return 0, false
 	}
-	return int(parsed * 1000)
+	return int(parsed * 1000), true
 }
 
-func parseMemoryMi(raw string) int {
+func parseMemoryMi(raw string) (int, bool) {
 	value := strings.TrimSpace(strings.ToLower(raw))
 	if value == "" || value == "n/a" {
-		return 0
+		return 0, false
 	}
 
 	switch {
@@ -315,31 +397,31 @@ func parseMemoryMi(raw string) int {
 		numeric := strings.TrimSuffix(value, "mi")
 		parsed, err := strconv.ParseFloat(numeric, 64)
 		if err != nil {
-			return 0
+			return 0, false
 		}
-		return int(parsed)
+		return int(parsed), true
 	case strings.HasSuffix(value, "gi"):
 		numeric := strings.TrimSuffix(value, "gi")
 		parsed, err := strconv.ParseFloat(numeric, 64)
 		if err != nil {
-			return 0
+			return 0, false
 		}
-		return int(parsed * 1024)
+		return int(parsed * 1024), true
 	case strings.HasSuffix(value, "ki"):
 		numeric := strings.TrimSuffix(value, "ki")
 		parsed, err := strconv.ParseFloat(numeric, 64)
 		if err != nil {
-			return 0
+			return 0, false
 		}
-		return int(parsed / 1024)
+		return int(parsed / 1024), true
 	default:
 		numeric := strings.TrimRight(value, "b")
 		parsed, err := strconv.ParseFloat(numeric, 64)
 		if err != nil {
-			return 0
+			return 0, false
 		}
 		// If no explicit unit is provided, treat as bytes.
-		return int(parsed / (1024 * 1024))
+		return int(parsed / (1024 * 1024)), true
 	}
 }
 

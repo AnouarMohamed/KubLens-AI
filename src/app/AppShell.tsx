@@ -22,6 +22,9 @@ const Audit = lazy(() => import("../views/audit"));
 const Pods = lazy(() => import("../views/pods"));
 const Deployments = lazy(() => import("../views/deployments"));
 const Nodes = lazy(() => import("../views/nodes"));
+const Events = lazy(() => import("../views/events"));
+const Namespaces = lazy(() => import("../views/namespaces"));
+const RBAC = lazy(() => import("../views/rbac"));
 const Diagnostics = lazy(() => import("../views/diagnostics"));
 const Predictions = lazy(() => import("../views/predictions"));
 const OpsAssistant = lazy(() => import("../views/opsassistant"));
@@ -180,6 +183,24 @@ function renderView(view: View): ReactElement {
       return (
         <Suspense fallback={<ViewLoadingState label="Loading nodes..." />}>
           <Nodes />
+        </Suspense>
+      );
+    case "events":
+      return (
+        <Suspense fallback={<ViewLoadingState label="Loading events..." />}>
+          <Events />
+        </Suspense>
+      );
+    case "namespaces":
+      return (
+        <Suspense fallback={<ViewLoadingState label="Loading namespaces..." />}>
+          <Namespaces />
+        </Suspense>
+      );
+    case "rbac":
+      return (
+        <Suspense fallback={<ViewLoadingState label="Loading RBAC..." />}>
+          <RBAC />
         </Suspense>
       );
     case "metrics":

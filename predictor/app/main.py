@@ -86,14 +86,16 @@ def require_predictor_secret(
 
 @api.post("/predict", response_model=PredictionResponse)
 def predict(request: PredictionRequest, _: None = Depends(require_predictor_secret)) -> PredictionResponse:
-    warning_events = count_warning_events(request.events)
     items: list[IncidentPrediction] = []
 
     for pod in request.pods:
         score = 0
         signals: list[PredictionSignal] = []
-
         status = pod.status.lower().strip()
+        resource_warnings = count_resource_warning_events(request.events, pod.name, pod.namespace)
+        cpu_milli, cpu_known = parse_cpu_milli(pod.cpu)
+        mem_mi, mem_known = parse_memory_mi(pod.memory)
+
         if status == "failed":
             score += 62
             signals.append(PredictionSignal(key="status", value="Failed"))
@@ -108,18 +110,16 @@ def predict(request: PredictionRequest, _: None = Depends(require_predictor_secr
             score += min(42, pod.restarts * 8)
             signals.append(PredictionSignal(key="restarts", value=str(pod.restarts)))
 
-        cpu_milli = parse_cpu_milli(pod.cpu)
         if cpu_milli >= 400:
             score += 10
             signals.append(PredictionSignal(key="cpu", value=pod.cpu))
 
-        mem_mi = parse_memory_mi(pod.memory)
         if mem_mi >= 512:
             score += 10
             signals.append(PredictionSignal(key="memory", value=pod.memory))
 
-        if warning_events > 0 and status != "running":
-            score += min(12, warning_events // 2)
+        if resource_warnings > 0 and status != "running":
+            score += min(12, resource_warnings * 2)
 
         score = clamp(score, 0, 100)
         if score < 35:
@@ -131,7 +131,14 @@ def predict(request: PredictionRequest, _: None = Depends(require_predictor_secr
         elif status == "failed":
             recommendation = "Check crash loops, roll back unstable changes, and validate readiness probes."
 
-        confidence = clamp(round(45 + score * 0.45), 50, 95)
+        confidence = confidence_from_evidence(
+            strong_status=status in {"failed", "pending"},
+            signal_count=len(signals),
+            metric_known=int(cpu_known) + int(mem_known),
+            metric_signal_count=int(cpu_milli >= 400) + int(mem_mi >= 512),
+            warning_matches=resource_warnings,
+            restart_signal=pod.restarts > 0,
+        )
         items.append(
             IncidentPrediction(
                 id=f"pod-{pod.id}",
@@ -149,26 +156,37 @@ def predict(request: PredictionRequest, _: None = Depends(require_predictor_secr
     for node in request.nodes:
         score = 0
         signals: list[PredictionSignal] = []
+        cpu_pct, cpu_known = parse_percent(node.cpuUsage)
+        mem_pct, mem_known = parse_percent(node.memUsage)
+        resource_warnings = count_resource_warning_events(request.events, node.name, None)
 
         if node.status.strip().lower() == "notready":
             score += 75
             signals.append(PredictionSignal(key="status", value="NotReady"))
 
-        cpu_pct = parse_percent(node.cpuUsage)
-        if cpu_pct >= 90:
+        if cpu_known and cpu_pct >= 90:
             score += 20
             signals.append(PredictionSignal(key="cpuUsage", value=node.cpuUsage))
 
-        mem_pct = parse_percent(node.memUsage)
-        if mem_pct >= 90:
+        if mem_known and mem_pct >= 90:
             score += 20
             signals.append(PredictionSignal(key="memUsage", value=node.memUsage))
+
+        if resource_warnings > 0 and node.status.strip().lower() != "ready":
+            score += min(10, resource_warnings * 2)
 
         score = clamp(score, 0, 100)
         if score < 45:
             continue
 
-        confidence = clamp(50 + score // 2, 55, 96)
+        confidence = confidence_from_evidence(
+            strong_status=node.status.strip().lower() == "notready",
+            signal_count=len(signals),
+            metric_known=int(cpu_known) + int(mem_known),
+            metric_signal_count=int(cpu_known and cpu_pct >= 90) + int(mem_known and mem_pct >= 90),
+            warning_matches=resource_warnings,
+            restart_signal=False,
+        )
         items.append(
             IncidentPrediction(
                 id=f"node-{node.name.lower()}",
@@ -192,57 +210,93 @@ def predict(request: PredictionRequest, _: None = Depends(require_predictor_secr
     )
 
 
-def count_warning_events(events: list[K8sEvent]) -> int:
-    warning_reasons = {"backoff", "failed", "unhealthy", "oomkilled"}
+def count_resource_warning_events(events: list[K8sEvent], resource: str, namespace: str | None) -> int:
+    resource_name = resource.strip().lower()
+    namespace_name = (namespace or "").strip().lower()
     total = 0
+
     for event in events:
-        if event.type.strip().lower() == "warning":
-            total += 1
+        event_type = event.type.strip().lower()
+        event_reason = event.reason.strip().lower()
+        if event_type != "warning" and event_reason not in {"backoff", "failed", "unhealthy", "oomkilled"}:
             continue
-        if event.reason.strip().lower() in warning_reasons:
-            total += 1
+
+        haystack = f"{event.reason} {event.message} {event.from_}".lower()
+        if resource_name not in haystack and (namespace_name == "" or namespace_name not in haystack):
+            continue
+
+        total += max(1, event.count or 1)
+
     return total
 
 
-def parse_cpu_milli(value: str) -> int:
+def confidence_from_evidence(
+    *,
+    strong_status: bool,
+    signal_count: int,
+    metric_known: int,
+    metric_signal_count: int,
+    warning_matches: int,
+    restart_signal: bool,
+) -> int:
+    confidence = 35
+    if strong_status:
+        confidence += 18
+
+    confidence += min(24, signal_count * 6)
+    confidence += min(16, metric_known * 8)
+    confidence += min(10, metric_signal_count * 5)
+    confidence += min(12, warning_matches * 3)
+    if restart_signal:
+        confidence += 6
+
+    if signal_count <= 1:
+        confidence -= 8
+    if metric_known == 0 and not strong_status:
+        confidence -= 10
+
+    return clamp(confidence, 35, 96)
+
+
+def parse_cpu_milli(value: str) -> tuple[int, bool]:
     raw = value.strip().lower()
     if not raw or raw == "n/a":
-        return 0
+        return 0, False
     try:
         if raw.endswith("m"):
-            return int(float(raw[:-1] or 0))
-        return int(float(raw) * 1000)
+            return int(float(raw[:-1] or 0)), True
+        return int(float(raw) * 1000), True
     except ValueError:
-        return 0
+        return 0, False
 
 
-def parse_memory_mi(value: str) -> int:
+def parse_memory_mi(value: str) -> tuple[int, bool]:
     raw = value.strip().lower()
     if not raw or raw == "n/a":
-        return 0
+        return 0, False
     try:
         if raw.endswith("mi"):
-            return int(float(raw[:-2] or 0))
+            return int(float(raw[:-2] or 0)), True
         if raw.endswith("gi"):
-            return int(float(raw[:-2] or 0) * 1024)
+            return int(float(raw[:-2] or 0) * 1024), True
         if raw.endswith("ki"):
-            return int(float(raw[:-2] or 0) / 1024)
+            return int(float(raw[:-2] or 0) / 1024), True
         if raw.endswith("b"):
-            return int(float(raw[:-1] or 0) / (1024 * 1024))
+            return int(float(raw[:-1] or 0) / (1024 * 1024)), True
     except ValueError:
-        return 0
-    return 0
+        return 0, False
+    return 0, False
 
 
-def parse_percent(value: str) -> float:
+def parse_percent(value: str) -> tuple[float, bool]:
     raw = value.strip().lower().replace("%", "")
     if not raw or raw == "n/a":
-        return 0.0
+        return 0.0, False
     try:
         parsed = float(raw)
     except ValueError:
-        return 0.0
-    return max(0.0, min(100.0, parsed))
+        return 0.0, False
+    return max(0.0, min(100.0, parsed)), True
 
 
 def clamp(value: int, low: int, high: int) -> int:
