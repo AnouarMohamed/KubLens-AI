@@ -1,6 +1,6 @@
 module kubelens-backend
 
-go 1.25.0
+go 1.24.0
 
 require (
 	github.com/coreos/go-oidc/v3 v3.17.0
