@@ -3,6 +3,7 @@ package httpapi
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -15,18 +16,33 @@ import (
 const maxAssistantRequestBody = 1 << 20 // 1 MiB
 
 func decodeJSONBody(r *http.Request, dst any) error {
+	return decodeJSONBodyWithDebug(r, dst, false)
+}
+
+func decodeJSONBodyWithDebug(r *http.Request, dst any, debug bool) error {
 	limited := io.LimitReader(r.Body, maxAssistantRequestBody)
 	decoder := json.NewDecoder(limited)
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(dst); err != nil {
-		return errors.New("invalid JSON body")
+		return invalidJSONError(err, debug)
 	}
 
 	var trailing json.RawMessage
 	if err := decoder.Decode(&trailing); err != io.EOF {
-		return errors.New("invalid JSON body")
+		return invalidJSONError(err, debug)
 	}
 	return nil
+}
+
+func invalidJSONError(err error, debug bool) error {
+	if !debug {
+		return errors.New("invalid JSON body")
+	}
+	return fmt.Errorf("invalid JSON body: %w", err)
+}
+
+func (s *Server) decodeJSONBody(r *http.Request, dst any) error {
+	return decodeJSONBodyWithDebug(r, dst, s.runtime.Mode != "prod")
 }
 
 func writeJSON(w http.ResponseWriter, status int, payload any) {
@@ -50,12 +66,12 @@ func attachStatic(r chi.Router, distDir string) {
 
 	fileServer := http.FileServer(http.Dir(distDir))
 	r.Get("/*", func(w http.ResponseWriter, req *http.Request) {
-		trimmed := strings.TrimPrefix(req.URL.Path, "/")
-		if strings.HasPrefix(trimmed, "api/") {
+		if isAPIPath(req.URL.Path) {
 			writeError(w, http.StatusNotFound, "Not found")
 			return
 		}
 
+		trimmed := strings.TrimPrefix(req.URL.Path, "/")
 		if trimmed == "" {
 			http.ServeFile(w, req, indexFile)
 			return

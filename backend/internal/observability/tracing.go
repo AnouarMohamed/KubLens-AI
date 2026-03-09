@@ -2,6 +2,8 @@ package observability
 
 import (
 	"context"
+	"log/slog"
+	"math"
 	"strings"
 
 	"go.opentelemetry.io/otel"
@@ -51,6 +53,7 @@ func InitTracing(ctx context.Context, cfg config.TracingConfig) (func(context.Co
 		exporter, err = otlptracegrpc.New(ctx, opts...)
 	}
 	if err != nil {
+		slog.Warn("tracing exporter initialization failed; tracing disabled", "endpoint", endpoint, "protocol", protocol, "error", err.Error())
 		return nil, err
 	}
 
@@ -65,12 +68,7 @@ func InitTracing(ctx context.Context, cfg config.TracingConfig) (func(context.Co
 		return nil, err
 	}
 
-	sampleRatio := cfg.SampleRatio
-	if sampleRatio < 0 {
-		sampleRatio = 0
-	} else if sampleRatio > 1 {
-		sampleRatio = 1
-	}
+	sampleRatio := math.Max(0, math.Min(1, cfg.SampleRatio))
 	sampler := sdktrace.ParentBased(sdktrace.TraceIDRatioBased(sampleRatio))
 
 	tp := sdktrace.NewTracerProvider(

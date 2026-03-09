@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -16,6 +17,7 @@ import (
 )
 
 const streamHeartbeatInterval = 20 * time.Second
+const streamSnapshotEventLimit = 32 // Keeps initial snapshot useful without over-buffering; too low drops context, too high increases memory/network burst.
 
 func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
 	flusher, ok := w.(http.Flusher)
@@ -123,7 +125,7 @@ func (s *Server) sendInitialStreamSnapshot(ctx context.Context, send func(events
 		Payload:   stats,
 	})
 
-	clusterEvents := trimEvents(s.cluster.ListClusterEvents(ctx), 32)
+	clusterEvents := trimEvents(s.cluster.ListClusterEvents(ctx), streamSnapshotEventLimit)
 	if len(clusterEvents) > 0 {
 		_ = send(events.Event{
 			Type:      "cluster_events",
@@ -139,10 +141,8 @@ func writeSSE(w http.ResponseWriter, event string, payload any) error {
 		return err
 	}
 
-	if _, err := w.Write([]byte("event: " + sanitizeSSEField(event) + "\n")); err != nil {
-		return err
-	}
-	if _, err := w.Write([]byte("data: " + string(encoded) + "\n\n")); err != nil {
+	// Emit event/data in a single write to avoid partially written SSE frames.
+	if _, err := fmt.Fprintf(w, "event: %s\ndata: %s\n\n", sanitizeSSEField(event), encoded); err != nil {
 		return err
 	}
 	return nil
@@ -158,7 +158,7 @@ func sanitizeSSEField(value string) string {
 
 func trimEvents(items []model.K8sEvent, limit int) []model.K8sEvent {
 	if limit <= 0 || len(items) <= limit {
-		return append([]model.K8sEvent(nil), items...)
+		return items
 	}
 	return append([]model.K8sEvent(nil), items[:limit]...)
 }

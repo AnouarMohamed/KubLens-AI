@@ -14,6 +14,8 @@ import (
 	"kubelens-backend/internal/config"
 )
 
+const gracefulShutdownTimeout = 10 * time.Second
+
 func main() {
 	cfg, err := config.Load()
 	if err != nil {
@@ -42,7 +44,7 @@ func main() {
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 	<-stop
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), gracefulShutdownTimeout)
 	defer cancel()
 	if err := built.Server.Shutdown(ctx); err != nil {
 		log.Printf("graceful shutdown warning: %v", err)

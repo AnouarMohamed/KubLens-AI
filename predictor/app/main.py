@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 from datetime import datetime, timezone
 
@@ -15,6 +16,7 @@ from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapProp
 from pydantic import BaseModel, Field
 
 api = FastAPI(title="k8s-ops-predictor", version="1.0.0")
+logger = logging.getLogger("predictor.telemetry")
 
 
 def configure_telemetry(app: FastAPI) -> None:
@@ -43,22 +45,25 @@ def configure_telemetry(app: FastAPI) -> None:
         sample_ratio = 1.0
     sample_ratio = max(0.0, min(1.0, sample_ratio))
 
-    resource = Resource.create({"service.name": service_name})
-    provider = TracerProvider(resource=resource, sampler=ParentBased(TraceIdRatioBased(sample_ratio)))
+    try:
+        resource = Resource.create({"service.name": service_name})
+        provider = TracerProvider(resource=resource, sampler=ParentBased(TraceIdRatioBased(sample_ratio)))
 
-    if protocol in {"http", "http/protobuf"}:
-        from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter as OTLPHTTPSpanExporter
+        if protocol in {"http", "http/protobuf"}:
+            from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter as OTLPHTTPSpanExporter
 
-        exporter = OTLPHTTPSpanExporter(endpoint=endpoint)
-    else:
-        from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter as OTLPGRPCSpanExporter
+            exporter = OTLPHTTPSpanExporter(endpoint=endpoint)
+        else:
+            from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter as OTLPGRPCSpanExporter
 
-        exporter = OTLPGRPCSpanExporter(endpoint=endpoint, insecure=insecure)
+            exporter = OTLPGRPCSpanExporter(endpoint=endpoint, insecure=insecure)
 
-    provider.add_span_processor(BatchSpanProcessor(exporter))
-    trace.set_tracer_provider(provider)
-    set_global_textmap(TraceContextTextMapPropagator())
-    FastAPIInstrumentor.instrument_app(app)
+        provider.add_span_processor(BatchSpanProcessor(exporter))
+        trace.set_tracer_provider(provider)
+        set_global_textmap(TraceContextTextMapPropagator())
+        FastAPIInstrumentor.instrument_app(app)
+    except Exception as exc:  # pragma: no cover - defensive startup path
+        logger.warning("OpenTelemetry initialization failed; continuing without tracing: %s", exc)
 
 
 configure_telemetry(api)
@@ -146,6 +151,7 @@ def require_predictor_secret(
 
 
 @api.post("/predict", response_model=PredictionResponse)
+# Intentionally sync: prediction is CPU-bound in-memory scoring with no blocking I/O.
 def predict(request: PredictionRequest, _: None = Depends(require_predictor_secret)) -> PredictionResponse:
     items: list[IncidentPrediction] = []
 
@@ -333,7 +339,10 @@ def confidence_from_evidence(
     if metric_known == 0 and not strong_status:
         confidence -= 10
 
-    return clamp(confidence, 35, 96)
+    bounded_confidence = clamp(confidence, 35, 96)
+    # Confidence is deliberately clamped to a stable range for UI comparability.
+    assert 35 <= bounded_confidence <= 96
+    return bounded_confidence
 
 
 def parse_cpu_milli(value: str) -> tuple[int, bool]:
@@ -363,6 +372,7 @@ def parse_memory_mi(value: str) -> tuple[int, bool]:
             return int(float(raw[:-1] or 0) / (1024 * 1024)), True
     except ValueError:
         return 0, False
+    # Reached when input is numeric but has an unsupported suffix (for example "500mb").
     return 0, False
 
 

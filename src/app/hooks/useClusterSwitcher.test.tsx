@@ -2,6 +2,7 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useClusterSwitcher } from "./useClusterSwitcher";
 import type { ClusterContextList } from "../../types";
+import type { Dispatch, SetStateAction } from "react";
 
 const mockAPI = vi.hoisted(() => ({
   selectCluster: vi.fn(),
@@ -17,9 +18,7 @@ describe("useClusterSwitcher", () => {
   });
 
   it("switches cluster and increments refresh key", async () => {
-    const setClusterContexts = vi.fn((updater: (current: ClusterContextList | null) => ClusterContextList | null) =>
-      updater({ selected: "default", items: [] }),
-    );
+    const setClusterContexts = vi.fn() as unknown as Dispatch<SetStateAction<ClusterContextList | null>>;
     const onMessage = vi.fn();
     mockAPI.selectCluster.mockResolvedValue({ selected: "prod" });
 

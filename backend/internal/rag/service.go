@@ -309,24 +309,39 @@ func (s *Service) warnIfStaleIndex(expiresAt, indexedAt time.Time) {
 }
 
 func (s *Service) buildIndex(ctx context.Context) []chunk {
+	results := make([][]chunk, len(s.sources))
+	var wg sync.WaitGroup
+	wg.Add(len(s.sources))
+	for i := range s.sources {
+		i := i
+		source := s.sources[i]
+		go func() {
+			defer wg.Done()
+
+			text, err := s.fetchSourceText(ctx, source)
+			if err != nil {
+				if s.logger != nil {
+					s.logger.Warn("rag source fetch failed", "source", source.Source, "url", source.URL, "error", err.Error())
+				}
+				text = source.Fallback
+			}
+
+			chunks := make([]chunk, 0, 3)
+			for _, part := range chunkText(text, defaultChunkSize, defaultChunkOverlap) {
+				item := newChunk(source, part)
+				if item.text == "" {
+					continue
+				}
+				chunks = append(chunks, item)
+			}
+			results[i] = chunks
+		}()
+	}
+	wg.Wait()
+
 	out := make([]chunk, 0, len(s.sources)*3)
-
-	for _, source := range s.sources {
-		text, err := s.fetchSourceText(ctx, source)
-		if err != nil {
-			if s.logger != nil {
-				s.logger.Warn("rag source fetch failed", "source", source.Source, "url", source.URL, "error", err.Error())
-			}
-			text = source.Fallback
-		}
-
-		for _, part := range chunkText(text, defaultChunkSize, defaultChunkOverlap) {
-			item := newChunk(source, part)
-			if item.text == "" {
-				continue
-			}
-			out = append(out, item)
-		}
+	for _, chunks := range results {
+		out = append(out, chunks...)
 	}
 
 	s.applyEmbeddings(ctx, out)
@@ -636,6 +651,8 @@ func candidateIndexes(queryTerms []string, tokenIdx map[string][]int, total int)
 	}
 
 	if len(seen) == 0 {
+		// Returning nil triggers caller fallback to full-scan ranking.
+		// This keeps recall high when query terms are absent from token index.
 		return nil
 	}
 

@@ -60,7 +60,7 @@ func (l *rateLimiter) configure(config RateLimitConfig) {
 func (l *rateLimiter) middleware(now func() time.Time) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if !l.enabled || !strings.HasPrefix(r.URL.Path, "/api") {
+			if !l.enabled || !isAPIPath(r.URL.Path) {
 				next.ServeHTTP(w, r)
 				return
 			}

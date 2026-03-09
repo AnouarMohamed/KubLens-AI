@@ -1,4 +1,4 @@
-export type PodStatus = "Running" | "Pending" | "Failed" | "Succeeded" | "Unknown";
+export type PodStatus = "Running" | "Pending" | "Failed" | "Succeeded" | "Terminating" | "Unknown";
 export type NodeStatus = "Ready" | "NotReady" | "Unknown";
 export type DiagnosticSeverity = "critical" | "warning" | "info";
 
@@ -17,6 +17,7 @@ export interface K8sEvent {
   type: string;
   reason: string;
   age: string;
+  // Keep backend contract field name ("from") to avoid a runtime mapping layer.
   from: string;
   message: string;
   count?: number;
@@ -102,6 +103,7 @@ export interface BuildInfo {
 }
 
 export interface RuntimeStatus {
+  // Keep string fallback to tolerate forward-compatible backend modes from newer servers.
   mode: "dev" | "demo" | "prod" | string;
   devMode: boolean;
   insecure: boolean;

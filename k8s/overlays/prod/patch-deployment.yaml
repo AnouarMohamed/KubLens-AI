@@ -15,3 +15,19 @@ spec:
             - secretRef:
                 name: k8s-ops-secret
                 optional: false
+          env:
+            - name: AUTH_TOKENS
+              valueFrom:
+                secretKeyRef:
+                  name: k8s-ops-secret
+                  key: AUTH_TOKENS
+            - name: PREDICTOR_SHARED_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: k8s-ops-secret
+                  key: PREDICTOR_SHARED_SECRET
+            - name: KUBECONFIG_DATA
+              valueFrom:
+                secretKeyRef:
+                  name: k8s-ops-secret
+                  key: KUBECONFIG_DATA

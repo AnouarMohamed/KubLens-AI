@@ -2,6 +2,24 @@
 
 All notable changes to this project are documented here.
 
+## v0.3.0
+
+### Added
+
+- End-to-end OpenTelemetry tracing across backend API, Kubernetes client calls, and predictor service continuation.
+- Tracing overlay hardening with explicit Jaeger OTLP egress policies and production overlay secretKeyRef wiring for sensitive env vars.
+- Predictor telemetry startup safeguards and expanded predictor unit coverage for node scoring and metric parsing paths.
+
+### Changed
+
+- Dashboard and pods UI were refined into a dense terminal-forward style with sharper status signaling and safer destructive action confirmation.
+- Dashboard Pod Lifecycle Mix now uses a compact deterministic bar composition with summary metrics, and restart severity thresholds are consistent across views.
+- Backend request decoding now preserves detailed JSON parse failures outside prod mode while keeping production-safe generic messages.
+- SSE emission, stream snapshot sizing, and route/span naming were tightened for better reliability and observability cardinality control.
+- RAG index construction now fetches source documents concurrently to reduce refresh latency under slow documentation endpoints.
+- CI hardening: backend tests run with `-race`, E2E has a job timeout, and Docker build job includes post-build smoke checks.
+- Release metadata bumped to `v0.3.0` across package/docker/helm/k8s artifacts.
+
 ## v0.2.0
 
 ### Added

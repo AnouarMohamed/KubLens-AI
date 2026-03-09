@@ -342,7 +342,7 @@ func (s *Server) handleSelectCluster(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req model.ClusterSelectRequest
-	if err := decodeJSONBody(r, &req); err != nil {
+	if err := s.decodeJSONBody(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}

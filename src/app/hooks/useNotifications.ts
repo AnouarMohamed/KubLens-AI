@@ -45,43 +45,82 @@ export function useNotifications({ panel, authLoading, canRead, canStream }: Use
     };
 
     if (canStream) {
-      const socket = new WebSocket(api.getStreamWSURL());
-      socket.onopen = () => {
-        if (!cancelled) {
-          setError(null);
-        }
-      };
-      socket.onmessage = (event) => {
+      let socket: WebSocket | null = null;
+      let reconnectTimer: number | null = null;
+      let reconnectAttempt = 0;
+
+      const scheduleReconnect = () => {
         if (cancelled) {
           return;
         }
-        const payload = parseWSStreamPayload(event.data);
-        if (!payload) {
-          return;
-        }
-        if (payload.type === "cluster_events" && Array.isArray(payload.payload)) {
-          setNotifications(payload.payload.slice(0, 14));
-        }
-        if (payload.type === "k8s_event" && payload.payload) {
-          setNotifications((current) => [payload.payload as K8sEvent, ...current].slice(0, 14));
-        }
-      };
-      socket.onerror = () => {
-        if (!cancelled) {
-          setError("Live stream disconnected. Showing snapshot.");
-        }
-        loadSnapshot();
-      };
-      socket.onclose = () => {
-        if (!cancelled) {
-          setError("Live stream disconnected. Showing snapshot.");
-        }
-        loadSnapshot();
+        const delayMs = Math.min(30_000, 1_000 * 2 ** reconnectAttempt);
+        reconnectAttempt = Math.min(reconnectAttempt + 1, 6);
+        reconnectTimer = window.setTimeout(() => {
+          reconnectTimer = null;
+          connect();
+        }, delayMs);
       };
 
+      const connect = () => {
+        if (cancelled) {
+          return;
+        }
+
+        try {
+          socket = new WebSocket(api.getStreamWSURL());
+        } catch {
+          setError("Live stream unavailable. Retrying...");
+          loadSnapshot();
+          scheduleReconnect();
+          return;
+        }
+
+        socket.onopen = () => {
+          if (!cancelled) {
+            reconnectAttempt = 0;
+            setError(null);
+          }
+        };
+
+        socket.onmessage = (event) => {
+          if (cancelled) {
+            return;
+          }
+          const payload = parseWSStreamPayload(event.data);
+          if (!payload) {
+            return;
+          }
+          if (payload.type === "cluster_events" && Array.isArray(payload.payload)) {
+            setNotifications(payload.payload.slice(0, 14));
+          }
+          if (payload.type === "k8s_event" && payload.payload) {
+            setNotifications((current) => [payload.payload as K8sEvent, ...current].slice(0, 14));
+          }
+        };
+
+        socket.onerror = () => {
+          if (!cancelled) {
+            setError("Live stream disconnected. Retrying with snapshot fallback.");
+          }
+        };
+
+        socket.onclose = () => {
+          if (cancelled) {
+            return;
+          }
+          setError("Live stream disconnected. Retrying with snapshot fallback.");
+          loadSnapshot();
+          scheduleReconnect();
+        };
+      };
+
+      connect();
       return () => {
         cancelled = true;
-        socket.close();
+        if (reconnectTimer !== null) {
+          window.clearTimeout(reconnectTimer);
+        }
+        socket?.close();
       };
     }
 

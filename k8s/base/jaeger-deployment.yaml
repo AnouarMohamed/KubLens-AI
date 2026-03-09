@@ -1,3 +1,8 @@
+# Development-only tracing backend.
+# Jaeger all-in-one stores data in-memory and is not suitable for production retention/HA.
+# For production, deploy Jaeger in production mode or use Grafana Tempo:
+# https://www.jaegertracing.io/docs/latest/deployment/
+# https://grafana.com/oss/tempo/
 apiVersion: apps/v1
 kind: Deployment
 metadata:

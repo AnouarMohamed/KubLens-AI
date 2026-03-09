@@ -75,6 +75,53 @@ func TestDecodeJSONBodyRejectsTrailingJSON(t *testing.T) {
 	}
 }
 
+func TestDecodeJSONBodyIncludesParseDetailsOutsideProd(t *testing.T) {
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	server := newServer(testClusterReader{}, nil, logger)
+	router := server.Router("")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/assistant", strings.NewReader(`{"message":`))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status code = %d, want 400", rr.Code)
+	}
+	var payload map[string]string
+	if err := json.NewDecoder(rr.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if !strings.Contains(payload["error"], "invalid JSON body:") {
+		t.Fatalf("expected detailed parse error, got %q", payload["error"])
+	}
+}
+
+func TestDecodeJSONBodyStaysGenericInProd(t *testing.T) {
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	server := newServer(
+		testClusterReader{},
+		nil,
+		logger,
+		WithRuntimeStatus(model.RuntimeStatus{Mode: "prod"}),
+	)
+	router := server.Router("")
+
+	req := httptest.NewRequest(http.MethodPost, "/api/assistant", strings.NewReader(`{"message":`))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status code = %d, want 400", rr.Code)
+	}
+	var payload map[string]string
+	if err := json.NewDecoder(rr.Body).Decode(&payload); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if payload["error"] != "invalid JSON body" {
+		t.Fatalf("expected generic parse error, got %q", payload["error"])
+	}
+}
+
 func TestMetricsEndpointIncludesAssistantRoute(t *testing.T) {
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
 	server := newServer(testClusterReader{}, nil, logger)

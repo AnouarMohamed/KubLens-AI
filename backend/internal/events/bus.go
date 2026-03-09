@@ -2,6 +2,8 @@ package events
 
 import "sync"
 
+const defaultStreamBufferSize = 32
+
 // Event represents a streamable cluster or system event.
 type Event struct {
 	Type      string `json:"type"`
@@ -22,7 +24,9 @@ type Bus struct {
 // NewBus constructs a new event bus with a bounded per-subscriber buffer.
 func NewBus(buffer int) *Bus {
 	if buffer <= 0 {
-		buffer = 32
+		// 32 balances burst tolerance and memory use:
+		// smaller buffers drop events during short spikes, larger buffers increase per-subscriber footprint.
+		buffer = defaultStreamBufferSize
 	}
 	return &Bus{
 		subs:   make(map[int]chan Event),

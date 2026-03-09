@@ -209,8 +209,8 @@ export default function Metrics() {
                     <YAxis domain={[0, 100]} tick={{ fill: "#5d6674", fontSize: 12 }} unit="%" />
                     <Tooltip
                       contentStyle={TOOLTIP_STYLE}
-                      formatter={(value: number, name: string) => [
-                        `${value.toFixed(1)}%`,
+                      formatter={(value: number | string | undefined, name: string | undefined) => [
+                        `${coerceNumber(value).toFixed(1)}%`,
                         name === "cpu" ? "CPU" : "Memory",
                       ]}
                     />
@@ -232,7 +232,10 @@ export default function Metrics() {
                     <YAxis domain={[0, 100]} tick={{ fill: "#5d6674", fontSize: 12 }} unit="%" />
                     <Tooltip
                       contentStyle={TOOLTIP_STYLE}
-                      formatter={(value: number) => [`${value.toFixed(1)}%`, "Avg CPU"]}
+                      formatter={(value: number | string | undefined) => [
+                        `${coerceNumber(value).toFixed(1)}%`,
+                        "Avg CPU",
+                      ]}
                     />
                     <Area
                       type="monotone"
@@ -260,7 +263,10 @@ export default function Metrics() {
                     <CartesianGrid stroke={GRID_STROKE} strokeDasharray="3 3" vertical={false} />
                     <XAxis dataKey="name" tick={{ fill: "#5d6674", fontSize: 12 }} />
                     <YAxis allowDecimals={false} tick={{ fill: "#5d6674", fontSize: 12 }} />
-                    <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(value: number) => [value, "Pods"]} />
+                    <Tooltip
+                      contentStyle={TOOLTIP_STYLE}
+                      formatter={(value: number | string | undefined) => [Math.round(coerceNumber(value)), "Pods"]}
+                    />
                     <Bar dataKey="value" radius={[4, 4, 0, 0]}>
                       {podLifecycleBars.map((row) => (
                         <Cell key={row.name} fill={row.color} />
@@ -286,7 +292,10 @@ export default function Metrics() {
                     height={50}
                   />
                   <YAxis allowDecimals={false} tick={{ fill: "#5d6674", fontSize: 12 }} />
-                  <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(value: number) => [value, "Pods"]} />
+                  <Tooltip
+                    contentStyle={TOOLTIP_STYLE}
+                    formatter={(value: number | string | undefined) => [Math.round(coerceNumber(value)), "Pods"]}
+                  />
                   <Bar dataKey="value" radius={[4, 4, 0, 0]}>
                     {restartBands.map((row) => (
                       <Cell key={row.name} fill={row.color} />
@@ -309,15 +318,16 @@ export default function Metrics() {
                     <YAxis type="category" dataKey="name" width={120} tick={{ fill: "#5d6674", fontSize: 12 }} />
                     <Tooltip
                       contentStyle={TOOLTIP_STYLE}
-                      formatter={(value: number, name: string, item) => {
-                        const payload = item.payload as { cpuMilli: number; memMi: number };
+                      formatter={(value: number | string | undefined, name: string | undefined, item) => {
+                        const numeric = coerceNumber(value);
+                        const payload = (item.payload ?? {}) as { cpuMilli?: number; memMi?: number };
                         if (name === "score") {
                           return [
-                            `${value.toFixed(1)}%`,
-                            `Pressure (CPU ${payload.cpuMilli}m | Mem ${payload.memMi}Mi)`,
+                            `${numeric.toFixed(1)}%`,
+                            `Pressure (CPU ${payload.cpuMilli ?? 0}m | Mem ${payload.memMi ?? 0}Mi)`,
                           ];
                         }
-                        return [value, name];
+                        return [numeric, name];
                       }}
                     />
                     <Bar dataKey="score" fill={DOCKER_BLUE} radius={[0, 4, 4, 0]} />
@@ -684,6 +694,17 @@ function parsePercentValue(value: string): number {
     return 0;
   }
   return Math.min(Math.max(num, 0), 100);
+}
+
+function coerceNumber(value: number | string | undefined): number {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : 0;
+  }
+  if (typeof value === "string") {
+    const parsed = Number.parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
 }
 
 function parseCPUMilli(value: string): number {

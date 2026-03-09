@@ -32,6 +32,7 @@ export default function Pods() {
   const [logError, setLogError] = useState<string | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [createForm, setCreateForm] = useState<PodCreateRequest>(defaultCreateForm);
+  const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
   const [isBusy, setIsBusy] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -54,6 +55,7 @@ export default function Pods() {
       const [podRows, namespaceRows] = await Promise.all([api.getPods(), api.getNamespaces()]);
       setPods(podRows);
       setNamespaces(namespaceRows);
+      setConfirmingDeleteId(null);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load pods");
@@ -132,6 +134,7 @@ export default function Pods() {
       logAbortRef.current = null;
       setLogStreaming(false);
       setLogError(null);
+      setConfirmingDeleteId(null);
       setIsBusy(true);
       try {
         const logs = await api.getPodLogs(namespace, podName, 50);
@@ -159,6 +162,7 @@ export default function Pods() {
       logAbortRef.current = controller;
       setLogStreaming(true);
       setLogError(null);
+      setConfirmingDeleteId(null);
       setIsBusy(true);
       setLogPodName(`${namespace}/${podName}`);
       setLogText("");
@@ -248,6 +252,7 @@ export default function Pods() {
       if (!window.confirm(`Restart pod ${namespace}/${podName}?`)) {
         return;
       }
+      setConfirmingDeleteId(null);
 
       setIsBusy(true);
       try {
@@ -269,9 +274,7 @@ export default function Pods() {
         setError("Your role does not allow pod deletion.");
         return;
       }
-      if (!window.confirm(`Delete pod ${namespace}/${podName}?`)) {
-        return;
-      }
+      setConfirmingDeleteId(null);
 
       setIsBusy(true);
       try {
@@ -285,6 +288,17 @@ export default function Pods() {
       }
     },
     [canWrite, load],
+  );
+
+  const requestDelete = useCallback(
+    async (pod: Pod) => {
+      if (confirmingDeleteId != pod.id) {
+        setConfirmingDeleteId(pod.id);
+        return;
+      }
+      await deletePod(pod.namespace, pod.name);
+    },
+    [confirmingDeleteId, deletePod],
   );
 
   return (
@@ -434,11 +448,13 @@ export default function Pods() {
                       Restart
                     </button>
                     <button
-                      onClick={() => void deletePod(pod.namespace, pod.name)}
+                      onClick={() => void requestDelete(pod)}
                       disabled={!canWrite}
-                      className="text-xs font-mono text-[#ff4444]/50 hover:text-[#ff4444] transition-colors"
+                      className={`text-xs font-mono transition-colors ${
+                        confirmingDeleteId === pod.id ? "text-[#ff4444]" : "text-[#ff4444]/50 hover:text-[#ff4444]"
+                      }`}
                     >
-                      Delete
+                      {confirmingDeleteId === pod.id ? "Confirm?" : "Delete"}
                     </button>
                   </div>
                 </td>

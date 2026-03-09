@@ -203,7 +203,7 @@ func routePattern(r *http.Request) string {
 			return pattern
 		}
 	}
-	return r.URL.Path
+	return "unmatched"
 }
 
 func updateMax(target *atomic.Uint64, value uint64) {

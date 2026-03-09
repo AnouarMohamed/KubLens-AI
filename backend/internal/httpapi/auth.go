@@ -42,21 +42,21 @@ func (a *authRuntime) configure(config AuthConfig) {
 
 func (s *Server) authMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !strings.HasPrefix(r.URL.Path, "/api") {
+		if !isAPIPath(r.URL.Path) {
 			next.ServeHTTP(w, r)
 			return
 		}
 
-		if r.URL.Path == "/api/auth/login" || r.URL.Path == "/api/auth/logout" {
+		if r.URL.Path == apiAuthLoginPath || r.URL.Path == apiAuthLogoutPath {
 			next.ServeHTTP(w, r)
 			return
 		}
-		if r.URL.Path == "/api/healthz" || r.URL.Path == "/api/readyz" || r.URL.Path == "/api/openapi.yaml" {
+		if r.URL.Path == apiHealthzPath || r.URL.Path == apiReadyzPath || r.URL.Path == apiOpenAPIPath {
 			next.ServeHTTP(w, r)
 			return
 		}
 
-		if r.URL.Path == "/api/auth/session" {
+		if r.URL.Path == apiAuthSessionPath {
 			if !s.auth.enabled {
 				next.ServeHTTP(w, r)
 				return
@@ -128,7 +128,7 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req authLoginRequest
-	if err := decodeJSONBody(r, &req); err != nil {
+	if err := s.decodeJSONBody(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}

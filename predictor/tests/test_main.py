@@ -1,5 +1,12 @@
 from fastapi.testclient import TestClient
-from predictor.app.main import K8sEvent, api, confidence_from_evidence, count_resource_warning_events
+from predictor.app.main import (
+    K8sEvent,
+    api,
+    confidence_from_evidence,
+    count_resource_warning_events,
+    parse_cpu_milli,
+    parse_memory_mi,
+)
 
 client = TestClient(api)
 
@@ -70,6 +77,36 @@ def test_predict_handles_invalid_usage_values() -> None:
     assert data["source"] == "python-fastapi"
 
 
+def test_predict_scores_not_ready_node_with_hot_metrics() -> None:
+    payload = {
+        "pods": [],
+        "nodes": [
+            {
+                "name": "node-hot-1",
+                "status": "NotReady",
+                "roles": "worker",
+                "age": "3d",
+                "version": "1.31",
+                "cpuUsage": "95%",
+                "memUsage": "92%",
+                "cpuHistory": [
+                    {"time": "10:00", "value": 72},
+                    {"time": "10:05", "value": 96},
+                ],
+            }
+        ],
+        "events": [{"type": "Warning", "reason": "Failed", "age": "1m", "from": "kubelet", "message": "node-hot-1"}],
+    }
+
+    response = client.post("/predict", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    node_item = next((item for item in data["items"] if item["resourceKind"] == "Node"), None)
+    assert node_item is not None
+    assert node_item["riskScore"] >= 45
+    assert node_item["confidence"] >= 70
+
+
 def test_predict_rejects_invalid_contract() -> None:
     response = client.post("/predict", json={"pods": "bad"})
     assert response.status_code == 422
@@ -130,3 +167,15 @@ def test_count_resource_warning_events_matches_message_and_count() -> None:
 
     assert count_resource_warning_events(events, "payment-gateway", "production") == 3
     assert count_resource_warning_events(events, "node-worker-3", None) == 2
+
+
+def test_parse_memory_mi_supports_gi_suffix() -> None:
+    value, known = parse_memory_mi("1Gi")
+    assert known is True
+    assert value == 1024
+
+
+def test_parse_cpu_milli_supports_whole_cpu_units() -> None:
+    value, known = parse_cpu_milli("2")
+    assert known is True
+    assert value == 2000

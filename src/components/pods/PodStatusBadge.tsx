@@ -7,9 +7,11 @@ export default function StatusText({ status }: { status: string }) {
         ? "text-[#ff4444]"
         : s === "pending"
           ? "text-[#f59e0b]"
-          : s === "succeeded"
-            ? "text-[#666666]"
-            : "text-[#666666]";
+          : s === "terminating"
+            ? "text-[#f59e0b]"
+            : s === "succeeded"
+              ? "text-[#666666]"
+              : "text-[#666666]";
 
   return <span className={`text-xs font-mono font-semibold ${color}`}>{status}</span>;
 }

@@ -141,7 +141,7 @@ func (l *auditLog) total() int {
 
 func (s *Server) auditMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !strings.HasPrefix(r.URL.Path, "/api") {
+		if !isAPIPath(r.URL.Path) {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -293,11 +293,11 @@ func loadAuditEntries(path string, maxItems int) ([]model.AuditEntry, uint64, er
 func actionForRequest(method, path string) string {
 	m := strings.ToUpper(strings.TrimSpace(method))
 	switch {
-	case m == http.MethodPost && path == "/api/pods":
+	case m == http.MethodPost && path == apiMountPrefix+"/pods":
 		return "pod.create"
-	case m == http.MethodPost && strings.HasSuffix(path, "/restart") && strings.Contains(path, "/api/pods/"):
+	case m == http.MethodPost && strings.HasSuffix(path, "/restart") && strings.Contains(path, apiMountPrefix+"/pods/"):
 		return "pod.restart"
-	case m == http.MethodDelete && strings.Contains(path, "/api/pods/"):
+	case m == http.MethodDelete && strings.Contains(path, apiMountPrefix+"/pods/"):
 		return "pod.delete"
 	case m == http.MethodPost && strings.HasSuffix(path, "/cordon"):
 		return "node.cordon"
@@ -309,7 +309,7 @@ func actionForRequest(method, path string) string {
 		return "resource.rollback"
 	case m == http.MethodPost && strings.HasSuffix(path, "/restart"):
 		return "resource.restart"
-	case m == http.MethodPost && path == "/api/assistant":
+	case m == http.MethodPost && path == apiMountPrefix+"/assistant":
 		return "assistant.ask"
 	default:
 		route := strings.TrimSpace(path)

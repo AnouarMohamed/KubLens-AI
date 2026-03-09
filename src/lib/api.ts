@@ -42,6 +42,7 @@ function apiPath(...segments: string[]): string {
   if (segments.length === 0) {
     return API_PREFIX;
   }
+  // Callers must pass raw path fragments (not pre-encoded) to avoid double-encoding.
   return `${API_PREFIX}/${segments.map(encodeURIComponent).join("/")}`;
 }
 
@@ -94,6 +95,7 @@ async function requestPredictions(force = false): Promise<PredictionsResult> {
     return await requestJson<PredictionsResult>(`${apiPath("predictions")}${suffix}`);
   } catch (err) {
     if (err instanceof ApiError && err.status === 404) {
+      // Backward compatibility for pre-v0.2 backends; safe to remove after v1.0.
       return requestJson<PredictionsResult>(`${apiPath("predictive-incidents")}${suffix}`);
     }
     throw err;
@@ -169,7 +171,7 @@ export const api = {
   getPodDetail: (namespace: string, name: string) => requestJson<PodDetail>(apiPath("pods", namespace, name)),
   getPodEvents: (namespace: string, name: string) =>
     requestJson<K8sEvent[]>(apiPath("pods", namespace, name, "events")),
-  getPodLogs: (namespace: string, name: string, lines = 50, container?: string) => {
+  getPodLogs: (namespace: string, name: string, lines = 100, container?: string) => {
     const params = new URLSearchParams();
     if (lines > 0) {
       params.set("lines", String(lines));

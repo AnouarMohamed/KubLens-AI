@@ -1,0 +1,43 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: dashboard-tracing-egress
+  namespace: kubernetes-operations-dashboard
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: kubernetes-operations-dashboard
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: k8s-ops-jaeger
+      ports:
+        - protocol: TCP
+          port: 4317
+        - protocol: TCP
+          port: 4318
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: predictor-tracing-egress
+  namespace: kubernetes-operations-dashboard
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: k8s-ops-predictor
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: k8s-ops-jaeger
+      ports:
+        - protocol: TCP
+          port: 4317
+        - protocol: TCP
+          port: 4318

@@ -153,7 +153,10 @@ export default function Dashboard() {
                 <YAxis domain={[0, 100]} tick={AXIS_TICK} unit="%" />
                 <Tooltip
                   contentStyle={TOOLTIP_STYLE}
-                  formatter={(value: number, key: string) => [`${value.toFixed(1)}%`, key === "cpu" ? "CPU" : "Memory"]}
+                  formatter={(value: number | string | undefined, key: string | undefined) => [
+                    `${coerceNumber(value).toFixed(1)}%`,
+                    key === "cpu" ? "CPU" : "Memory",
+                  ]}
                 />
                 <Bar dataKey="cpu" fill={ACCENT} />
                 <Bar dataKey="memory" fill="rgba(0, 212, 168, 0.4)" />
@@ -172,7 +175,7 @@ export default function Dashboard() {
                 <YAxis domain={[0, 100]} tick={AXIS_TICK} unit="%" />
                 <Tooltip
                   contentStyle={TOOLTIP_STYLE}
-                  formatter={(value: number) => [`${value.toFixed(1)}%`, "Avg CPU"]}
+                  formatter={(value: number | string | undefined) => [`${coerceNumber(value).toFixed(1)}%`, "Avg CPU"]}
                 />
                 <Line
                   type="monotone"
@@ -196,7 +199,10 @@ export default function Dashboard() {
                 <ReferenceLine y={0} stroke={GRID_BASELINE} />
                 <XAxis dataKey="name" tick={AXIS_TICK} interval={0} angle={-20} textAnchor="end" height={48} />
                 <YAxis allowDecimals={false} tick={AXIS_TICK} />
-                <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(value: number) => [value, "Events"]} />
+                <Tooltip
+                  contentStyle={TOOLTIP_STYLE}
+                  formatter={(value: number | string | undefined) => [Math.round(coerceNumber(value)), "Events"]}
+                />
                 <Bar dataKey="count" fill={BLUE} />
               </BarChart>
             </ResponsiveContainer>
@@ -212,7 +218,10 @@ export default function Dashboard() {
                 <ReferenceLine x={0} stroke={GRID_BASELINE} />
                 <XAxis type="number" allowDecimals={false} tick={AXIS_TICK} />
                 <YAxis type="category" dataKey="name" width={130} tick={AXIS_TICK} />
-                <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(value: number) => [value, "Restarts"]} />
+                <Tooltip
+                  contentStyle={TOOLTIP_STYLE}
+                  formatter={(value: number | string | undefined) => [Math.round(coerceNumber(value)), "Restarts"]}
+                />
                 <Bar dataKey="restarts">
                   {restartHotspots.map((row) => (
                     <Cell key={row.name} fill={row.color} />
@@ -664,6 +673,17 @@ function parsePercentNumber(value: string): number {
   return Number(Math.max(0, Math.min(100, numeric)).toFixed(2));
 }
 
+function coerceNumber(value: number | string | undefined): number {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : 0;
+  }
+  if (typeof value === "string") {
+    const parsed = Number.parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+  return 0;
+}
+
 function percentage(part: number, whole: number): number {
   if (!Number.isFinite(part) || !Number.isFinite(whole) || whole <= 0) {
     return 0;
@@ -710,7 +730,7 @@ function restartCountColorClass(restarts: number): string {
   if (restarts > 10) {
     return "text-[#ff4444]";
   }
-  if (restarts > 3) {
+  if (restarts >= 3) {
     return "text-[#f59e0b]";
   }
   return "text-[#666666]";

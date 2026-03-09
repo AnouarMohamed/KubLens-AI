@@ -4,6 +4,7 @@ resources:
   - ../../base
   - clusterrole.yaml
   - clusterrolebinding.yaml
+  - networkpolicy-tracing.yaml
 patches:
   - path: patch-configmap.yaml
   - path: patch-predictor-deployment.yaml

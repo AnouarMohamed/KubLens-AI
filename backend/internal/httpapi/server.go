@@ -242,14 +242,18 @@ func (s *Server) Router(distDir string) http.Handler {
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Recoverer)
-	r.Use(timeoutUnlessPath(20*time.Second, "/api/stream"))
+	r.Use(timeoutUnlessPath(20*time.Second, apiStreamPrefix))
 	r.Use(s.limiter.middleware(s.now))
 	r.Use(s.metrics.middleware(s.logger))
 	r.Use(s.authMiddleware)
 	r.Use(s.clusterMiddleware)
 	r.Use(s.auditMiddleware)
 
-	r.Route("/api", func(api chi.Router) {
+	// Mutating endpoints are guarded centrally by auth middleware:
+	// 1) RBAC role check via auth.RequiredRole
+	// 2) environment write gate via s.writesOn
+	// Non-mutating POST exceptions (assistant/clusters/select) are documented in auth.RequiredRole.
+	r.Route(apiMountPrefix, func(api chi.Router) {
 		api.Get("/healthz", s.handleHealthz)
 		api.Get("/readyz", s.handleReadyz)
 		api.Get("/openapi.yaml", s.handleOpenAPIYAML)
@@ -302,7 +306,7 @@ func (s *Server) Router(distDir string) http.Handler {
 		otelhttp.WithSpanNameFormatter(func(operation string, r *http.Request) string {
 			route := routePattern(r)
 			if route == "" {
-				route = r.URL.Path
+				route = operation
 			}
 			return r.Method + " " + route
 		}),

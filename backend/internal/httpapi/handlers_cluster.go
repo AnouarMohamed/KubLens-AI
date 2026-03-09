@@ -83,7 +83,7 @@ func (s *Server) handleApplyResourceYAML(w http.ResponseWriter, r *http.Request)
 	name := strings.TrimSpace(chi.URLParam(r, "name"))
 
 	var req model.ResourceManifest
-	if err := decodeJSONBody(r, &req); err != nil {
+	if err := s.decodeJSONBody(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -104,7 +104,7 @@ func (s *Server) handleScaleResource(w http.ResponseWriter, r *http.Request) {
 	name := strings.TrimSpace(chi.URLParam(r, "name"))
 
 	var req model.ScaleRequest
-	if err := decodeJSONBody(r, &req); err != nil {
+	if err := s.decodeJSONBody(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -153,7 +153,7 @@ func (s *Server) handleEvents(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleCreatePod(w http.ResponseWriter, r *http.Request) {
 	var req model.PodCreateRequest
-	if err := decodeJSONBody(r, &req); err != nil {
+	if err := s.decodeJSONBody(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
