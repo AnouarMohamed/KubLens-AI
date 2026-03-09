@@ -81,8 +81,7 @@ jobs:
         uses: golangci/golangci-lint-action@v6
         with:
           version: latest
-          working-directory: backend
-          args: --timeout=5m --config=../.golangci.yml
+          args: --timeout=5m --config=.golangci.yml ./backend/...
 
       - name: Go tests
         run: npm run test:go
