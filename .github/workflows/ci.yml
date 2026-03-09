@@ -81,7 +81,7 @@ jobs:
         with:
           version: latest
           working-directory: backend
-          args: --timeout=5m
+          args: --timeout=5m --config=../.golangci.yml
 
       - name: Go tests
         run: npm run test:go
