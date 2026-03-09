@@ -192,6 +192,7 @@ jobs:
           context: .
           file: Dockerfile
           push: false
+          load: true
           tags: kubernetes-operations-dashboard:ci
 
       - name: Build predictor image
@@ -200,6 +201,7 @@ jobs:
           context: ./predictor
           file: ./predictor/Dockerfile
           push: false
+          load: true
           tags: k8s-ops-predictor:ci
 
       - name: Smoke test dashboard image
