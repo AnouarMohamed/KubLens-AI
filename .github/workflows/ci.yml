@@ -79,7 +79,7 @@ jobs:
       - name: Go lint (golangci-lint)
         uses: golangci/golangci-lint-action@v6
         with:
-          version: v1.60.1
+          version: latest
           working-directory: backend
           args: --timeout=5m
 
@@ -167,13 +167,12 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Trivy filesystem scan
-        uses: aquasecurity/trivy-action@0.28.0
-        with:
-          scan-type: fs
-          scan-ref: .
-          severity: CRITICAL,HIGH
-          ignore-unfixed: true
-          exit-code: "0"
+        run: |
+          docker run --rm \
+            -v "${{ github.workspace }}:/workspace" \
+            -w /workspace \
+            aquasec/trivy:0.56.1 \
+            fs --severity CRITICAL,HIGH --ignore-unfixed --exit-code 0 .
 
       - name: Hadolint Dockerfile
         uses: hadolint/hadolint-action@v3.1.0
