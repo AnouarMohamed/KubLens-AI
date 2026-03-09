@@ -15,6 +15,7 @@ import (
 
 	"kubelens-backend/internal/ai"
 	"kubelens-backend/internal/model"
+	"kubelens-backend/internal/state"
 )
 
 func TestDetectIntent(t *testing.T) {
@@ -558,6 +559,10 @@ func (testClusterReader) PodLogs(context.Context, string, string, string, int) s
 	return "dependency connection timeout"
 }
 
+func (testClusterReader) StreamPodLogs(context.Context, string, string, string, int) (io.ReadCloser, error) {
+	return io.NopCloser(strings.NewReader("streamed logs")), nil
+}
+
 func (testClusterReader) PodDetail(context.Context, string, string) (model.PodDetail, error) {
 	return model.PodDetail{}, nil
 }
@@ -580,6 +585,10 @@ func (testClusterReader) DeletePod(context.Context, string, string) (model.Actio
 
 func (testClusterReader) CordonNode(context.Context, string) (model.ActionResult, error) {
 	return model.ActionResult{Success: true, Message: "cordoned"}, nil
+}
+
+func (testClusterReader) StateSnapshot(context.Context) (state.ClusterState, bool) {
+	return state.ClusterState{}, false
 }
 
 type testAIProvider struct {

@@ -47,9 +47,9 @@ func main() {
 	if err := built.Server.Shutdown(ctx); err != nil {
 		log.Printf("graceful shutdown warning: %v", err)
 	}
-	if built.ShutdownTracing != nil {
-		if err := built.ShutdownTracing(ctx); err != nil {
-			log.Printf("tracing shutdown warning: %v", err)
+	if built.Shutdown != nil {
+		if err := built.Shutdown(ctx); err != nil {
+			log.Printf("shutdown warning: %v", err)
 		}
 	}
 }

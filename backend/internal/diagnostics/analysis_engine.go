@@ -24,17 +24,17 @@ func BuildDiagnostics(pods []model.PodSummary, nodes []model.NodeSummary) model.
 		case model.PodStatusFailed:
 			issues = append(issues, model.DiagnosticIssue{
 				Severity:       model.SeverityCritical,
-				Title:          "Failed pod detected",
+				Message:        "Failed pod detected",
 				Resource:       fmt.Sprintf("%s/%s", pod.Namespace, pod.Name),
-				Details:        fmt.Sprintf("Pod has status %s with %d restarts.", pod.Status, pod.Restarts),
+				Evidence:       []string{fmt.Sprintf("Pod has status %s with %d restarts.", pod.Status, pod.Restarts)},
 				Recommendation: "Inspect pod events and logs before restarting the workload.",
 			})
 		case model.PodStatusPending:
 			issues = append(issues, model.DiagnosticIssue{
 				Severity:       model.SeverityWarning,
-				Title:          "Pending pod detected",
+				Message:        "Pending pod detected",
 				Resource:       fmt.Sprintf("%s/%s", pod.Namespace, pod.Name),
-				Details:        "Pod is not fully scheduled or started yet.",
+				Evidence:       []string{"Pod is not fully scheduled or started yet."},
 				Recommendation: "Check scheduler events, image pull status, and resource requests.",
 			})
 		}
@@ -42,9 +42,9 @@ func BuildDiagnostics(pods []model.PodSummary, nodes []model.NodeSummary) model.
 		if pod.Restarts >= 3 {
 			issues = append(issues, model.DiagnosticIssue{
 				Severity:       model.SeverityWarning,
-				Title:          "High restart count",
+				Message:        "High restart count",
 				Resource:       fmt.Sprintf("%s/%s", pod.Namespace, pod.Name),
-				Details:        fmt.Sprintf("%d container restarts observed.", pod.Restarts),
+				Evidence:       []string{fmt.Sprintf("%d container restarts observed.", pod.Restarts)},
 				Recommendation: "Review crash loops, probes, and service dependencies.",
 			})
 		}
@@ -54,9 +54,9 @@ func BuildDiagnostics(pods []model.PodSummary, nodes []model.NodeSummary) model.
 		if node.Status == model.NodeStatusNotReady {
 			issues = append(issues, model.DiagnosticIssue{
 				Severity:       model.SeverityCritical,
-				Title:          "Node not ready",
+				Message:        "Node not ready",
 				Resource:       node.Name,
-				Details:        "Node is reporting NotReady conditions.",
+				Evidence:       []string{"Node is reporting NotReady conditions."},
 				Recommendation: "Validate kubelet health, node connectivity, and pressure conditions.",
 			})
 		}
@@ -84,8 +84,8 @@ func ensureAtLeastOneIssue(issues []model.DiagnosticIssue) []model.DiagnosticIss
 
 	return append(issues, model.DiagnosticIssue{
 		Severity:       model.SeverityInfo,
-		Title:          "Cluster healthy",
-		Details:        "No failed pods, pending pods, or not-ready nodes were detected.",
+		Message:        "Cluster healthy",
+		Evidence:       []string{"No failed pods, pending pods, or not-ready nodes were detected."},
 		Recommendation: "Continue monitoring and keep alerting enabled.",
 	})
 }

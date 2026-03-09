@@ -2,11 +2,13 @@ package httpapi
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"slices"
 	"strings"
 
 	"kubelens-backend/internal/model"
+	"kubelens-backend/internal/state"
 )
 
 const clusterCookieName = "kubelens_cluster"
@@ -224,6 +226,14 @@ func (r *routedCluster) PodLogs(ctx context.Context, namespace, name, container 
 	return reader.PodLogs(ctx, namespace, name, container, lines)
 }
 
+func (r *routedCluster) StreamPodLogs(ctx context.Context, namespace, name, container string, lines int) (io.ReadCloser, error) {
+	reader := r.selectReader(ctx)
+	if reader == nil {
+		return nil, nil
+	}
+	return reader.StreamPodLogs(ctx, namespace, name, container, lines)
+}
+
 func (r *routedCluster) PodDetail(ctx context.Context, namespace, name string) (model.PodDetail, error) {
 	reader := r.selectReader(ctx)
 	if reader == nil {
@@ -270,6 +280,14 @@ func (r *routedCluster) CordonNode(ctx context.Context, name string) (model.Acti
 		return model.ActionResult{}, nil
 	}
 	return reader.CordonNode(ctx, name)
+}
+
+func (r *routedCluster) StateSnapshot(ctx context.Context) (state.ClusterState, bool) {
+	reader := r.selectReader(ctx)
+	if reader == nil {
+		return state.ClusterState{}, false
+	}
+	return reader.StateSnapshot(ctx)
 }
 
 func (s *Server) clusterMiddleware(next http.Handler) http.Handler {

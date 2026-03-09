@@ -10,6 +10,7 @@
 ## Enforced controls
 
 - Bearer token auth with role-based permissions
+- Optional OIDC/JWT bearer validation with role claim mapping
 - Global write-action feature gate
 - Terminal execution off by default, admin-only when enabled
 - Terminal requires global write enablement and admin role when enabled

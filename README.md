@@ -1,23 +1,77 @@
-# KubeLens
+# KubeLens AI
 
-A full-stack Kubernetes operations dashboard. Runs against mock data out of the box — point it at a real cluster when you're ready.
+AI-powered Kubernetes operations assistant for deterministic diagnostics and root-cause analysis.
 
-**Stack:** React + Vite · Go API · FastAPI predictor · Kustomize overlays
+**Stack:** React + Vite, Go API, FastAPI predictor, Kustomize overlays, Helm.
+
+---
+
+## Product vision
+
+KubeLens AI helps engineers diagnose cluster issues, understand failures, and optimize workloads. The differentiator is a deterministic cluster intelligence engine that produces structured diagnostics. The AI layer explains those diagnostics and suggests safe remediation steps; it does not invent facts.
+
+---
+
+## Architecture
+
+```mermaid
+flowchart TD
+    Browser["Browser UI"] --> API
+    API["Go API /api/*"] --> State["Cluster State Cache"]
+    State --> Intel["Intelligence Engine"]
+    Intel --> Plugins["Diagnostic Plugins"]
+    Plugins --> K8S["Kubernetes API"]
+    API --> Predictor["Predictor Service"]
+    API --> LLM["AI Provider (optional)"]
+    State --> Bus["Event Bus"] --> WS["WebSocket/SSE"] --> Browser
+```
+
+---
+
+## Screenshots
+
+![Overview](./screenshots/overview.png)
+![Diagnostics](./screenshots/diagnostics.png)
+![Assistant](./screenshots/assistant.png)
+![Metrics](./screenshots/metrics.png)
+
+---
+
+## Demo
+
+![Demo](./screenshots/demo.gif)
 
 ---
 
 ## What it does
 
-| Area              | Detail                                                                                                        |
-| ----------------- | ------------------------------------------------------------------------------------------------------------- |
-| **Inventory**     | Pods, nodes, deployments, services, ingresses, namespaces, RBAC, events, storage, config — all views are live |
-| **Diagnostics**   | Rule-based analysis engine with remediation recommendations                                                   |
-| **Risk scoring**  | Evidence-based signal scoring from pod/node health indicators                                                 |
-| **Ops assistant** | Deterministic flow + optional LLM provider, RAG-grounded on Kubernetes docs                                   |
-| **Metrics**       | CPU/memory via `metrics.k8s.io` when Metrics Server is present                                                |
-| **Multi-cluster** | Switch between named cluster contexts at runtime                                                              |
-| **Audit trail**   | Per-request log with actor attribution and outcome                                                            |
-| **Alerts**        | Alertmanager, Slack, PagerDuty integration                                                                    |
+| Area              | Detail                                                                                   |
+| ----------------- | ---------------------------------------------------------------------------------------- |
+| **Inventory**     | Pods, nodes, deployments, services, ingresses, namespaces, RBAC, events, storage, config |
+| **Diagnostics**   | Deterministic intelligence engine with evidence + recommendations                        |
+| **Risk scoring**  | Pod/node risk signals with confidence scoring and trend detection                        |
+| **Ops assistant** | Deterministic answer with optional LLM explanation and RAG grounding                     |
+| **Metrics**       | CPU/memory via `metrics.k8s.io` when Metrics Server is present                           |
+| **Streaming**     | Real-time event stream over SSE/WebSocket                                                |
+| **Multi-cluster** | Switch between named cluster contexts at runtime                                         |
+| **Audit trail**   | Per-request log with actor attribution and outcome                                       |
+| **Alerts**        | Alertmanager, Slack, PagerDuty integration                                               |
+
+---
+
+## Example diagnostics
+
+```json
+{
+  "severity": "critical",
+  "resource": "payments/payment-api",
+  "namespace": "payments",
+  "message": "Pod payment-api restarting due to memory limit exceeded.",
+  "evidence": ["termination reason: OOMKilled", "restart count: 6", "memory usage exceeded limit"],
+  "recommendation": "Increase memory limit or investigate memory leak.",
+  "source": "resource-analyzer"
+}
+```
 
 ---
 
@@ -28,8 +82,8 @@ npm install
 npm run dev
 ```
 
-- Frontend → `http://localhost:5173`
-- Backend → `http://localhost:3000`
+- Frontend -> `http://localhost:5173`
+- Backend -> `http://localhost:3000`
 
 Runs in `demo` mode with mock data. No cluster required, no config needed.
 
@@ -71,16 +125,28 @@ kubectl top pods -A
 | `demo` | Safe showcase         | Off          | Off    |
 | `prod` | Controlled operations | **Required** | Off    |
 
-Write actions are opt-in in every mode. Enabling writes without auth is rejected at startup. `prod` mode refuses to boot without `AUTH_ENABLED=true` and valid tokens.
+Write actions are opt-in in every mode. Enabling writes without auth is rejected at startup. `prod` mode refuses to boot without `AUTH_ENABLED=true` and valid tokens or OIDC configuration.
 
 ---
 
 ## Auth
 
-Set `AUTH_ENABLED=true` and provide tokens:
+Static token auth:
 
 ```env
+AUTH_ENABLED=true
 AUTH_TOKENS=viewer:viewer:token1,operator:operator:token2,admin:admin:token3
+```
+
+OIDC/JWT auth:
+
+```env
+AUTH_ENABLED=true
+AUTH_PROVIDER=google           # google | keycloak | oidc | github
+AUTH_OIDC_ISSUER_URL=""         # required for oidc/keycloak
+AUTH_OIDC_CLIENT_ID=""          # optional (set if your issuer requires it)
+AUTH_OIDC_USERNAME_CLAIM=""      # optional (defaults to preferred_username/email)
+AUTH_OIDC_ROLE_CLAIM=""          # optional (defaults to roles/role/groups)
 ```
 
 **Roles:**
@@ -126,9 +192,15 @@ kubectl apply -k k8s/overlays/demo
 
 # Production
 kubectl apply -k k8s/overlays/prod
+
+# Tracing (Jaeger)
+kubectl apply -k k8s/overlays/tracing
+
+# Observability (Prometheus + Grafana)
+kubectl apply -k k8s/overlays/observability
 ```
 
-Each overlay carries its own RBAC ClusterRole, NetworkPolicy, configmap patches, and probe configuration. Production overlay is read-only by default — no `secrets` access.
+Each overlay carries its own RBAC ClusterRole, NetworkPolicy, configmap patches, and probe configuration. Production overlay is read-only by default.
 
 For multi-cluster, provide named contexts:
 
@@ -140,16 +212,24 @@ See [k8s/README.md](k8s/README.md) for full deployment reference.
 
 ---
 
+## Helm chart
+
+A minimal Helm chart is available in `helm/kubelens`:
+
+```bash
+helm install kubelens ./helm/kubelens
+```
+
+---
+
 ## Predictor service
 
-The risk scoring service runs as a separate FastAPI container. It's optional — the backend degrades gracefully if unavailable.
+The predictor service is optional. It scores incident risk using deterministic signals and CPU trend detection (from node history). If it is unavailable, the backend falls back to local predictions.
 
 ```env
 PREDICTOR_BASE_URL=http://localhost:8001
 PREDICTOR_SHARED_SECRET=your-shared-secret
 ```
-
-Confidence scores are evidence-based: signal count, metric coverage, warning corroboration, and status severity are scored independently. A resource can have a high risk score with low confidence if signals are sparse.
 
 ---
 
@@ -200,6 +280,8 @@ ASSISTANT_EMBEDDING_BASE_URL=http://localhost:11434/v1
 | `GET /api/metrics/prometheus` | Prometheus exposition format                                |
 | `GET /api/openapi.yaml`       | Published API contract                                      |
 
+Grafana + Prometheus are available via the `observability` overlay.
+
 ---
 
 ## Tracing (OpenTelemetry)
@@ -243,6 +325,11 @@ KUBECONFIG_CONTEXTS=             # name:base64,name:base64 for multi-cluster
 
 AUTH_ENABLED=false
 AUTH_TOKENS=                     # user:role:token,user:role:token
+AUTH_PROVIDER=                   # google | keycloak | oidc | github
+AUTH_OIDC_ISSUER_URL=
+AUTH_OIDC_CLIENT_ID=
+AUTH_OIDC_USERNAME_CLAIM=
+AUTH_OIDC_ROLE_CLAIM=
 WRITE_ACTIONS_ENABLED=false
 
 PREDICTOR_BASE_URL=
@@ -271,7 +358,7 @@ PAGERDUTY_ROUTING_KEY=
 ## Development
 
 ```bash
-npm run lint              # ESLint
+npm run lint              # ESLint + Prettier
 npm run test:web          # Vitest (frontend)
 npm run test:go           # Go tests
 npm run test:predictor    # Pytest
@@ -285,23 +372,23 @@ CI runs all of the above plus:
 - Changelog discipline check
 - OpenAPI contract validation
 - Kustomize build + kubeconform schema validation for all overlays
+- Go linting via golangci-lint
+- Trivy filesystem scan + hadolint for Dockerfiles
 - Docker builds for both images
-
-Nothing merges unless all gates pass.
 
 ---
 
 ## Troubleshooting
 
-**Metrics show `N/A`** — Metrics Server is not installed or not healthy. Verify with `kubectl top nodes`.
+**Metrics show `N/A`** -> Metrics Server is not installed or not healthy. Verify with `kubectl top nodes`.
 
-**Predictions fall back to degraded** — Predictor is unreachable. Check `PREDICTOR_BASE_URL` and `/api/readyz`.
+**Predictions fall back to degraded** -> Predictor is unreachable. Check `PREDICTOR_BASE_URL` and `/api/readyz`.
 
-**`403` on write operations** — Either the role doesn't permit writes, or `WRITE_ACTIONS_ENABLED=false`. Both must allow it.
+**`403` on write operations** -> Either the role does not permit writes, or `WRITE_ACTIONS_ENABLED=false`. Both must allow it.
 
-**Startup fails in `prod` mode** — `AUTH_ENABLED=true` and `AUTH_TOKENS` are required. `DEV_MODE=true` is rejected in prod.
+**Startup fails in `prod` mode** -> `AUTH_ENABLED=true` and `AUTH_TOKENS` or OIDC config are required.
 
-**`401` on predictor** — `PREDICTOR_SHARED_SECRET` must match between dashboard and predictor service.
+**`401` on predictor** -> `PREDICTOR_SHARED_SECRET` must match between dashboard and predictor service.
 
 ---
 
@@ -314,22 +401,20 @@ Nothing merges unless all gates pass.
 - Rate limiting on all `/api/*` routes
 - CSRF same-origin enforcement on mutating cookie-authenticated requests
 
-Full details: [SECURITY.md](docs/SECURITY.md) · [THREAT_MODEL.md](docs/THREAT_MODEL.md) · [OPERATIONS_VERIFICATION.md](docs/OPERATIONS_VERIFICATION.md)
+Full details: [SECURITY.md](docs/SECURITY.md) � [THREAT_MODEL.md](docs/THREAT_MODEL.md) � [OPERATIONS_VERIFICATION.md](docs/OPERATIONS_VERIFICATION.md)
 
 ---
 
-## Architecture
+## Comparison
 
-```
-React + Vite  ──►  Go API (/api/*)  ──►  Kubernetes API
-                       │             ──►  metrics.k8s.io
-                       │             ──►  FastAPI Predictor
-                       │             ──►  AI Provider (optional)
-                       │             ──►  Docs RAG Service
-                       └─────────────►  Audit Log
-```
-
-Full details: [ARCHITECTURE.md](docs/ARCHITECTURE.md)
+| Capability                   | KubeLens AI | Lens    | k9s     | kubectl  |
+| ---------------------------- | ----------- | ------- | ------- | -------- |
+| Deterministic diagnostics    | Yes         | No      | No      | No       |
+| AI explanation layer         | Yes         | No      | No      | No       |
+| Real-time event streaming    | Yes         | Partial | Partial | No       |
+| Multi-cluster context switch | Yes         | Yes     | Yes     | Manual   |
+| Built-in audit trail         | Yes         | No      | No      | No       |
+| API-first automation         | Yes         | No      | No      | CLI only |
 
 ---
 

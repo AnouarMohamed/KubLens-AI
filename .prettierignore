@@ -8,3 +8,4 @@ coverage
 predictor/.pytest_cache
 test-results
 playwright-report
+helm

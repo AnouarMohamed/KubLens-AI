@@ -78,6 +78,16 @@ type AuthConfig struct {
 	AllowHeaderToken   bool
 	TrustedCSRFDomains []string
 	Tokens             []AuthToken
+	OIDC               AuthOIDCConfig
+}
+
+type AuthOIDCConfig struct {
+	Enabled       bool
+	Provider      string
+	IssuerURL     string
+	ClientID      string
+	UsernameClaim string
+	RoleClaim     string
 }
 
 type RateLimitConfig struct {
@@ -167,8 +177,24 @@ func Load() (Config, error) {
 
 	authEnabled := parseBoolDefault(os.Getenv("AUTH_ENABLED"), p.authEnabled)
 	tokens := parseAuthTokens(os.Getenv("AUTH_TOKENS"))
+
+	oidcProvider := strings.ToLower(strings.TrimSpace(firstNonEmpty(
+		os.Getenv("AUTH_PROVIDER"),
+		os.Getenv("AUTH_OIDC_PROVIDER"),
+	)))
+	oidcIssuer := strings.TrimSpace(os.Getenv("AUTH_OIDC_ISSUER_URL"))
+	oidcClientID := strings.TrimSpace(os.Getenv("AUTH_OIDC_CLIENT_ID"))
+	oidcUsernameClaim := strings.TrimSpace(os.Getenv("AUTH_OIDC_USERNAME_CLAIM"))
+	oidcRoleClaim := strings.TrimSpace(os.Getenv("AUTH_OIDC_ROLE_CLAIM"))
+	oidcEnabled := parseBoolDefault(os.Getenv("AUTH_OIDC_ENABLED"), false)
+	if oidcProvider != "" || oidcIssuer != "" {
+		oidcEnabled = true
+	}
+
 	if authEnabled && len(tokens) == 0 {
-		if devMode {
+		if oidcEnabled {
+			// OIDC auth does not require static tokens.
+		} else if devMode {
 			tokens = []AuthToken{
 				{Token: "kubelens-viewer", User: "viewer", Role: "viewer"},
 				{Token: "kubelens-operator", User: "operator", Role: "operator"},
@@ -183,6 +209,14 @@ func Load() (Config, error) {
 		AllowHeaderToken:   parseBoolDefault(os.Getenv("AUTH_ALLOW_HEADER_TOKEN"), devMode),
 		TrustedCSRFDomains: parseCSV(os.Getenv("AUTH_TRUSTED_CSRF_DOMAINS")),
 		Tokens:             tokens,
+		OIDC: AuthOIDCConfig{
+			Enabled:       oidcEnabled,
+			Provider:      oidcProvider,
+			IssuerURL:     oidcIssuer,
+			ClientID:      oidcClientID,
+			UsernameClaim: oidcUsernameClaim,
+			RoleClaim:     oidcRoleClaim,
+		},
 	}
 
 	cfg.RateLimit = RateLimitConfig{
@@ -281,6 +315,9 @@ func validate(cfg Config) error {
 	}
 	if cfg.Mode == ModeProd && cfg.Auth.AllowHeaderToken {
 		return errors.New("APP_MODE=prod does not allow AUTH_ALLOW_HEADER_TOKEN=true")
+	}
+	if cfg.Auth.Enabled && len(cfg.Auth.Tokens) == 0 && !cfg.Auth.OIDC.Enabled {
+		return errors.New("AUTH_ENABLED=true requires AUTH_TOKENS or AUTH_OIDC_* configuration")
 	}
 
 	if cfg.WriteActionsEnabled && !cfg.Auth.Enabled {

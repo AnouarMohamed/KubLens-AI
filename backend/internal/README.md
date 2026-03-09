@@ -4,13 +4,17 @@
 
 - `ai/` -> assistant provider interfaces + implementations
 - `apperrors/` -> shared sentinel/domain errors
+- `auth/` -> JWT/OIDC auth, roles, and request principal handling
 - `cluster/` -> Kubernetes data access, mapping, and actions
 - `config/` -> env parsing, mode defaults, and startup validation
 - `bootstrap/` -> dependency assembly and server construction
 - `diagnostics/` -> health scoring + issue inference
+- `events/` -> in-process event bus for streaming updates
 - `httpapi/` -> HTTP handlers, routing, transport concerns
+- `intelligence/` -> deterministic diagnostic engine and scoring
 - `model/` -> canonical backend API models
 - `rag/` -> documentation retrieval and grounding for assistant responses
+- `state/` -> informer-backed cluster cache
 
 Navigation tips:
 

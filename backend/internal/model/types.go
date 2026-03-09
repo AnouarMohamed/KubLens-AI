@@ -202,10 +202,12 @@ type ClusterStats struct {
 
 type DiagnosticIssue struct {
 	Severity       DiagnosticSeverity `json:"severity"`
-	Title          string             `json:"title"`
 	Resource       string             `json:"resource,omitempty"`
-	Details        string             `json:"details"`
+	Namespace      string             `json:"namespace,omitempty"`
+	Message        string             `json:"message"`
+	Evidence       []string           `json:"evidence,omitempty"`
 	Recommendation string             `json:"recommendation"`
+	Source         string             `json:"source,omitempty"`
 }
 
 type DiagnosticsResult struct {

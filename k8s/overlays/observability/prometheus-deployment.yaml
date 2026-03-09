@@ -1,0 +1,34 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: k8s-ops-prometheus
+  namespace: kubernetes-operations-dashboard
+  labels:
+    app.kubernetes.io/name: k8s-ops-prometheus
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: k8s-ops-prometheus
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: k8s-ops-prometheus
+    spec:
+      containers:
+        - name: prometheus
+          image: prom/prometheus:v2.52.0
+          args:
+            - --config.file=/etc/prometheus/prometheus.yml
+            - --storage.tsdb.path=/prometheus
+            - --storage.tsdb.retention.time=12h
+          ports:
+            - name: http
+              containerPort: 9090
+          volumeMounts:
+            - name: config
+              mountPath: /etc/prometheus
+      volumes:
+        - name: config
+          configMap:
+            name: k8s-ops-prometheus-config

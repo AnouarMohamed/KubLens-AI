@@ -16,6 +16,8 @@ import (
 
 	"github.com/go-chi/chi/v5/middleware"
 
+	"kubelens-backend/internal/auth"
+	"kubelens-backend/internal/events"
 	"kubelens-backend/internal/model"
 )
 
@@ -166,14 +168,14 @@ func (s *Server) auditMiddleware(next http.Handler) http.Handler {
 			ClientIP:   sanitizeClientIP(r.RemoteAddr),
 			Success:    status < http.StatusBadRequest,
 		}
-		if p, ok := principalFromContext(r.Context()); ok {
-			entry.User = p.user
-			entry.Role = roleLabel(p.role)
+		if p, ok := auth.PrincipalFromContext(r.Context()); ok {
+			entry.User = p.User
+			entry.Role = auth.RoleLabel(p.Role)
 		}
 
 		saved := s.audit.append(entry)
-		if s.stream != nil {
-			s.stream.publish(model.StreamEvent{
+		if s.eventBus != nil {
+			s.eventBus.Publish(events.Event{
 				Type:      "audit",
 				Timestamp: saved.Timestamp,
 				Payload:   saved,

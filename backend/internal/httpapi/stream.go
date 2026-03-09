@@ -1,66 +1,21 @@
 package httpapi
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5/middleware"
+	"nhooyr.io/websocket"
+	"nhooyr.io/websocket/wsjson"
 
+	"kubelens-backend/internal/events"
 	"kubelens-backend/internal/model"
 )
 
-const streamBufferSize = 32
-
-type streamHub struct {
-	mu     sync.RWMutex
-	nextID int
-	subs   map[int]chan model.StreamEvent
-}
-
-func newStreamHub() *streamHub {
-	return &streamHub{
-		subs: make(map[int]chan model.StreamEvent),
-	}
-}
-
-func (h *streamHub) subscribe() (int, <-chan model.StreamEvent) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-
-	h.nextID++
-	id := h.nextID
-	ch := make(chan model.StreamEvent, streamBufferSize)
-	h.subs[id] = ch
-	return id, ch
-}
-
-func (h *streamHub) unsubscribe(id int) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-
-	ch, ok := h.subs[id]
-	if !ok {
-		return
-	}
-	delete(h.subs, id)
-	close(ch)
-}
-
-func (h *streamHub) publish(event model.StreamEvent) {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-
-	for _, ch := range h.subs {
-		select {
-		case ch <- event:
-		default:
-			// Drop when subscriber is slower than producer to avoid blocking request paths.
-		}
-	}
-}
+const streamHeartbeatInterval = 20 * time.Second
 
 func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
 	flusher, ok := w.(http.Flusher)
@@ -74,10 +29,10 @@ func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
 
-	subID, events := s.stream.subscribe()
-	defer s.stream.unsubscribe(subID)
+	subID, ch := s.eventBus.Subscribe()
+	defer s.eventBus.Unsubscribe(subID)
 
-	_ = writeSSE(w, "connected", model.StreamEvent{
+	_ = writeSSE(w, "connected", events.Event{
 		Type:      "connected",
 		Timestamp: s.now().UTC().Format(time.RFC3339),
 		Payload: map[string]string{
@@ -86,14 +41,19 @@ func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
 	})
 	flusher.Flush()
 
-	ticker := time.NewTicker(8 * time.Second)
+	s.sendInitialStreamSnapshot(r.Context(), func(evt events.Event) error {
+		return writeSSE(w, evt.Type, evt)
+	})
+	flusher.Flush()
+
+	ticker := time.NewTicker(streamHeartbeatInterval)
 	defer ticker.Stop()
 
 	for {
 		select {
 		case <-r.Context().Done():
 			return
-		case event, ok := <-events:
+		case event, ok := <-ch:
 			if !ok {
 				return
 			}
@@ -102,25 +62,74 @@ func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
 			}
 			flusher.Flush()
 		case <-ticker.C:
-			stats := s.currentClusterStats(r.Context())
-			if err := writeSSE(w, "stats", model.StreamEvent{
-				Type:      "stats",
-				Timestamp: s.now().UTC().Format(time.RFC3339),
-				Payload:   stats,
-			}); err != nil {
-				return
-			}
-
-			clusterEvents := trimEvents(s.cluster.ListClusterEvents(r.Context()), 24)
-			if err := writeSSE(w, "cluster_events", model.StreamEvent{
-				Type:      "cluster_events",
-				Timestamp: s.now().UTC().Format(time.RFC3339),
-				Payload:   clusterEvents,
-			}); err != nil {
-				return
-			}
+			_, _ = w.Write([]byte(": ping\n\n"))
 			flusher.Flush()
 		}
+	}
+}
+
+func (s *Server) handleStreamWebSocket(w http.ResponseWriter, r *http.Request) {
+	if s.auth.enabled {
+		if err := validateCSRFSameOrigin(r, s.auth.trustedCSRFDomains); err != nil {
+			writeError(w, http.StatusForbidden, err.Error())
+			return
+		}
+	}
+
+	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
+		OriginPatterns: []string{"*"},
+	})
+	if err != nil {
+		return
+	}
+	defer conn.Close(websocket.StatusNormalClosure, "")
+
+	ctx := r.Context()
+	subID, ch := s.eventBus.Subscribe()
+	defer s.eventBus.Unsubscribe(subID)
+
+	_ = wsjson.Write(ctx, conn, events.Event{
+		Type:      "connected",
+		Timestamp: s.now().UTC().Format(time.RFC3339),
+		Payload: map[string]string{
+			"message": "stream established",
+		},
+	})
+
+	s.sendInitialStreamSnapshot(ctx, func(evt events.Event) error {
+		return wsjson.Write(ctx, conn, evt)
+	})
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case event, ok := <-ch:
+			if !ok {
+				return
+			}
+			if err := wsjson.Write(ctx, conn, event); err != nil {
+				return
+			}
+		}
+	}
+}
+
+func (s *Server) sendInitialStreamSnapshot(ctx context.Context, send func(events.Event) error) {
+	stats := s.currentClusterStats(ctx)
+	_ = send(events.Event{
+		Type:      "stats",
+		Timestamp: s.now().UTC().Format(time.RFC3339),
+		Payload:   stats,
+	})
+
+	clusterEvents := trimEvents(s.cluster.ListClusterEvents(ctx), 32)
+	if len(clusterEvents) > 0 {
+		_ = send(events.Event{
+			Type:      "cluster_events",
+			Timestamp: s.now().UTC().Format(time.RFC3339),
+			Payload:   clusterEvents,
+		})
 	}
 }
 

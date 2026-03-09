@@ -1,12 +1,13 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../lib/api";
 import { useAuthSession } from "../../context/AuthSessionContext";
+import { useStreamRefresh } from "../../app/hooks/useStreamRefresh";
 import type { Pod, PodDetail, PodCreateRequest } from "../../types";
 import PodDetailModal from "../../components/pods/PodDetailModal";
 import PodStatusBadge from "../../components/pods/PodStatusBadge";
 import { PodsSummary } from "./components/PodsSummary";
 
-type PodDetailTab = "specs" | "events";
+type PodDetailTab = "specs" | "events" | "describe";
 
 const STATUSES = ["All", "Running", "Pending", "Failed", "Succeeded", "Unknown"] as const;
 
@@ -27,6 +28,8 @@ export default function Pods() {
   const [activeTab, setActiveTab] = useState<PodDetailTab>("specs");
   const [logText, setLogText] = useState<string | null>(null);
   const [logPodName, setLogPodName] = useState("");
+  const [logStreaming, setLogStreaming] = useState(false);
+  const [logError, setLogError] = useState<string | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [createForm, setCreateForm] = useState<PodCreateRequest>(defaultCreateForm);
   const [isBusy, setIsBusy] = useState(false);
@@ -34,6 +37,8 @@ export default function Pods() {
   const [error, setError] = useState<string | null>(null);
   const canRead = can("read");
   const canWrite = can("write");
+  const logAbortRef = useRef<AbortController | null>(null);
+  const maxLogChars = 20000;
 
   const load = useCallback(async () => {
     if (!canRead) {
@@ -64,6 +69,20 @@ export default function Pods() {
     void load();
   }, [authLoading, load]);
 
+  useEffect(() => {
+    return () => {
+      logAbortRef.current?.abort();
+    };
+  }, []);
+
+  useStreamRefresh({
+    enabled: canRead,
+    eventTypes: ["pod_update", "pod_restart", "pod_failed", "pod_pending", "pod_deleted"],
+    onEvent: () => {
+      void load();
+    },
+  });
+
   const filteredPods = useMemo(() => {
     const q = search.trim().toLowerCase();
     return pods.filter((pod) => {
@@ -83,11 +102,14 @@ export default function Pods() {
 
       setIsBusy(true);
       try {
-        const [detail, events] = await Promise.all([
+        const [detail, events, describe] = await Promise.all([
           api.getPodDetail(namespace, podName),
           api.getPodEvents(namespace, podName),
+          api
+            .getPodDescribe(namespace, podName)
+            .catch((err) => (err instanceof Error ? `Describe failed: ${err.message}` : "Describe failed")),
         ]);
-        setSelectedPod({ ...detail, events });
+        setSelectedPod({ ...detail, events, describe });
         setActiveTab("specs");
         setError(null);
       } catch (err) {
@@ -106,6 +128,10 @@ export default function Pods() {
         return;
       }
 
+      logAbortRef.current?.abort();
+      logAbortRef.current = null;
+      setLogStreaming(false);
+      setLogError(null);
       setIsBusy(true);
       try {
         const logs = await api.getPodLogs(namespace, podName, 50);
@@ -120,6 +146,70 @@ export default function Pods() {
     },
     [canRead],
   );
+
+  const streamLogs = useCallback(
+    async (namespace: string, podName: string) => {
+      if (!canRead) {
+        setError("Authenticate to view pod logs.");
+        return;
+      }
+
+      logAbortRef.current?.abort();
+      const controller = new AbortController();
+      logAbortRef.current = controller;
+      setLogStreaming(true);
+      setLogError(null);
+      setIsBusy(true);
+      setLogPodName(`${namespace}/${podName}`);
+      setLogText("");
+
+      try {
+        const response = await api.streamPodLogs(namespace, podName, 50, undefined, controller.signal);
+        if (!response.ok) {
+          throw new Error(`Log stream failed with status ${response.status}`);
+        }
+        if (!response.body) {
+          throw new Error("Log stream not available");
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) {
+            break;
+          }
+          if (value) {
+            const chunk = decoder.decode(value, { stream: true });
+            setLogText((prev) => {
+              const next = (prev ?? "") + chunk;
+              if (next.length > maxLogChars) {
+                return next.slice(-maxLogChars);
+              }
+              return next;
+            });
+          }
+        }
+      } catch (err) {
+        if (!controller.signal.aborted) {
+          setLogError(err instanceof Error ? err.message : "Log stream failed");
+        }
+      } finally {
+        if (logAbortRef.current === controller) {
+          logAbortRef.current = null;
+        }
+        setLogStreaming(false);
+        setIsBusy(false);
+      }
+    },
+    [canRead],
+  );
+
+  const stopLogStream = useCallback(() => {
+    logAbortRef.current?.abort();
+    logAbortRef.current = null;
+    setLogStreaming(false);
+  }, []);
 
   const createPod = useCallback(async () => {
     if (!canWrite) {
@@ -331,6 +421,13 @@ export default function Pods() {
                       Logs
                     </button>
                     <button
+                      onClick={() => void streamLogs(pod.namespace, pod.name)}
+                      className="btn-sm"
+                      disabled={!canRead}
+                    >
+                      Stream
+                    </button>
+                    <button
                       onClick={() => void restartPod(pod.namespace, pod.name)}
                       className="btn-sm"
                       disabled={!canWrite}
@@ -364,11 +461,29 @@ export default function Pods() {
               <div>
                 <p className="text-sm font-semibold text-zinc-100">Pod Logs</p>
                 <p className="text-xs text-zinc-500">{logPodName}</p>
+                <p className="text-[11px] text-zinc-500">{logStreaming ? "Streaming live output" : "Snapshot"}</p>
               </div>
-              <button onClick={() => setLogText(null)} className="btn-sm">
-                Close
-              </button>
+              <div className="flex gap-2">
+                {logStreaming && (
+                  <button onClick={stopLogStream} className="btn-sm border-zinc-600">
+                    Stop
+                  </button>
+                )}
+                <button
+                  onClick={() => {
+                    stopLogStream();
+                    setLogText(null);
+                    setLogError(null);
+                  }}
+                  className="btn-sm"
+                >
+                  Close
+                </button>
+              </div>
             </header>
+            {logError && (
+              <div className="border-b border-zinc-800 px-4 py-2 text-xs text-rose-300 bg-rose-500/10">{logError}</div>
+            )}
             <pre className="max-h-[60vh] overflow-auto p-4 text-xs leading-relaxed text-zinc-200 bg-zinc-900/60">
               {logText}
             </pre>

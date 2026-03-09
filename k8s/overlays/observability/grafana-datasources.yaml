@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: k8s-ops-grafana-datasources
+  namespace: kubernetes-operations-dashboard
+data:
+  datasources.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        access: proxy
+        url: http://k8s-ops-prometheus:9090
+        isDefault: true

@@ -9,6 +9,7 @@ This directory uses a **base + overlays** structure.
 - `overlays/demo`: read-focused demo profile (readonly RBAC)
 - `overlays/prod`: production profile (auth required + stricter defaults)
 - `overlays/tracing`: demo profile with OpenTelemetry wired to the in-cluster Jaeger backend
+- `overlays/observability`: demo profile with Prometheus + Grafana dashboards
 - `secret.example.yaml`: secrets template
 
 Each overlay includes explicit RBAC manifests (`clusterrole.yaml`, `clusterrolebinding.yaml`) so `kubectl kustomize` and CI validation work with root-only load restrictions.
@@ -60,6 +61,24 @@ Jaeger UI access (port-forward):
 kubectl -n kubernetes-operations-dashboard port-forward svc/k8s-ops-jaeger 16686:16686
 ```
 
+### Observability overlay (Prometheus + Grafana)
+
+```bash
+kubectl apply -k k8s/overlays/observability
+```
+
+Grafana UI access (port-forward):
+
+```bash
+kubectl -n kubernetes-operations-dashboard port-forward svc/k8s-ops-grafana 3001:3000
+```
+
+Prometheus access (port-forward):
+
+```bash
+kubectl -n kubernetes-operations-dashboard port-forward svc/k8s-ops-prometheus 9090:9090
+```
+
 ## Validate manifests locally
 
 ```bash
@@ -67,6 +86,7 @@ kubectl kustomize k8s/overlays/dev > /dev/null
 kubectl kustomize k8s/overlays/demo > /dev/null
 kubectl kustomize k8s/overlays/prod > /dev/null
 kubectl kustomize k8s/overlays/tracing > /dev/null
+kubectl kustomize k8s/overlays/observability > /dev/null
 ```
 
 CI also validates rendered manifests with `kubeconform`.

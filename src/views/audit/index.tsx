@@ -40,7 +40,7 @@ export default function AuditView() {
   }, []);
 
   useEffect(() => {
-    let source: EventSource | null = null;
+    let socket: WebSocket | null = null;
     let cancelled = false;
 
     const connectStream = async () => {
@@ -58,19 +58,19 @@ export default function AuditView() {
         // Keep trying to open stream in local mode.
       }
 
-      source = new EventSource(api.getStreamURL());
-      source.addEventListener("connected", () => {
+      socket = new WebSocket(api.getStreamWSURL());
+      socket.onopen = () => {
         setConnected(true);
         setError(null);
-      });
-      source.addEventListener("audit", (event) => {
-        const payload = parseStreamEvent<AuditEntry>(event);
-        if (!payload) {
+      };
+      socket.onmessage = (event) => {
+        const payload = parseWSStreamEvent<AuditEntry>(event.data);
+        if (!payload || payload.type !== "audit") {
           return;
         }
         setRows((current) => [payload.payload, ...current].slice(0, MAX_ROWS));
-      });
-      source.onerror = () => {
+      };
+      socket.onerror = () => {
         setConnected(false);
       };
     };
@@ -78,7 +78,7 @@ export default function AuditView() {
     void connectStream();
     return () => {
       cancelled = true;
-      source?.close();
+      socket?.close();
       setConnected(false);
     };
   }, []);
@@ -179,9 +179,9 @@ export default function AuditView() {
   );
 }
 
-function parseStreamEvent<T>(event: MessageEvent<string>): StreamEvent<T> | null {
+function parseWSStreamEvent<T>(data: string): StreamEvent<T> | null {
   try {
-    return JSON.parse(event.data) as StreamEvent<T>;
+    return JSON.parse(data) as StreamEvent<T>;
   } catch {
     return null;
   }

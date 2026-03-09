@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 	"sync"
@@ -16,7 +17,9 @@ import (
 	metricsclientset "k8s.io/metrics/pkg/client/clientset/versioned"
 
 	"kubelens-backend/internal/apperrors"
+	"kubelens-backend/internal/events"
 	"kubelens-backend/internal/model"
+	"kubelens-backend/internal/state"
 )
 
 const (
@@ -42,6 +45,10 @@ type Service struct {
 	isReal        bool
 	apiTimeout    time.Duration
 	cacheTTL      time.Duration
+	stateCache    *state.ClusterCache
+	stateEnabled  bool
+	eventBus      *events.Bus
+	logger        *slog.Logger
 
 	mu    sync.RWMutex
 	cache cachedSlices
@@ -55,9 +62,34 @@ type Service struct {
 	mockManifests  map[string]string
 }
 
+type ServiceOption func(*Service)
+
+func WithEventBus(bus *events.Bus) ServiceOption {
+	return func(s *Service) {
+		s.eventBus = bus
+	}
+}
+
+func WithLogger(logger *slog.Logger) ServiceOption {
+	return func(s *Service) {
+		s.logger = logger
+	}
+}
+
+func WithStateCache(enabled bool) ServiceOption {
+	return func(s *Service) {
+		s.stateEnabled = enabled
+	}
+}
+
 // NewService initializes a cluster service.
 // If KUBECONFIG_DATA is missing or invalid, the service falls back to mock mode.
 func NewService(kubeconfigData string) (*Service, error) {
+	return NewServiceWithOptions(kubeconfigData)
+}
+
+// NewServiceWithOptions initializes a cluster service with optional enhancements.
+func NewServiceWithOptions(kubeconfigData string, opts ...ServiceOption) (*Service, error) {
 	svc := &Service{
 		isReal:         false,
 		apiTimeout:     defaultAPITimeout,
@@ -67,6 +99,11 @@ func NewService(kubeconfigData string) (*Service, error) {
 		mockNamespaces: mockNamespaces(),
 		mockResources:  mockCatalogResourceStore(),
 		mockManifests:  mockCatalogManifestStore(),
+		stateEnabled:   true,
+	}
+
+	for _, opt := range opts {
+		opt(svc)
 	}
 
 	trimmed := strings.TrimSpace(kubeconfigData)
@@ -99,11 +136,32 @@ func NewService(kubeconfigData string) (*Service, error) {
 
 	svc.client = clientset
 	svc.isReal = true
+
+	if svc.stateEnabled {
+		svc.stateCache = state.NewClusterCache(clientset, metricsClient, state.Config{
+			Events: svc.eventBus,
+			Logger: svc.logger,
+		})
+	}
 	return svc, nil
 }
 
 func (s *Service) IsRealCluster() bool {
 	return s.isReal
+}
+
+func (s *Service) Start(ctx context.Context) error {
+	if s.stateCache == nil {
+		return nil
+	}
+	return s.stateCache.Start(ctx)
+}
+
+func (s *Service) StateSnapshot(ctx context.Context) (state.ClusterState, bool) {
+	if s.stateCache == nil || !s.stateCache.Ready() {
+		return state.ClusterState{}, false
+	}
+	return s.stateCache.Snapshot(), true
 }
 
 func (s *Service) withTimeout(ctx context.Context) (context.Context, context.CancelFunc) {

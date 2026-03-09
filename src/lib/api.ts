@@ -112,6 +112,7 @@ export const api = {
       body: JSON.stringify({}),
     }),
   getStreamURL: () => buildStreamURL(),
+  getStreamWSURL: () => buildStreamWSURL(),
   getAuthSession: () => requestJson<AuthSession>(apiPath("auth", "session")),
   getClusters: () => requestJson<ClusterContextList>(apiPath("clusters")),
   selectCluster: (name: string) =>
@@ -179,6 +180,27 @@ export const api = {
     const suffix = params.toString();
     return requestText(`${apiPath("pods", namespace, name, "logs")}${suffix ? `?${suffix}` : ""}`);
   },
+  streamPodLogs: (
+    namespace: string,
+    name: string,
+    lines = 50,
+    container?: string,
+    signal?: AbortSignal,
+  ): Promise<Response> => {
+    const params = new URLSearchParams();
+    if (lines > 0) {
+      params.set("lines", String(lines));
+    }
+    if (container && container.trim() !== "") {
+      params.set("container", container.trim());
+    }
+    const suffix = params.toString();
+    return fetch(`${apiPath("pods", namespace, name, "logs", "stream")}${suffix ? `?${suffix}` : ""}`, {
+      credentials: "same-origin",
+      signal,
+    });
+  },
+  getPodDescribe: (namespace: string, name: string) => requestText(apiPath("pods", namespace, name, "describe")),
   restartPod: (namespace: string, name: string) =>
     requestJson<ActionResult>(apiPath("pods", namespace, name, "restart"), {
       method: "POST",
@@ -207,4 +229,12 @@ export { ApiError };
 
 function buildStreamURL(): string {
   return apiPath("stream");
+}
+
+function buildStreamWSURL(): string {
+  if (typeof window === "undefined") {
+    return apiPath("stream", "ws");
+  }
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  return `${protocol}//${window.location.host}${apiPath("stream", "ws")}`;
 }

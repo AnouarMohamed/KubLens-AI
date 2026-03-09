@@ -11,21 +11,31 @@ import (
 
 	"kubelens-backend/internal/ai"
 	"kubelens-backend/internal/alerts"
+	"kubelens-backend/internal/auth"
 	"kubelens-backend/internal/cluster"
 	"kubelens-backend/internal/config"
+	"kubelens-backend/internal/events"
 	"kubelens-backend/internal/httpapi"
+	"kubelens-backend/internal/intelligence"
 	"kubelens-backend/internal/observability"
 	"kubelens-backend/internal/rag"
+	"kubelens-backend/plugins"
+	"kubelens-backend/plugins/crashloop_analyzer"
+	"kubelens-backend/plugins/image_pull_analyzer"
+	"kubelens-backend/plugins/node_health_analyzer"
+	"kubelens-backend/plugins/resource_analyzer"
+	"kubelens-backend/plugins/scheduling_analyzer"
 )
 
 type Result struct {
-	Server          *http.Server
-	Warnings        []string
-	ShutdownTracing func(context.Context) error
+	Server   *http.Server
+	Warnings []string
+	Shutdown func(context.Context) error
 }
 
 func Build(cfg config.Config) (Result, error) {
 	warnings := make([]string, 0, 8)
+	eventBus := events.NewBus(64)
 
 	shutdownTracing := func(context.Context) error { return nil }
 	if strings.TrimSpace(cfg.Tracing.Endpoint) != "" {
@@ -37,7 +47,10 @@ func Build(cfg config.Config) (Result, error) {
 		}
 	}
 
-	clusterSvc, initErr := cluster.NewService(cfg.Cluster.KubeconfigData)
+	clusterSvc, initErr := cluster.NewServiceWithOptions(
+		cfg.Cluster.KubeconfigData,
+		cluster.WithEventBus(eventBus),
+	)
 	if initErr != nil {
 		warnings = append(warnings, fmt.Sprintf("cluster initialization warning: %v", initErr))
 	}
@@ -46,11 +59,26 @@ func Build(cfg config.Config) (Result, error) {
 		"default": clusterSvc,
 	}
 	for name, payload := range cfg.Cluster.Contexts {
-		svc, err := cluster.NewService(payload)
+		svc, err := cluster.NewServiceWithOptions(payload, cluster.WithEventBus(eventBus))
 		if err != nil {
 			warnings = append(warnings, fmt.Sprintf("cluster context %s warning: %v", name, err))
 		}
 		clusterContexts[name] = svc
+	}
+
+	stateCtx, stateCancel := context.WithCancel(context.Background())
+	if err := clusterSvc.Start(stateCtx); err != nil {
+		warnings = append(warnings, fmt.Sprintf("cluster state cache warning: %v", err))
+	}
+	for name, reader := range clusterContexts {
+		if name == "default" {
+			continue
+		}
+		if svc, ok := reader.(*cluster.Service); ok {
+			if err := svc.Start(stateCtx); err != nil {
+				warnings = append(warnings, fmt.Sprintf("cluster state cache (%s) warning: %v", name, err))
+			}
+		}
 	}
 
 	aiProvider, providerErr := buildAIProvider(cfg.Assistant)
@@ -73,6 +101,7 @@ func Build(cfg config.Config) (Result, error) {
 	})
 
 	runtime := config.RuntimeStatus(cfg, clusterSvc.IsRealCluster(), alertDispatcher.Enabled())
+	diagnosticAnalyzer := buildAnalyzer()
 
 	handler := httpapi.New(
 		clusterSvc,
@@ -91,6 +120,8 @@ func Build(cfg config.Config) (Result, error) {
 			FilePath: cfg.Audit.FilePath,
 		}),
 		httpapi.WithAlertDispatcher(alertDispatcher),
+		httpapi.WithEventBus(eventBus),
+		httpapi.WithIntelligence(diagnosticAnalyzer),
 		httpapi.WithClusterContexts(httpapi.ClusterContextsConfig{
 			Default: "default",
 			Readers: clusterContexts,
@@ -111,10 +142,34 @@ func Build(cfg config.Config) (Result, error) {
 	}
 
 	return Result{
-		Server:          server,
-		Warnings:        warnings,
-		ShutdownTracing: shutdownTracing,
+		Server:   server,
+		Warnings: warnings,
+		Shutdown: func(ctx context.Context) error {
+			stateCancel()
+			return shutdownTracing(ctx)
+		},
 	}, nil
+}
+
+func buildAnalyzer() *intelligence.Analyzer {
+	pluginList := []plugins.Plugin{
+		crashloop_analyzer.New(),
+		image_pull_analyzer.New(),
+		node_health_analyzer.New(),
+		resource_analyzer.New(),
+		scheduling_analyzer.New(),
+	}
+
+	runners := make([]intelligence.PluginRunner, 0, len(pluginList))
+	for _, plugin := range pluginList {
+		p := plugin
+		runners = append(runners, intelligence.PluginRunner{
+			Name:    p.Name(),
+			Analyze: p.Analyze,
+		})
+	}
+
+	return intelligence.NewAnalyzer(time.Now, runners...)
 }
 
 func toHTTPAuth(cfg config.AuthConfig) httpapi.AuthConfig {
@@ -132,6 +187,14 @@ func toHTTPAuth(cfg config.AuthConfig) httpapi.AuthConfig {
 		AllowHeaderToken:   cfg.AllowHeaderToken,
 		TrustedCSRFDomains: cfg.TrustedCSRFDomains,
 		Tokens:             tokens,
+		OIDC: auth.OIDCConfig{
+			Enabled:       cfg.OIDC.Enabled,
+			Provider:      cfg.OIDC.Provider,
+			IssuerURL:     cfg.OIDC.IssuerURL,
+			ClientID:      cfg.OIDC.ClientID,
+			UsernameClaim: cfg.OIDC.UsernameClaim,
+			RoleClaim:     cfg.OIDC.RoleClaim,
+		},
 	}
 }
 

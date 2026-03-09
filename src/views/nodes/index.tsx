@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "../../lib/api";
 import { useAuthSession } from "../../context/AuthSessionContext";
+import { useStreamRefresh } from "../../app/hooks/useStreamRefresh";
 import type { Node, NodeDetail } from "../../types";
 import NodeDetailModal from "../../components/nodes/NodeDetailModal";
 import { NodesSummary } from "./components/NodesSummary";
@@ -42,6 +43,14 @@ export default function Nodes() {
     }
     void load();
   }, [authLoading, load]);
+
+  useStreamRefresh({
+    enabled: canRead,
+    eventTypes: ["node_update", "node_not_ready", "node_pressure", "node_deleted"],
+    onEvent: () => {
+      void load();
+    },
+  });
 
   const filteredNodes = useMemo(() => {
     const query = search.trim().toLowerCase();

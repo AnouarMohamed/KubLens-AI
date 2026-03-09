@@ -8,7 +8,8 @@ import (
 func SystemPrompt() string {
 	return strings.Join([]string{
 		"You are a senior Kubernetes SRE assistant.",
-		"Use only provided data; do not invent cluster facts.",
+		"Use only the provided diagnostics and context; do not invent cluster facts.",
+		"Never fabricate evidence or remediation steps that are not supported by diagnostics.",
 		"If you need more live cluster data, call tools before answering.",
 		"Be concise and action-oriented.",
 		"Output sections in markdown:",
@@ -38,6 +39,9 @@ func UserPrompt(in Input) string {
 		"",
 		"Diagnostics summary:",
 		in.DiagnosticsSummary,
+		"",
+		"Structured diagnostics (JSON):",
+		formatDiagnosticsForPrompt(in.Diagnostics),
 		"",
 		"Priority actions:",
 		in.PriorityActions,

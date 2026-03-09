@@ -76,6 +76,13 @@ jobs:
           npm run fmt:go
           git diff --exit-code -- backend/cmd backend/internal
 
+      - name: Go lint (golangci-lint)
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.60.1
+          working-directory: backend
+          args: --timeout=5m
+
       - name: Go tests
         run: npm run test:go
 
@@ -147,15 +154,42 @@ jobs:
       - name: Validate kustomize overlays
         run: |
           set -e
-          for overlay in k8s/overlays/dev k8s/overlays/demo k8s/overlays/prod k8s; do
+          for overlay in k8s/overlays/dev k8s/overlays/demo k8s/overlays/prod k8s/overlays/tracing k8s/overlays/observability k8s; do
             echo "Validating $overlay"
             kustomize build "$overlay" > /tmp/manifest.yaml
             kubeconform -strict -summary -ignore-missing-schemas /tmp/manifest.yaml
           done
 
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Trivy filesystem scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "0"
+
+      - name: Hadolint Dockerfile
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: Dockerfile
+          config: .hadolint.yaml
+
+      - name: Hadolint predictor Dockerfile
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: predictor/Dockerfile
+          config: .hadolint.yaml
+
   docker-build:
     runs-on: ubuntu-latest
-    needs: [release-discipline, frontend, backend, predictor, e2e, manifests]
+    needs: [release-discipline, frontend, backend, predictor, e2e, manifests, security]
     steps:
       - name: Checkout
         uses: actions/checkout@v4

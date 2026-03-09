@@ -168,7 +168,8 @@ function buildDiagnosticsIntroMessage(diagnostics: DiagnosticsResult): Assistant
 
 function formatIssueLine(issue: DiagnosticIssue): string {
   const resource = issue.resource ? ` (${issue.resource})` : "";
-  return `- ${issue.title}${resource}: ${issue.details}`;
+  const evidence = (issue.evidence ?? []).join(" | ");
+  return `- ${issue.message}${resource}: ${evidence || "no evidence captured yet"}`;
 }
 
 function dedupeStrings(values: readonly string[]): string[] {

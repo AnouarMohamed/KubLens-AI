@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"kubelens-backend/internal/model"
+	"kubelens-backend/internal/state"
 )
 
 func BenchmarkHandleAssistant(b *testing.B) {
@@ -120,6 +121,10 @@ func (b benchmarkClusterReader) PodLogs(context.Context, string, string, string,
 	return b.logs
 }
 
+func (b benchmarkClusterReader) StreamPodLogs(context.Context, string, string, string, int) (io.ReadCloser, error) {
+	return io.NopCloser(strings.NewReader(b.logs)), nil
+}
+
 func (b benchmarkClusterReader) PodDetail(context.Context, string, string) (model.PodDetail, error) {
 	return model.PodDetail{}, nil
 }
@@ -142,4 +147,8 @@ func (b benchmarkClusterReader) DeletePod(context.Context, string, string) (mode
 
 func (b benchmarkClusterReader) CordonNode(context.Context, string) (model.ActionResult, error) {
 	return model.ActionResult{Success: true, Message: "cordoned"}, nil
+}
+
+func (b benchmarkClusterReader) StateSnapshot(context.Context) (state.ClusterState, bool) {
+	return state.ClusterState{}, false
 }

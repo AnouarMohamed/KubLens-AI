@@ -237,6 +237,7 @@ func buildLocalPredictions(pods []model.PodSummary, nodes []model.NodeSummary, e
 		cpu, cpuKnown := parsePercent(node.CPUUsage)
 		mem, memKnown := parsePercent(node.MemUsage)
 		resourceWarnings := countResourceWarningEvents(events, node.Name, "")
+		cpuTrend := cpuTrendDelta(node.CPUHistory)
 		cpuSignal := false
 		memSignal := false
 
@@ -257,6 +258,11 @@ func buildLocalPredictions(pods []model.PodSummary, nodes []model.NodeSummary, e
 			memSignal = true
 		}
 
+		if cpuTrend >= 20 && cpuKnown && cpu >= 80 {
+			score += 10
+			signals = append(signals, model.PredictionSignal{Key: "cpuTrend", Value: fmt.Sprintf("+%d%%", cpuTrend)})
+		}
+
 		if resourceWarnings > 0 && node.Status != model.NodeStatusReady {
 			score += minInt(10, resourceWarnings*2)
 		}
@@ -273,6 +279,11 @@ func buildLocalPredictions(pods []model.PodSummary, nodes []model.NodeSummary, e
 			metricSignalCount: boolToInt(cpuSignal) + boolToInt(memSignal),
 			warningMatches:    resourceWarnings,
 		})
+		recommendation := "Inspect kubelet health, node conditions, and workload pressure before scheduling more pods."
+		if cpuTrend >= 20 && cpuKnown && cpu >= 80 {
+			recommendation = "CPU usage is trending up quickly; review noisy neighbors and consider scaling."
+		}
+
 		items = append(items, model.IncidentPrediction{
 			ID:             "node-" + strings.ToLower(node.Name),
 			ResourceKind:   "Node",
@@ -280,7 +291,7 @@ func buildLocalPredictions(pods []model.PodSummary, nodes []model.NodeSummary, e
 			RiskScore:      score,
 			Confidence:     confidence,
 			Summary:        fmt.Sprintf("Node %s shows elevated operational risk.", node.Name),
-			Recommendation: "Inspect kubelet health, node conditions, and workload pressure before scheduling more pods.",
+			Recommendation: recommendation,
 			Signals:        signals,
 		})
 	}
@@ -448,6 +459,18 @@ func minInt(a, b int) int {
 		return a
 	}
 	return b
+}
+
+func cpuTrendDelta(points []model.CPUPoint) int {
+	if len(points) < 2 {
+		return 0
+	}
+	start := points[0].Value
+	end := points[len(points)-1].Value
+	if end < start {
+		return 0
+	}
+	return end - start
 }
 
 func (s *Server) predictionsFromCache() (model.PredictionsResult, bool) {

@@ -39,6 +39,7 @@ export interface PodDetail extends Pod {
   hostIP?: string;
   podIP?: string;
   events?: K8sEvent[];
+  describe?: string;
 }
 
 export interface Node {
@@ -151,10 +152,12 @@ export interface ClusterStats {
 
 export interface DiagnosticIssue {
   severity: DiagnosticSeverity;
-  title: string;
   resource?: string;
-  details: string;
+  namespace?: string;
+  message: string;
+  evidence?: string[];
   recommendation: string;
+  source?: string;
 }
 
 export interface DiagnosticsResult {

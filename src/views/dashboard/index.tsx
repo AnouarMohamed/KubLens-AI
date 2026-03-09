@@ -354,11 +354,11 @@ export default function Dashboard() {
                 <div className="mt-3 space-y-2">
                   {prioritizedIssues.map((issue, index) => (
                     <FindingCard
-                      key={`${issue.title}-${issue.resource ?? "resource"}-${index}`}
+                      key={`${issue.message}-${issue.resource ?? "resource"}-${index}`}
                       severity={issue.severity}
-                      title={issue.title}
+                      title={issue.message}
                       resource={issue.resource}
-                      details={issue.details}
+                      details={(issue.evidence ?? []).join(" | ") || "No evidence captured."}
                       recommendation={issue.recommendation}
                     />
                   ))}

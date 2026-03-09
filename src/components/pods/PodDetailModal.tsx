@@ -1,6 +1,6 @@
 import type { PodDetail, PodStatus } from "../../types";
 
-type PodDetailTab = "specs" | "events";
+type PodDetailTab = "specs" | "events" | "describe";
 
 interface PodDetailModalProps {
   selectedPod: PodDetail | null;
@@ -42,6 +42,7 @@ export default function PodDetailModal({ selectedPod, activeTab, onTabChange, on
           <div className="flex items-center gap-2">
             <TabButton active={activeTab === "specs"} label="Specifications" onClick={() => onTabChange("specs")} />
             <TabButton active={activeTab === "events"} label="Events" onClick={() => onTabChange("events")} />
+            <TabButton active={activeTab === "describe"} label="Describe" onClick={() => onTabChange("describe")} />
             <button onClick={onClose} className="btn-sm">
               Close
             </button>
@@ -151,7 +152,7 @@ export default function PodDetailModal({ selectedPod, activeTab, onTabChange, on
                 </div>
               </section>
             </>
-          ) : (
+          ) : activeTab === "events" ? (
             <section className="space-y-3">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <InfoCard label="Total Events" value={String(events.length)} />
@@ -192,6 +193,18 @@ export default function PodDetailModal({ selectedPod, activeTab, onTabChange, on
                   </tbody>
                 </table>
               </div>
+            </section>
+          ) : (
+            <section className="space-y-3">
+              <div className="rounded-xl border border-zinc-700 bg-zinc-900/80 px-4 py-3">
+                <p className="text-xs uppercase tracking-wide text-zinc-500 font-semibold">kubectl describe</p>
+                <p className="text-[11px] text-zinc-400 mt-1">
+                  Structured summary from the API, useful for rapid triage.
+                </p>
+              </div>
+              <pre className="whitespace-pre-wrap rounded-xl border border-zinc-700 bg-zinc-950/70 p-4 text-xs text-zinc-200">
+                {selectedPod.describe || "Describe output unavailable."}
+              </pre>
             </section>
           )}
         </div>

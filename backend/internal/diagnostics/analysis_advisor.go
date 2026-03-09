@@ -57,7 +57,7 @@ func BuildPriorityActions(diag model.DiagnosticsResult) string {
 		}
 
 		lines = append(lines,
-			fmt.Sprintf("- %s%s", issue.Title, resource),
+			fmt.Sprintf("- %s%s", issue.Message, resource),
 			fmt.Sprintf("  - %s", issue.Recommendation),
 		)
 		count++

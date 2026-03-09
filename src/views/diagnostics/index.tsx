@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuthSession } from "../../context/AuthSessionContext";
 import { api } from "../../lib/api";
+import { useStreamRefresh } from "../../app/hooks/useStreamRefresh";
 import type { DiagnosticSeverity, DiagnosticsResult } from "../../types";
 
 export default function Diagnostics() {
@@ -29,6 +30,14 @@ export default function Diagnostics() {
     void refresh();
   }, [refresh]);
 
+  useStreamRefresh({
+    enabled: can("read"),
+    eventTypes: ["pod_update", "node_update", "deployment_update", "k8s_event"],
+    onEvent: () => {
+      void refresh();
+    },
+  });
+
   const prioritizedIssues = useMemo(() => buildPrioritizedIssues(diagnostics), [diagnostics]);
   const summaryHighlights = useMemo(() => extractSummaryHighlights(diagnostics?.summary ?? ""), [diagnostics?.summary]);
 
@@ -38,11 +47,12 @@ export default function Diagnostics() {
     }
 
     const top = prioritizedIssues[0];
+    const topEvidence = (top.evidence ?? []).join(" | ") || "No supporting evidence captured yet.";
     setIsAlerting(true);
     try {
       const response = await api.dispatchAlert({
-        title: `Diagnostics: ${top.title}`,
-        message: `${top.details}\nRecommended action: ${top.recommendation}`,
+        title: `Diagnostics: ${top.message}`,
+        message: `${topEvidence}\nRecommended action: ${top.recommendation}`,
         severity: top.severity,
         source: "diagnostics",
         tags: [top.resource ?? "cluster", top.severity],
@@ -158,11 +168,11 @@ export default function Diagnostics() {
               <div className="mt-3 space-y-2">
                 {prioritizedIssues.map((issue, index) => (
                   <FindingCard
-                    key={`${issue.title}-${issue.resource ?? "resource"}-${index}`}
+                    key={`${issue.message}-${issue.resource ?? "resource"}-${index}`}
                     severity={issue.severity}
-                    title={issue.title}
+                    title={issue.message}
                     resource={issue.resource}
-                    details={issue.details}
+                    details={(issue.evidence ?? []).join(" | ") || "No supporting evidence captured yet."}
                     recommendation={issue.recommendation}
                   />
                 ))}
@@ -190,21 +200,23 @@ export default function Diagnostics() {
               <thead className="table-head table-head-sticky">
                 <tr>
                   <th className="px-4 py-3 font-semibold">Severity</th>
-                  <th className="px-4 py-3 font-semibold">Title</th>
+                  <th className="px-4 py-3 font-semibold">Finding</th>
                   <th className="px-4 py-3 font-semibold">Resource</th>
-                  <th className="px-4 py-3 font-semibold">Details</th>
+                  <th className="px-4 py-3 font-semibold">Evidence</th>
                   <th className="px-4 py-3 font-semibold">Recommendation</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-700 text-zinc-200">
                 {diagnostics.issues.map((issue, index) => (
-                  <tr key={`${issue.title}-${index}`} className="table-row">
+                  <tr key={`${issue.message}-${index}`} className="table-row">
                     <td className="px-4 py-3">
                       <SeverityBadge severity={issue.severity} />
                     </td>
-                    <td className="px-4 py-3 font-medium">{issue.title}</td>
+                    <td className="px-4 py-3 font-medium">{issue.message}</td>
                     <td className="px-4 py-3 text-zinc-400">{issue.resource || "-"}</td>
-                    <td className="px-4 py-3 text-zinc-400">{issue.details}</td>
+                    <td className="px-4 py-3 text-zinc-400">
+                      {(issue.evidence ?? []).join(" | ") || "No evidence captured."}
+                    </td>
                     <td className="px-4 py-3 text-zinc-400">{issue.recommendation}</td>
                   </tr>
                 ))}

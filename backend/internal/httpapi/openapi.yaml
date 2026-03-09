@@ -13,6 +13,10 @@ paths:
       responses:
         "200":
           description: Service is alive
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
   /readyz:
     get:
       operationId: getReadiness
@@ -20,8 +24,16 @@ paths:
       responses:
         "200":
           description: Service ready
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
         "503":
           description: Service degraded or dependency unavailable
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
   /openapi.yaml:
     get:
       operationId: getOpenAPISpec
@@ -29,6 +41,10 @@ paths:
       responses:
         "200":
           description: OpenAPI document
+          content:
+            text/plain:
+              schema:
+                type: string
   /runtime:
     get:
       operationId: getRuntimeStatus
@@ -40,6 +56,17 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/RuntimeStatus"
+  /metrics:
+    get:
+      operationId: getApiMetrics
+      summary: Request and runtime metrics snapshot
+      responses:
+        "200":
+          description: Metrics snapshot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiMetricsSnapshot"
   /metrics/prometheus:
     get:
       operationId: getPrometheusMetrics
@@ -47,6 +74,10 @@ paths:
       responses:
         "200":
           description: Prometheus text format
+          content:
+            text/plain:
+              schema:
+                type: string
   /auth/session:
     get:
       operationId: getAuthSession
@@ -85,6 +116,17 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /auth/logout:
+    post:
+      operationId: postAuthLogout
+      summary: Clear cookie session
+      responses:
+        "200":
+          description: Session cleared
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthSession"
   /clusters:
     get:
       operationId: getClusters
@@ -92,13 +134,73 @@ paths:
       responses:
         "200":
           description: Cluster contexts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClusterContextList"
   /clusters/select:
     post:
       operationId: postSelectCluster
       summary: Switch active cluster context
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
       responses:
         "200":
           description: Selected context
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClusterSelectResponse"
+  /cluster-info:
+    get:
+      operationId: getClusterInfo
+      summary: Cluster connectivity information
+      responses:
+        "200":
+          description: Cluster info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClusterInfo"
+  /stream:
+    get:
+      operationId: getStream
+      summary: Server-sent events stream
+      responses:
+        "200":
+          description: Event stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+  /stream/ws:
+    get:
+      operationId: getStreamWebSocket
+      summary: WebSocket event stream
+      responses:
+        "101":
+          description: Switching protocols to WebSocket
+  /namespaces:
+    get:
+      operationId: listNamespaces
+      summary: List namespaces
+      responses:
+        "200":
+          description: Namespace list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
   /pods:
     get:
       operationId: listPods
@@ -106,14 +208,101 @@ paths:
       responses:
         "200":
           description: Pod list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PodSummary"
     post:
       operationId: createPod
       summary: Create pod
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PodCreateRequest"
       responses:
         "200":
           description: Action result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActionResult"
         "403":
           description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /pods/{namespace}/{name}:
+    get:
+      operationId: getPodDetail
+      summary: Get pod detail
+      parameters:
+        - in: path
+          name: namespace
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: name
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Pod detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PodDetail"
+    delete:
+      operationId: deletePod
+      summary: Delete pod
+      parameters:
+        - in: path
+          name: namespace
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: name
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Action result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActionResult"
+  /pods/{namespace}/{name}/events:
+    get:
+      operationId: getPodEvents
+      summary: Fetch pod events
+      parameters:
+        - in: path
+          name: namespace
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: name
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Pod events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/K8sEvent"
   /pods/{namespace}/{name}/logs:
     get:
       operationId: getPodLogs
@@ -148,6 +337,84 @@ paths:
             text/plain:
               schema:
                 type: string
+  /pods/{namespace}/{name}/logs/stream:
+    get:
+      operationId: streamPodLogs
+      summary: Stream pod logs
+      parameters:
+        - in: path
+          name: namespace
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: name
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: lines
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 50
+        - in: query
+          name: container
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Streaming log output
+          content:
+            text/plain:
+              schema:
+                type: string
+  /pods/{namespace}/{name}/describe:
+    get:
+      operationId: getPodDescribe
+      summary: Get kubectl describe output
+      parameters:
+        - in: path
+          name: namespace
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: name
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Describe output
+          content:
+            text/plain:
+              schema:
+                type: string
+  /pods/{namespace}/{name}/restart:
+    post:
+      operationId: restartPod
+      summary: Restart pod
+      parameters:
+        - in: path
+          name: namespace
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: name
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Action result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActionResult"
   /nodes:
     get:
       operationId: listNodes
@@ -155,6 +422,222 @@ paths:
       responses:
         "200":
           description: Node list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/NodeSummary"
+  /nodes/{name}:
+    get:
+      operationId: getNodeDetail
+      summary: Get node detail
+      parameters:
+        - in: path
+          name: name
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Node detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NodeDetail"
+  /nodes/{name}/cordon:
+    post:
+      operationId: cordonNode
+      summary: Cordon node
+      parameters:
+        - in: path
+          name: name
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Action result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActionResult"
+  /resources/{kind}:
+    get:
+      operationId: listResources
+      summary: List resources by kind
+      parameters:
+        - in: path
+          name: kind
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Resource list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResourceList"
+  /resources/{kind}/{namespace}/{name}/yaml:
+    get:
+      operationId: getResourceYAML
+      summary: Fetch resource YAML
+      parameters:
+        - in: path
+          name: kind
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: namespace
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: name
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Resource manifest
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResourceManifest"
+    put:
+      operationId: putResourceYAML
+      summary: Apply resource YAML
+      parameters:
+        - in: path
+          name: kind
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: namespace
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: name
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResourceManifest"
+      responses:
+        "200":
+          description: Action result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActionResult"
+  /resources/{kind}/{namespace}/{name}/scale:
+    post:
+      operationId: postResourceScale
+      summary: Scale workload resource
+      parameters:
+        - in: path
+          name: kind
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: namespace
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: name
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ScaleRequest"
+      responses:
+        "200":
+          description: Action result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActionResult"
+  /resources/{kind}/{namespace}/{name}/restart:
+    post:
+      operationId: postResourceRestart
+      summary: Restart workload resource
+      parameters:
+        - in: path
+          name: kind
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: namespace
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: name
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Action result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActionResult"
+  /resources/{kind}/{namespace}/{name}/rollback:
+    post:
+      operationId: postResourceRollback
+      summary: Rollback workload resource
+      parameters:
+        - in: path
+          name: kind
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: namespace
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: name
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Action result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActionResult"
+  /events:
+    get:
+      operationId: listEvents
+      summary: List cluster events
+      responses:
+        "200":
+          description: Cluster events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/K8sEvent"
   /stats:
     get:
       operationId: getStats
@@ -162,6 +645,10 @@ paths:
       responses:
         "200":
           description: Stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClusterStats"
   /diagnostics:
     get:
       operationId: getDiagnostics
@@ -169,6 +656,10 @@ paths:
       responses:
         "200":
           description: Diagnostics payload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DiagnosticsResult"
   /predictions:
     get:
       operationId: getPredictions
@@ -182,13 +673,70 @@ paths:
       responses:
         "200":
           description: Prediction payload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PredictionsResult"
   /assistant:
     post:
       operationId: postAssistant
       summary: Assistant question/answer endpoint
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [message]
+              properties:
+                message:
+                  type: string
       responses:
         "200":
           description: Assistant response
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AssistantResponse"
+  /audit:
+    get:
+      operationId: getAuditLog
+      summary: Fetch audit log
+      responses:
+        "200":
+          description: Audit log
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditLogResponse"
+  /alerts/dispatch:
+    post:
+      operationId: postAlertDispatch
+      summary: Dispatch alert to configured channels
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AlertDispatchRequest"
+      responses:
+        "200":
+          description: Alert dispatch result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertDispatchResponse"
+  /alerts/test:
+    post:
+      operationId: postAlertTest
+      summary: Send a test alert to configured channels
+      responses:
+        "200":
+          description: Test alert result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AlertDispatchResponse"
 components:
   schemas:
     RuntimeStatus:
@@ -246,13 +794,615 @@ components:
           type: boolean
         authenticated:
           type: boolean
+        user:
+          $ref: "#/components/schemas/SessionUser"
         permissions:
           type: array
           items:
             type: string
+    SessionUser:
+      type: object
+      required:
+        - name
+        - role
+      properties:
+        name:
+          type: string
+        role:
+          type: string
+          enum: [viewer, operator, admin]
     ErrorResponse:
       type: object
       required: [error]
       properties:
         error:
           type: string
+    HealthStatus:
+      type: object
+      required:
+        - status
+        - timestamp
+        - checks
+        - build
+      properties:
+        status:
+          type: string
+        timestamp:
+          type: string
+        checks:
+          type: array
+          items:
+            $ref: "#/components/schemas/HealthCheck"
+        build:
+          $ref: "#/components/schemas/BuildInfo"
+    HealthCheck:
+      type: object
+      required:
+        - name
+        - ok
+        - message
+      properties:
+        name:
+          type: string
+        ok:
+          type: boolean
+        message:
+          type: string
+        lastSuccess:
+          type: string
+        lastFailure:
+          type: string
+    BuildInfo:
+      type: object
+      required:
+        - version
+        - commit
+        - builtAt
+      properties:
+        version:
+          type: string
+        commit:
+          type: string
+        builtAt:
+          type: string
+    ClusterContext:
+      type: object
+      required: [name, isRealCluster]
+      properties:
+        name:
+          type: string
+        isRealCluster:
+          type: boolean
+    ClusterContextList:
+      type: object
+      required: [selected, items]
+      properties:
+        selected:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ClusterContext"
+    ClusterSelectResponse:
+      type: object
+      required: [selected]
+      properties:
+        selected:
+          type: string
+    ClusterInfo:
+      type: object
+      required: [isRealCluster]
+      properties:
+        isRealCluster:
+          type: boolean
+    PodSummary:
+      type: object
+      required: [id, name, namespace, status, cpu, memory, age, restarts]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        namespace:
+          type: string
+        status:
+          type: string
+        cpu:
+          type: string
+        memory:
+          type: string
+        age:
+          type: string
+        restarts:
+          type: integer
+    PodDetail:
+      allOf:
+        - $ref: "#/components/schemas/PodSummary"
+        - type: object
+          properties:
+            nodeName:
+              type: string
+            hostIP:
+              type: string
+            podIP:
+              type: string
+            containers:
+              type: array
+              items:
+                $ref: "#/components/schemas/ContainerSpec"
+            volumes:
+              type: array
+              items:
+                $ref: "#/components/schemas/NamedVolume"
+    ContainerSpec:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        image:
+          type: string
+        env:
+          type: array
+          items:
+            $ref: "#/components/schemas/EnvVar"
+        volumeMounts:
+          type: array
+          items:
+            $ref: "#/components/schemas/VolumeMount"
+        resources:
+          $ref: "#/components/schemas/ContainerResources"
+    EnvVar:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        value:
+          type: string
+    VolumeMount:
+      type: object
+      properties:
+        name:
+          type: string
+        mountPath:
+          type: string
+    ContainerResources:
+      type: object
+      properties:
+        requests:
+          $ref: "#/components/schemas/ResourcePairs"
+        limits:
+          $ref: "#/components/schemas/ResourcePairs"
+    ResourcePairs:
+      type: object
+      properties:
+        cpu:
+          type: string
+        memory:
+          type: string
+    NamedVolume:
+      type: object
+      properties:
+        name:
+          type: string
+    NodeSummary:
+      type: object
+      required: [name, status, roles, age, version, cpuUsage, memUsage]
+      properties:
+        name:
+          type: string
+        status:
+          type: string
+        roles:
+          type: string
+        age:
+          type: string
+        version:
+          type: string
+        cpuUsage:
+          type: string
+        memUsage:
+          type: string
+        cpuHistory:
+          type: array
+          items:
+            $ref: "#/components/schemas/CPUPoint"
+    CPUPoint:
+      type: object
+      properties:
+        time:
+          type: string
+        value:
+          type: integer
+    NodeDetail:
+      allOf:
+        - $ref: "#/components/schemas/NodeSummary"
+        - type: object
+          properties:
+            capacity:
+              $ref: "#/components/schemas/ResourceCapacity"
+            allocatable:
+              $ref: "#/components/schemas/ResourceCapacity"
+            conditions:
+              type: array
+              items:
+                $ref: "#/components/schemas/NodeCondition"
+            addresses:
+              type: array
+              items:
+                $ref: "#/components/schemas/NodeAddress"
+    ResourceCapacity:
+      type: object
+      properties:
+        cpu:
+          type: string
+        memory:
+          type: string
+        pods:
+          type: string
+    NodeCondition:
+      type: object
+      properties:
+        type:
+          type: string
+        status:
+          type: string
+        lastTransitionTime:
+          type: string
+        reason:
+          type: string
+        message:
+          type: string
+    NodeAddress:
+      type: object
+      properties:
+        type:
+          type: string
+        address:
+          type: string
+    K8sEvent:
+      type: object
+      properties:
+        type:
+          type: string
+        reason:
+          type: string
+        age:
+          type: string
+        from:
+          type: string
+        message:
+          type: string
+        count:
+          type: integer
+        lastTimestamp:
+          type: string
+    ClusterStats:
+      type: object
+      required: [pods, nodes, cluster]
+      properties:
+        pods:
+          $ref: "#/components/schemas/PodStats"
+        nodes:
+          $ref: "#/components/schemas/NodeStats"
+        cluster:
+          $ref: "#/components/schemas/ClusterCapacity"
+    PodStats:
+      type: object
+      properties:
+        total:
+          type: integer
+        running:
+          type: integer
+        pending:
+          type: integer
+        failed:
+          type: integer
+    NodeStats:
+      type: object
+      properties:
+        total:
+          type: integer
+        ready:
+          type: integer
+        notReady:
+          type: integer
+    ClusterCapacity:
+      type: object
+      properties:
+        cpu:
+          type: string
+        memory:
+          type: string
+        storage:
+          type: string
+    DiagnosticIssue:
+      type: object
+      required: [severity, message, recommendation]
+      properties:
+        severity:
+          type: string
+        resource:
+          type: string
+        namespace:
+          type: string
+        message:
+          type: string
+        evidence:
+          type: array
+          items:
+            type: string
+        recommendation:
+          type: string
+        source:
+          type: string
+    DiagnosticsResult:
+      type: object
+      required: [summary, timestamp, criticalIssues, warningIssues, healthScore, issues]
+      properties:
+        summary:
+          type: string
+        timestamp:
+          type: string
+        criticalIssues:
+          type: integer
+        warningIssues:
+          type: integer
+        healthScore:
+          type: integer
+        issues:
+          type: array
+          items:
+            $ref: "#/components/schemas/DiagnosticIssue"
+    PredictionSignal:
+      type: object
+      properties:
+        key:
+          type: string
+        value:
+          type: string
+    IncidentPrediction:
+      type: object
+      required: [id, resourceKind, resource, riskScore, confidence, summary, recommendation]
+      properties:
+        id:
+          type: string
+        resourceKind:
+          type: string
+        resource:
+          type: string
+        namespace:
+          type: string
+        riskScore:
+          type: integer
+        confidence:
+          type: integer
+        summary:
+          type: string
+        recommendation:
+          type: string
+        signals:
+          type: array
+          items:
+            $ref: "#/components/schemas/PredictionSignal"
+    PredictionsResult:
+      type: object
+      required: [source, generatedAt, items]
+      properties:
+        source:
+          type: string
+        generatedAt:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/IncidentPrediction"
+    ResourceRecord:
+      type: object
+      required: [id, name, status, age]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        namespace:
+          type: string
+        status:
+          type: string
+        age:
+          type: string
+        summary:
+          type: string
+    ResourceList:
+      type: object
+      required: [kind, items]
+      properties:
+        kind:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ResourceRecord"
+    ResourceManifest:
+      type: object
+      required: [yaml]
+      properties:
+        yaml:
+          type: string
+    PodCreateRequest:
+      type: object
+      required: [namespace, name, image]
+      properties:
+        namespace:
+          type: string
+        name:
+          type: string
+        image:
+          type: string
+    ScaleRequest:
+      type: object
+      required: [replicas]
+      properties:
+        replicas:
+          type: integer
+    ActionResult:
+      type: object
+      required: [success, message]
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+    AssistantResponse:
+      type: object
+      required: [answer, hints, referencedResources, timestamp]
+      properties:
+        answer:
+          type: string
+        hints:
+          type: array
+          items:
+            type: string
+        referencedResources:
+          type: array
+          items:
+            type: string
+        references:
+          type: array
+          items:
+            $ref: "#/components/schemas/DocumentationReference"
+        timestamp:
+          type: string
+    DocumentationReference:
+      type: object
+      required: [title, url, source]
+      properties:
+        title:
+          type: string
+        url:
+          type: string
+        source:
+          type: string
+        snippet:
+          type: string
+    ApiRouteMetrics:
+      type: object
+      properties:
+        route:
+          type: string
+        requests:
+          type: integer
+        errors:
+          type: integer
+        bytes:
+          type: integer
+        status2xx:
+          type: integer
+        status3xx:
+          type: integer
+        status4xx:
+          type: integer
+        status5xx:
+          type: integer
+        avgLatencyMs:
+          type: number
+        maxLatencyMs:
+          type: number
+    ApiMetricsSnapshot:
+      type: object
+      properties:
+        uptimeSeconds:
+          type: number
+        inFlight:
+          type: integer
+        totalRequests:
+          type: integer
+        totalErrors:
+          type: integer
+        totalBytes:
+          type: integer
+        avgLatencyMs:
+          type: number
+        maxLatencyMs:
+          type: number
+        routes:
+          type: array
+          items:
+            $ref: "#/components/schemas/ApiRouteMetrics"
+    AuditEntry:
+      type: object
+      properties:
+        id:
+          type: string
+        timestamp:
+          type: string
+        requestId:
+          type: string
+        method:
+          type: string
+        path:
+          type: string
+        route:
+          type: string
+        action:
+          type: string
+        status:
+          type: integer
+        durationMs:
+          type: number
+        bytes:
+          type: number
+        clientIp:
+          type: string
+        user:
+          type: string
+        role:
+          type: string
+        success:
+          type: boolean
+    AuditLogResponse:
+      type: object
+      properties:
+        total:
+          type: integer
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/AuditEntry"
+    AlertDispatchRequest:
+      type: object
+      required: [title, message]
+      properties:
+        title:
+          type: string
+        message:
+          type: string
+        severity:
+          type: string
+        source:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+    AlertChannelResult:
+      type: object
+      required: [channel, success]
+      properties:
+        channel:
+          type: string
+        success:
+          type: boolean
+        error:
+          type: string
+    AlertDispatchResponse:
+      type: object
+      required: [success, results]
+      properties:
+        success:
+          type: boolean
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/AlertChannelResult"

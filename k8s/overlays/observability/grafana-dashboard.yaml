@@ -1,0 +1,67 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: k8s-ops-grafana-dashboards
+  namespace: kubernetes-operations-dashboard
+data:
+  dashboard.yaml: |
+    apiVersion: 1
+    providers:
+      - name: "kubelens"
+        orgId: 1
+        folder: "KubeLens"
+        type: file
+        disableDeletion: false
+        editable: true
+        options:
+          path: /etc/grafana/provisioning/dashboards
+  kubelens-dashboard.json: |
+    {
+      "uid": "kubelens-overview",
+      "title": "KubeLens API Overview",
+      "timezone": "browser",
+      "schemaVersion": 39,
+      "version": 1,
+      "panels": [
+        {
+          "id": 1,
+          "type": "timeseries",
+          "title": "Request Rate",
+          "datasource": "Prometheus",
+          "targets": [
+            { "expr": "rate(kubelens_http_requests_total[5m])", "legendFormat": "req/s" }
+          ],
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 }
+        },
+        {
+          "id": 2,
+          "type": "timeseries",
+          "title": "Error Rate",
+          "datasource": "Prometheus",
+          "targets": [
+            { "expr": "rate(kubelens_http_errors_total[5m])", "legendFormat": "errors/s" }
+          ],
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 }
+        },
+        {
+          "id": 3,
+          "type": "timeseries",
+          "title": "Avg Latency (ms)",
+          "datasource": "Prometheus",
+          "targets": [
+            { "expr": "kubelens_http_latency_avg_ms", "legendFormat": "avg" }
+          ],
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 }
+        },
+        {
+          "id": 4,
+          "type": "timeseries",
+          "title": "In-Flight Requests",
+          "datasource": "Prometheus",
+          "targets": [
+            { "expr": "kubelens_http_inflight_requests", "legendFormat": "inflight" }
+          ],
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 }
+        }
+      ]
+    }

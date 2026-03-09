@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -13,7 +14,10 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 
 	"kubelens-backend/internal/ai"
+	"kubelens-backend/internal/events"
+	"kubelens-backend/internal/intelligence"
 	"kubelens-backend/internal/model"
+	"kubelens-backend/internal/state"
 )
 
 type ClusterReader interface {
@@ -29,12 +33,14 @@ type ClusterReader interface {
 	RollbackResource(ctx context.Context, kind, namespace, name string) (model.ActionResult, error)
 	PodEvents(ctx context.Context, namespace, name string) []model.K8sEvent
 	PodLogs(ctx context.Context, namespace, name, container string, lines int) string
+	StreamPodLogs(ctx context.Context, namespace, name, container string, lines int) (io.ReadCloser, error)
 	PodDetail(ctx context.Context, namespace, name string) (model.PodDetail, error)
 	NodeDetail(ctx context.Context, name string) (model.NodeDetail, error)
 	CreatePod(ctx context.Context, req model.PodCreateRequest) (model.ActionResult, error)
 	RestartPod(ctx context.Context, namespace, name string) (model.ActionResult, error)
 	DeletePod(ctx context.Context, namespace, name string) (model.ActionResult, error)
 	CordonNode(ctx context.Context, name string) (model.ActionResult, error)
+	StateSnapshot(ctx context.Context) (state.ClusterState, bool)
 }
 
 type Server struct {
@@ -48,13 +54,14 @@ type Server struct {
 	writesOn  bool
 	anonPerms []string
 	audit     *auditLog
-	stream    *streamHub
+	eventBus  *events.Bus
 	alerts    alertDispatcher
 	ai        ai.Provider
 	aiTTL     time.Duration
 	docs      docsRetriever
 	predictor predictionProvider
 	buildInfo model.BuildInfo
+	intel     *intelligence.Analyzer
 
 	predictionsTTL   time.Duration
 	predictionsMu    sync.RWMutex
@@ -126,6 +133,18 @@ func WithAlertDispatcher(dispatcher alertDispatcher) Option {
 	}
 }
 
+func WithEventBus(bus *events.Bus) Option {
+	return func(s *Server) {
+		s.eventBus = bus
+	}
+}
+
+func WithIntelligence(analyzer *intelligence.Analyzer) Option {
+	return func(s *Server) {
+		s.intel = analyzer
+	}
+}
+
 func WithPredictionsTTL(ttl time.Duration) Option {
 	return func(s *Server) {
 		if ttl > 0 {
@@ -184,7 +203,7 @@ func newServer(clusterSvc ClusterReader, now func() time.Time, logger *slog.Logg
 		logger:         logger,
 		metrics:        newRequestMetrics(now),
 		audit:          newAuditLog(maxAuditLimit, "", logger),
-		stream:         newStreamHub(),
+		eventBus:       events.NewBus(64),
 		aiTTL:          8 * time.Second,
 		predictionsTTL: 8 * time.Second,
 		buildInfo: model.BuildInfo{
@@ -209,6 +228,10 @@ func newServer(clusterSvc ClusterReader, now func() time.Time, logger *slog.Logg
 
 	for _, opt := range opts {
 		opt(server)
+	}
+
+	if server.eventBus == nil {
+		server.eventBus = events.NewBus(64)
 	}
 
 	return server
@@ -244,6 +267,7 @@ func (s *Server) Router(distDir string) http.Handler {
 		api.Post("/alerts/test", s.handleAlertTest)
 		api.Get("/audit", s.handleAuditLog)
 		api.Get("/stream", s.handleStream)
+		api.Get("/stream/ws", s.handleStreamWebSocket)
 		api.Get("/namespaces", s.handleNamespaces)
 		api.Get("/pods", s.handlePods)
 		api.Get("/nodes", s.handleNodes)
@@ -257,6 +281,8 @@ func (s *Server) Router(distDir string) http.Handler {
 		api.Post("/pods", s.handleCreatePod)
 		api.Get("/pods/{namespace}/{name}/events", s.handlePodEvents)
 		api.Get("/pods/{namespace}/{name}/logs", s.handlePodLogs)
+		api.Get("/pods/{namespace}/{name}/logs/stream", s.handlePodLogsStream)
+		api.Get("/pods/{namespace}/{name}/describe", s.handlePodDescribe)
 		api.Post("/pods/{namespace}/{name}/restart", s.handleRestartPod)
 		api.Delete("/pods/{namespace}/{name}", s.handleDeletePod)
 		api.Get("/pods/{namespace}/{name}", s.handlePodDetail)

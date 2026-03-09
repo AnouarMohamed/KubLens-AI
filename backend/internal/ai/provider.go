@@ -15,12 +15,23 @@ type Input struct {
 	Intent               string
 	LocalAnswer          string
 	DiagnosticsSummary   string
+	Diagnostics          []DiagnosticBrief
 	PriorityActions      string
 	ReferencedResources  []string
 	ClusterSnapshotBrief string
 	DocumentationContext string
 	DocumentationRefs    []DocReference
 	EnrichedContext      string
+}
+
+type DiagnosticBrief struct {
+	Severity       string
+	Resource       string
+	Namespace      string
+	Message        string
+	Evidence       []string
+	Recommendation string
+	Source         string
 }
 
 // Provider generates an assistant answer from normalized context.

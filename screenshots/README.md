@@ -8,6 +8,7 @@ Suggested names:
 - `metrics.png`
 - `diagnostics.png`
 - `assistant.png`
+- `demo.gif`
 
 Markdown example:
 

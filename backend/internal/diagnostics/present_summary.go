@@ -30,14 +30,14 @@ func buildSummary(healthScore int, pods []model.PodSummary, nodes []model.NodeSu
 			continue
 		}
 
-		title := issue.Title
+		title := issue.Message
 		if issue.Resource != "" {
-			title = fmt.Sprintf("%s (%s)", issue.Title, issue.Resource)
+			title = fmt.Sprintf("%s (%s)", issue.Message, issue.Resource)
 		}
 
 		lines = append(lines,
 			fmt.Sprintf("- **%s**: %s", strings.ToUpper(string(issue.Severity)), title),
-			fmt.Sprintf("  - %s", issue.Details),
+			fmt.Sprintf("  - %s", strings.Join(issue.Evidence, " | ")),
 			fmt.Sprintf("  - Recommended action: %s", issue.Recommendation),
 		)
 	}

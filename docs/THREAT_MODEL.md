@@ -37,7 +37,7 @@ This document defines high-risk attack paths for KubeLens AI and the explicit co
 
 ## Explicit non-goals (current release)
 
-- No OIDC/JWT identity provider integration yet
+- No interactive OAuth browser login flows yet (JWT/OIDC bearer validation is supported)
 - No hardware-backed secret management in local mode
 - No signed audit log chain/tamper-evidence yet
 

@@ -76,3 +76,11 @@ If OTEL export is enabled:
 1. Open the Jaeger UI and select service `kubelens-backend`.
 2. Trigger a prediction request (`GET /api/predictions`).
 3. Verify the trace shows browser → API → k8s client → predictor as a single timeline.
+
+## 8. Observability dashboard verification (optional)
+
+If the observability overlay is installed:
+
+1. Port-forward Grafana (`svc/k8s-ops-grafana`) and log in.
+2. Open the "KubeLens API Overview" dashboard.
+3. Confirm request rate and latency panels are populated after browsing the UI.

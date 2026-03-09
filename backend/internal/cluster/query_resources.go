@@ -16,7 +16,55 @@ func (s *Service) listRealResources(ctx context.Context, kind string) ([]model.R
 	callCtx, cancel := s.withTimeout(ctx)
 	defer cancel()
 
-	switch strings.ToLower(strings.TrimSpace(kind)) {
+	normalized := strings.ToLower(strings.TrimSpace(kind))
+	if snapshot, ok := s.StateSnapshot(ctx); ok {
+		switch normalized {
+		case "pods":
+			pods := podsFromState(snapshot)
+			items := make([]model.ResourceRecord, 0, len(pods))
+			for _, pod := range pods {
+				items = append(items, model.ResourceRecord{
+					ID:        pod.ID,
+					Name:      pod.Name,
+					Namespace: pod.Namespace,
+					Status:    string(pod.Status),
+					Age:       pod.Age,
+					Summary:   fmt.Sprintf("CPU %s, Memory %s, Restarts %d", pod.CPU, pod.Memory, pod.Restarts),
+				})
+			}
+			return items, nil
+		case "nodes":
+			nodes := nodesFromState(snapshot)
+			items := make([]model.ResourceRecord, 0, len(nodes))
+			for _, node := range nodes {
+				items = append(items, model.ResourceRecord{
+					ID:      node.Name,
+					Name:    node.Name,
+					Status:  string(node.Status),
+					Age:     node.Age,
+					Summary: fmt.Sprintf("CPU %s, Memory %s", node.CPUUsage, node.MemUsage),
+				})
+			}
+			return items, nil
+		case "deployments":
+			return deploymentRecordsFromState(snapshot), nil
+		case "events":
+			events := eventsFromState(snapshot)
+			items := make([]model.ResourceRecord, 0, len(events))
+			for i, event := range events {
+				items = append(items, model.ResourceRecord{
+					ID:      fmt.Sprintf("event-%d", i),
+					Name:    event.Reason,
+					Status:  event.Type,
+					Age:     event.Age,
+					Summary: event.Message,
+				})
+			}
+			return items, nil
+		}
+	}
+
+	switch normalized {
 	case "pods":
 		pods, _ := s.Snapshot(ctx)
 		items := make([]model.ResourceRecord, 0, len(pods))

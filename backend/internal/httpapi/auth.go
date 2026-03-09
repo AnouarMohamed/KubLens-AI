@@ -1,7 +1,6 @@
 package httpapi
 
 import (
-	"context"
 	"errors"
 	"net/http"
 	"net/url"
@@ -11,53 +10,20 @@ import (
 
 	"github.com/go-chi/chi/v5/middleware"
 
+	"kubelens-backend/internal/auth"
 	"kubelens-backend/internal/model"
 )
 
-type AuthConfig struct {
-	Enabled            bool
-	Tokens             []AuthToken
-	AllowHeaderToken   bool
-	TrustedCSRFDomains []string
-}
+type AuthConfig = auth.Config
 
-type AuthToken struct {
-	Token string
-	User  string
-	Role  string
-}
-
-type authRole int
-
-const (
-	roleViewer authRole = iota + 1
-	roleOperator
-	roleAdmin
-)
-
-type principal struct {
-	user string
-	role authRole
-}
+type AuthToken = auth.Token
 
 type authRuntime struct {
 	enabled            bool
-	allowHeaderToken   bool
 	trustedCSRFDomains []string
-	tokens             map[string]principal
+	authenticator      *auth.Authenticator
 	cookieName         string
 }
-
-type authChannel int
-
-const (
-	authChannelUnknown authChannel = iota
-	authChannelBearer
-	authChannelHeader
-	authChannelCookie
-)
-
-type principalContextKey struct{}
 
 func WithAuth(config AuthConfig) Option {
 	return func(s *Server) {
@@ -67,27 +33,10 @@ func WithAuth(config AuthConfig) Option {
 
 func (a *authRuntime) configure(config AuthConfig) {
 	a.enabled = config.Enabled
-	a.allowHeaderToken = config.AllowHeaderToken
 	a.trustedCSRFDomains = normalizeDomains(config.TrustedCSRFDomains)
-	a.tokens = make(map[string]principal, len(config.Tokens))
-	if strings.TrimSpace(a.cookieName) == "" {
-		a.cookieName = "kubelens_auth"
-	}
-
-	for _, token := range config.Tokens {
-		secret := strings.TrimSpace(token.Token)
-		if secret == "" {
-			continue
-		}
-
-		p := principal{
-			user: strings.TrimSpace(token.User),
-			role: parseRole(token.Role),
-		}
-		if p.user == "" {
-			p.user = "operator"
-		}
-		a.tokens[secret] = p
+	a.authenticator = auth.NewAuthenticator(config)
+	if a.authenticator != nil {
+		a.cookieName = a.authenticator.CookieName()
 	}
 }
 
@@ -113,9 +62,11 @@ func (s *Server) authMiddleware(next http.Handler) http.Handler {
 				return
 			}
 
-			if p, _, err := s.authenticate(r); err == "" {
-				next.ServeHTTP(w, r.WithContext(withPrincipal(r.Context(), p)))
-				return
+			if s.auth.authenticator != nil {
+				if p, _, err := s.auth.authenticator.AuthenticateRequest(r); err == nil {
+					next.ServeHTTP(w, r.WithContext(auth.WithPrincipal(r.Context(), p)))
+					return
+				}
 			}
 
 			next.ServeHTTP(w, r)
@@ -123,33 +74,38 @@ func (s *Server) authMiddleware(next http.Handler) http.Handler {
 		}
 
 		var (
-			p       principal
-			channel authChannel
-			err     string
+			p       auth.Principal
+			channel auth.Channel
+			err     error
 		)
 
 		if !s.auth.enabled {
-			p = principal{user: "local-viewer", role: roleViewer}
+			p = auth.Principal{User: "local-viewer", Role: auth.RoleViewer}
 		} else {
-			p, channel, err = s.authenticate(r)
-			if err != "" {
+			if s.auth.authenticator == nil {
 				s.recordAuthFailure(r, http.StatusUnauthorized, "unauthenticated")
-				writeError(w, http.StatusUnauthorized, err)
+				writeError(w, http.StatusUnauthorized, "authenticator not configured")
+				return
+			}
+			p, channel, err = s.auth.authenticator.AuthenticateRequest(r)
+			if err != nil {
+				s.recordAuthFailure(r, http.StatusUnauthorized, "unauthenticated")
+				writeError(w, http.StatusUnauthorized, err.Error())
 				return
 			}
 		}
 
-		required := requiredRole(r.Method, r.URL.Path)
-		if p.role < required {
+		required := auth.RequiredRole(r.Method, r.URL.Path)
+		if p.Role < required {
 			s.recordAuthFailure(r, http.StatusForbidden, "forbidden")
 			writeError(w, http.StatusForbidden, "insufficient role for this action")
 			return
 		}
-		if required >= roleOperator && !s.writesOn {
+		if required >= auth.RoleOperator && !s.writesOn {
 			writeError(w, http.StatusForbidden, "mutating operations are disabled for this environment")
 			return
 		}
-		if isMutatingMethod(r.Method) && channel == authChannelCookie {
+		if isMutatingMethod(r.Method) && channel == auth.ChannelCookie {
 			if err := validateCSRFSameOrigin(r, s.auth.trustedCSRFDomains); err != nil {
 				s.recordAuthFailure(r, http.StatusForbidden, "csrf_blocked")
 				writeError(w, http.StatusForbidden, err.Error())
@@ -157,44 +113,8 @@ func (s *Server) authMiddleware(next http.Handler) http.Handler {
 			}
 		}
 
-		next.ServeHTTP(w, r.WithContext(withPrincipal(r.Context(), p)))
+		next.ServeHTTP(w, r.WithContext(auth.WithPrincipal(r.Context(), p)))
 	})
-}
-
-func (s *Server) authenticate(r *http.Request) (principal, authChannel, string) {
-	token := strings.TrimSpace(readBearerToken(r.Header.Get("Authorization")))
-	if token == "" {
-		if s.auth.allowHeaderToken {
-			token = strings.TrimSpace(r.Header.Get("X-Auth-Token"))
-		}
-		if token != "" {
-			p, ok := s.auth.tokens[token]
-			if !ok {
-				return principal{}, authChannelHeader, "invalid bearer token"
-			}
-			return p, authChannelHeader, ""
-		}
-	} else {
-		p, ok := s.auth.tokens[token]
-		if !ok {
-			return principal{}, authChannelBearer, "invalid bearer token"
-		}
-		return p, authChannelBearer, ""
-	}
-	if token == "" {
-		token = strings.TrimSpace(s.readAuthCookie(r))
-		if token != "" {
-			p, ok := s.auth.tokens[token]
-			if !ok {
-				return principal{}, authChannelCookie, "invalid bearer token"
-			}
-			return p, authChannelCookie, ""
-		}
-	}
-	if token == "" {
-		return principal{}, authChannelUnknown, "missing bearer token"
-	}
-	return principal{}, authChannelUnknown, "invalid bearer token"
 }
 
 type authLoginRequest struct {
@@ -219,8 +139,12 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	p, ok := s.auth.tokens[token]
-	if !ok {
+	if s.auth.authenticator == nil {
+		writeError(w, http.StatusInternalServerError, "authenticator not configured")
+		return
+	}
+	p, err := s.auth.authenticator.VerifyToken(r.Context(), token)
+	if err != nil {
 		s.recordAuthFailure(r, http.StatusUnauthorized, "login_failed")
 		writeError(w, http.StatusUnauthorized, "invalid bearer token")
 		return
@@ -231,10 +155,10 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 		Enabled:       true,
 		Authenticated: true,
 		User: &model.SessionUser{
-			Name: p.user,
-			Role: roleLabel(p.role),
+			Name: p.User,
+			Role: auth.RoleLabel(p.Role),
 		},
-		Permissions: permissionsForRole(p.role),
+		Permissions: auth.PermissionsForRole(p.Role),
 	})
 }
 
@@ -245,18 +169,6 @@ func (s *Server) handleAuthLogout(w http.ResponseWriter, r *http.Request) {
 		Authenticated: false,
 		Permissions:   nil,
 	})
-}
-
-func (s *Server) readAuthCookie(r *http.Request) string {
-	if strings.TrimSpace(s.auth.cookieName) == "" {
-		return ""
-	}
-
-	cookie, err := r.Cookie(s.auth.cookieName)
-	if err != nil {
-		return ""
-	}
-	return cookie.Value
 }
 
 func (s *Server) writeAuthCookie(w http.ResponseWriter, r *http.Request, token string) {
@@ -289,14 +201,6 @@ func (s *Server) clearAuthCookie(w http.ResponseWriter, r *http.Request) {
 		SameSite: http.SameSiteStrictMode,
 		Secure:   r.TLS != nil,
 	})
-}
-
-func readBearerToken(raw string) string {
-	parts := strings.Fields(strings.TrimSpace(raw))
-	if len(parts) != 2 || !strings.EqualFold(parts[0], "bearer") {
-		return ""
-	}
-	return parts[1]
 }
 
 func isMutatingMethod(method string) bool {
@@ -367,65 +271,6 @@ func hostAllowed(candidate, host string, trustedDomains []string) bool {
 	return false
 }
 
-func withPrincipal(ctx context.Context, p principal) context.Context {
-	return context.WithValue(ctx, principalContextKey{}, p)
-}
-
-func principalFromContext(ctx context.Context) (principal, bool) {
-	p, ok := ctx.Value(principalContextKey{}).(principal)
-	return p, ok
-}
-
-func requiredRole(method, path string) authRole {
-	cleanMethod := strings.ToUpper(strings.TrimSpace(method))
-
-	switch {
-	case cleanMethod == http.MethodPost && path == "/api/assistant":
-		return roleViewer
-	case cleanMethod == http.MethodPost && path == "/api/clusters/select":
-		return roleViewer
-	case cleanMethod == http.MethodGet || cleanMethod == http.MethodHead:
-		return roleViewer
-	case cleanMethod == http.MethodPost || cleanMethod == http.MethodPut || cleanMethod == http.MethodPatch || cleanMethod == http.MethodDelete:
-		return roleOperator
-	default:
-		return roleViewer
-	}
-}
-
-func roleLabel(role authRole) string {
-	switch role {
-	case roleAdmin:
-		return "admin"
-	case roleOperator:
-		return "operator"
-	default:
-		return "viewer"
-	}
-}
-
-func parseRole(role string) authRole {
-	switch strings.ToLower(strings.TrimSpace(role)) {
-	case "admin":
-		return roleAdmin
-	case "operator":
-		return roleOperator
-	default:
-		return roleViewer
-	}
-}
-
-func permissionsForRole(role authRole) []string {
-	switch role {
-	case roleAdmin:
-		return []string{"read", "assist", "stream", "write"}
-	case roleOperator:
-		return []string{"read", "assist", "stream", "write"}
-	default:
-		return []string{"read", "assist", "stream"}
-	}
-}
-
 func (s *Server) handleAuthSession(w http.ResponseWriter, r *http.Request) {
 	session := model.AuthSession{
 		Enabled:       s.auth.enabled,
@@ -436,14 +281,14 @@ func (s *Server) handleAuthSession(w http.ResponseWriter, r *http.Request) {
 		session.Permissions = append([]string(nil), s.anonPerms...)
 	}
 
-	p, ok := principalFromContext(r.Context())
+	p, ok := auth.PrincipalFromContext(r.Context())
 	if ok {
 		session.Authenticated = true
 		session.User = &model.SessionUser{
-			Name: p.user,
-			Role: roleLabel(p.role),
+			Name: p.User,
+			Role: auth.RoleLabel(p.Role),
 		}
-		session.Permissions = permissionsForRole(p.role)
+		session.Permissions = auth.PermissionsForRole(p.Role)
 	}
 
 	writeJSON(w, http.StatusOK, session)

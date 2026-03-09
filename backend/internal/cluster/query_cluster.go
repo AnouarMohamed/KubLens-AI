@@ -19,6 +19,10 @@ import (
 
 // Snapshot returns pods and nodes from the same cached/fetched view.
 func (s *Service) Snapshot(ctx context.Context) ([]model.PodSummary, []model.NodeSummary) {
+	if snapshot, ok := s.StateSnapshot(ctx); ok {
+		return podsFromState(snapshot), nodesFromState(snapshot)
+	}
+
 	if s.inMockMode() {
 		return s.mockSnapshot()
 	}
@@ -61,6 +65,12 @@ func (s *Service) Snapshot(ctx context.Context) ([]model.PodSummary, []model.Nod
 }
 
 func (s *Service) ListNamespaces(ctx context.Context) []string {
+	if snapshot, ok := s.StateSnapshot(ctx); ok {
+		if names := namespacesFromState(snapshot); len(names) > 0 {
+			return names
+		}
+	}
+
 	if s.inMockMode() {
 		return s.mockNamespaceList()
 	}
@@ -120,6 +130,12 @@ func (s *Service) ListNodes(ctx context.Context) []model.NodeSummary {
 }
 
 func (s *Service) PodDetail(ctx context.Context, namespace, name string) (model.PodDetail, error) {
+	if snapshot, ok := s.StateSnapshot(ctx); ok {
+		if detail, found := podDetailFromState(snapshot, namespace, name); found {
+			return detail, nil
+		}
+	}
+
 	if s.inMockMode() {
 		return s.mockPodDetail(namespace, name)
 	}
@@ -155,6 +171,13 @@ func (s *Service) PodDetail(ctx context.Context, namespace, name string) (model.
 }
 
 func (s *Service) PodEvents(ctx context.Context, namespace, name string) []model.K8sEvent {
+	if snapshot, ok := s.StateSnapshot(ctx); ok {
+		events := podEventsFromState(snapshot, namespace, name)
+		if len(events) > 0 {
+			return events
+		}
+	}
+
 	if s.inMockMode() {
 		return mockPodEvents(name)
 	}
@@ -222,7 +245,36 @@ func (s *Service) PodLogs(ctx context.Context, namespace, name, container string
 	return string(body)
 }
 
+func (s *Service) StreamPodLogs(ctx context.Context, namespace, name, container string, lines int) (io.ReadCloser, error) {
+	if s.inMockMode() {
+		return io.NopCloser(strings.NewReader(mockPodLogs(name))), nil
+	}
+
+	callCtx, cancel := s.withTimeout(ctx)
+	defer cancel()
+
+	if lines <= 0 {
+		lines = 150
+	}
+	tailLines := int64(lines)
+	opts := &corev1.PodLogOptions{
+		Follow:    true,
+		TailLines: &tailLines,
+	}
+	if trimmed := strings.TrimSpace(container); trimmed != "" {
+		opts.Container = trimmed
+	}
+	req := s.client.CoreV1().Pods(namespace).GetLogs(name, opts)
+	return req.Stream(callCtx)
+}
+
 func (s *Service) NodeDetail(ctx context.Context, name string) (model.NodeDetail, error) {
+	if snapshot, ok := s.StateSnapshot(ctx); ok {
+		if detail, found := nodeDetailFromState(snapshot, name); found {
+			return detail, nil
+		}
+	}
+
 	if s.inMockMode() {
 		return s.mockNodeDetail(name)
 	}
@@ -344,6 +396,12 @@ func (s *Service) ListResources(ctx context.Context, kind string) ([]model.Resou
 }
 
 func (s *Service) ListClusterEvents(ctx context.Context) []model.K8sEvent {
+	if snapshot, ok := s.StateSnapshot(ctx); ok {
+		if events := eventsFromState(snapshot); len(events) > 0 {
+			return events
+		}
+	}
+
 	if s.inMockMode() {
 		return s.mockClusterEvents()
 	}

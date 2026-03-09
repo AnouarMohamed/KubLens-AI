@@ -1,0 +1,40 @@
+{{- if .Values.predictor.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "kubelens.fullname" . }}-predictor
+  labels:
+    {{- include "kubelens.labels" . | nindent 4 }}
+    app.kubernetes.io/component: predictor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "kubelens.name" . }}
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: predictor
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "kubelens.name" . }}
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: predictor
+    spec:
+      containers:
+        - name: predictor
+          image: "{{ .Values.predictor.image.repository }}:{{ .Values.predictor.image.tag }}"
+          imagePullPolicy: {{ .Values.predictor.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.predictor.service.port }}
+              protocol: TCP
+          env:
+            - name: OTEL_SERVICE_NAME
+              value: "kubelens-predictor"
+            {{- range $key, $value := .Values.env }}
+            {{- if or (eq $key "OTEL_EXPORTER_OTLP_ENDPOINT") (eq $key "OTEL_EXPORTER_OTLP_PROTOCOL") (eq $key "OTEL_EXPORTER_OTLP_INSECURE") (eq $key "OTEL_TRACES_SAMPLE_RATIO") }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+            {{- end }}
+{{- end }}

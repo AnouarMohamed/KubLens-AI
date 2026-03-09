@@ -75,6 +75,11 @@ class PodSummary(BaseModel):
     restarts: int
 
 
+class CPUPoint(BaseModel):
+    time: str
+    value: int
+
+
 class NodeSummary(BaseModel):
     name: str
     status: str
@@ -83,6 +88,7 @@ class NodeSummary(BaseModel):
     version: str
     cpuUsage: str
     memUsage: str
+    cpuHistory: list[CPUPoint] = Field(default_factory=list)
 
 
 class K8sEvent(BaseModel):
@@ -214,6 +220,7 @@ def predict(request: PredictionRequest, _: None = Depends(require_predictor_secr
         cpu_pct, cpu_known = parse_percent(node.cpuUsage)
         mem_pct, mem_known = parse_percent(node.memUsage)
         resource_warnings = count_resource_warning_events(request.events, node.name, None)
+        cpu_trend = compute_trend(node.cpuHistory)
 
         if node.status.strip().lower() == "notready":
             score += 75
@@ -226,6 +233,10 @@ def predict(request: PredictionRequest, _: None = Depends(require_predictor_secr
         if mem_known and mem_pct >= 90:
             score += 20
             signals.append(PredictionSignal(key="memUsage", value=node.memUsage))
+
+        if cpu_trend >= 20 and cpu_known and cpu_pct >= 80:
+            score += 10
+            signals.append(PredictionSignal(key="cpuTrend", value=f"+{cpu_trend}%"))
 
         if resource_warnings > 0 and node.status.strip().lower() != "ready":
             score += min(10, resource_warnings * 2)
@@ -242,6 +253,10 @@ def predict(request: PredictionRequest, _: None = Depends(require_predictor_secr
             warning_matches=resource_warnings,
             restart_signal=False,
         )
+        recommendation = "Inspect kubelet health, pressure conditions, and workload distribution."
+        if cpu_trend >= 20 and cpu_known and cpu_pct >= 80:
+            recommendation = "CPU usage is trending up quickly; review noisy neighbors and consider scaling."
+
         items.append(
             IncidentPrediction(
                 id=f"node-{node.name.lower()}",
@@ -250,7 +265,7 @@ def predict(request: PredictionRequest, _: None = Depends(require_predictor_secr
                 riskScore=score,
                 confidence=confidence,
                 summary=f"Node {node.name} shows elevated operational risk.",
-                recommendation="Inspect kubelet health, pressure conditions, and workload distribution.",
+                recommendation=recommendation,
                 signals=signals,
             )
         )
@@ -283,6 +298,14 @@ def count_resource_warning_events(events: list[K8sEvent], resource: str, namespa
         total += max(1, event.count or 1)
 
     return total
+
+
+def compute_trend(history: list[CPUPoint]) -> int:
+    if len(history) < 2:
+        return 0
+    start = history[0].value
+    end = history[-1].value
+    return max(0, end - start)
 
 
 def confidence_from_evidence(

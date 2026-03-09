@@ -58,9 +58,11 @@ func (s *Server) handleAssistant(w http.ResponseWriter, r *http.Request) {
 	}
 
 	pods, nodes := s.cluster.Snapshot(r.Context())
-	diag := diagnostics.BuildDiagnostics(pods, nodes)
+	report := s.runDiagnostics(r.Context())
+	diag := s.mapDiagnosticsReport(report)
 	lower := strings.ToLower(message)
 	docRefs := s.retrieveDocReferences(r.Context(), message, diag.Summary)
+	diagnosticBriefs := mapDiagnosticsForAI(report.Diagnostics)
 
 	if match := diagnoseRegex.FindStringSubmatch(lower); len(match) == 2 {
 		hint := match[1]
@@ -75,6 +77,7 @@ func (s *Server) handleAssistant(w http.ResponseWriter, r *http.Request) {
 				docReferences:      docRefs,
 				diagnosticsSummary: diag.Summary,
 				diagnostics:        diag,
+				diagnosticBriefs:   diagnosticBriefs,
 				priorityActions:    diagnostics.BuildPriorityActions(diag),
 				pods:               pods,
 				nodes:              nodes,
@@ -84,8 +87,14 @@ func (s *Server) handleAssistant(w http.ResponseWriter, r *http.Request) {
 
 		events := s.cluster.PodEvents(r.Context(), pod.Namespace, pod.Name)
 		logs := s.cluster.PodLogs(r.Context(), pod.Namespace, pod.Name, "", 50)
-		analysis := diagnostics.DiagnosePodIssue(pod, events, logs)
-		answer := diagnostics.BuildPodDiagnosisMessage(pod, analysis)
+		targetDiagnostics := filterDiagnosticsForResource(diagnosticBriefs, pod.Namespace, pod.Name)
+		answer := ""
+		if len(targetDiagnostics) > 0 {
+			answer = ai.ExplainDiagnostics(targetDiagnostics)
+		} else {
+			analysis := diagnostics.DiagnosePodIssue(pod, events, logs)
+			answer = diagnostics.BuildPodDiagnosisMessage(pod, analysis)
+		}
 
 		s.writeAssistantResponse(w, r.Context(), assistantContext{
 			intent:             "diagnose",
@@ -96,6 +105,7 @@ func (s *Server) handleAssistant(w http.ResponseWriter, r *http.Request) {
 			docReferences:      docRefs,
 			diagnosticsSummary: diag.Summary,
 			diagnostics:        diag,
+			diagnosticBriefs:   diagnosticBriefs,
 			priorityActions:    diagnostics.BuildPriorityActions(diag),
 			pods:               pods,
 			nodes:              nodes,
@@ -114,6 +124,7 @@ func (s *Server) handleAssistant(w http.ResponseWriter, r *http.Request) {
 			docReferences:      docRefs,
 			diagnosticsSummary: diag.Summary,
 			diagnostics:        diag,
+			diagnosticBriefs:   diagnosticBriefs,
 			priorityActions:    diagnostics.BuildPriorityActions(diag),
 			pods:               pods,
 			nodes:              nodes,
@@ -123,12 +134,13 @@ func (s *Server) handleAssistant(w http.ResponseWriter, r *http.Request) {
 		s.writeAssistantResponse(w, r.Context(), assistantContext{
 			intent:             "health",
 			userMessage:        message,
-			localAnswer:        diag.Summary,
+			localAnswer:        report.Summary,
 			hints:              healthHints,
 			resources:          collectIssueResources(diag.Issues),
 			docReferences:      docRefs,
 			diagnosticsSummary: diag.Summary,
 			diagnostics:        diag,
+			diagnosticBriefs:   diagnosticBriefs,
 			priorityActions:    diagnostics.BuildPriorityActions(diag),
 			pods:               pods,
 			nodes:              nodes,
@@ -144,6 +156,7 @@ func (s *Server) handleAssistant(w http.ResponseWriter, r *http.Request) {
 			docReferences:      docRefs,
 			diagnosticsSummary: diag.Summary,
 			diagnostics:        diag,
+			diagnosticBriefs:   diagnosticBriefs,
 			priorityActions:    diagnostics.BuildPriorityActions(diag),
 			pods:               pods,
 			nodes:              nodes,
@@ -167,6 +180,7 @@ func (s *Server) handleAssistant(w http.ResponseWriter, r *http.Request) {
 			docReferences:      docRefs,
 			diagnosticsSummary: diag.Summary,
 			diagnostics:        diag,
+			diagnosticBriefs:   diagnosticBriefs,
 			priorityActions:    diagnostics.BuildPriorityActions(diag),
 			pods:               pods,
 			nodes:              nodes,
@@ -183,6 +197,7 @@ type assistantContext struct {
 	docReferences      []model.DocumentationReference
 	diagnosticsSummary string
 	diagnostics        model.DiagnosticsResult
+	diagnosticBriefs   []ai.DiagnosticBrief
 	priorityActions    string
 	pods               []model.PodSummary
 	nodes              []model.NodeSummary
@@ -218,6 +233,7 @@ func (s *Server) enhanceAssistantAnswer(ctx context.Context, c assistantContext)
 		Intent:               c.intent,
 		LocalAnswer:          c.localAnswer,
 		DiagnosticsSummary:   c.diagnosticsSummary,
+		Diagnostics:          c.diagnosticBriefs,
 		PriorityActions:      c.priorityActions,
 		ReferencedResources:  dedupeStrings(c.resources),
 		ClusterSnapshotBrief: buildClusterSnapshotBrief(c.pods, c.nodes),
@@ -659,7 +675,11 @@ func formatDiagnosticsIssues(diag model.DiagnosticsResult) string {
 		if resource != "" {
 			resource = " (" + resource + ")"
 		}
-		lines = append(lines, fmt.Sprintf("- %s%s: %s", issue.Title, resource, issue.Details))
+		message := issue.Message
+		if message == "" {
+			message = "Finding"
+		}
+		lines = append(lines, fmt.Sprintf("- %s%s: %s", message, resource, strings.Join(issue.Evidence, " | ")))
 	}
 	return strings.Join(lines, "\n")
 }

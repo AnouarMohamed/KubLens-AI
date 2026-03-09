@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"kubelens-backend/internal/model"
+	"kubelens-backend/internal/state"
 )
 
 func TestClusterSelectionSwitchesActiveContext(t *testing.T) {
@@ -148,6 +149,10 @@ func (altClusterReader) PodLogs(context.Context, string, string, string, int) st
 	return ""
 }
 
+func (altClusterReader) StreamPodLogs(context.Context, string, string, string, int) (io.ReadCloser, error) {
+	return io.NopCloser(strings.NewReader("")), nil
+}
+
 func (altClusterReader) PodDetail(context.Context, string, string) (model.PodDetail, error) {
 	return model.PodDetail{}, nil
 }
@@ -170,6 +175,10 @@ func (altClusterReader) DeletePod(context.Context, string, string) (model.Action
 
 func (altClusterReader) CordonNode(context.Context, string) (model.ActionResult, error) {
 	return model.ActionResult{Success: true, Message: "ok"}, nil
+}
+
+func (altClusterReader) StateSnapshot(context.Context) (state.ClusterState, bool) {
+	return state.ClusterState{}, false
 }
 
 type testAlertDispatcher struct {

@@ -45,21 +45,34 @@ export function useNotifications({ panel, authLoading, canRead, canStream }: Use
     };
 
     if (canStream) {
-      const source = new EventSource(api.getStreamURL());
-      source.addEventListener("connected", () => {
+      const socket = new WebSocket(api.getStreamWSURL());
+      socket.onopen = () => {
         if (!cancelled) {
           setError(null);
         }
-      });
-      source.addEventListener("cluster_events", (event) => {
-        if (!cancelled) {
-          const payload = parseStreamPayload<K8sEvent[]>(event);
-          if (payload?.payload) {
-            setNotifications(payload.payload.slice(0, 14));
-          }
+      };
+      socket.onmessage = (event) => {
+        if (cancelled) {
+          return;
         }
-      });
-      source.onerror = () => {
+        const payload = parseWSStreamPayload(event.data);
+        if (!payload) {
+          return;
+        }
+        if (payload.type === "cluster_events" && Array.isArray(payload.payload)) {
+          setNotifications(payload.payload.slice(0, 14));
+        }
+        if (payload.type === "k8s_event" && payload.payload) {
+          setNotifications((current) => [payload.payload as K8sEvent, ...current].slice(0, 14));
+        }
+      };
+      socket.onerror = () => {
+        if (!cancelled) {
+          setError("Live stream disconnected. Showing snapshot.");
+        }
+        loadSnapshot();
+      };
+      socket.onclose = () => {
         if (!cancelled) {
           setError("Live stream disconnected. Showing snapshot.");
         }
@@ -68,7 +81,7 @@ export function useNotifications({ panel, authLoading, canRead, canStream }: Use
 
       return () => {
         cancelled = true;
-        source.close();
+        socket.close();
       };
     }
 
@@ -84,12 +97,9 @@ export function useNotifications({ panel, authLoading, canRead, canStream }: Use
   };
 }
 
-function parseStreamPayload<T>(event: Event): { type: string; timestamp: string; payload: T } | null {
+function parseWSStreamPayload<T>(data: string): { type: string; timestamp: string; payload: T } | null {
   try {
-    if (!(event instanceof MessageEvent)) {
-      return null;
-    }
-    return JSON.parse(event.data) as { type: string; timestamp: string; payload: T };
+    return JSON.parse(data) as { type: string; timestamp: string; payload: T };
   } catch {
     return null;
   }

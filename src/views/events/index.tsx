@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuthSession } from "../../context/AuthSessionContext";
 import { api } from "../../lib/api";
+import { useStreamRefresh } from "../../app/hooks/useStreamRefresh";
 import type { K8sEvent } from "../../types";
 
 const EVENT_TYPES = ["All", "Warning", "Normal"] as const;
@@ -40,6 +41,14 @@ export default function Events() {
     }
     void load();
   }, [authLoading, load]);
+
+  useStreamRefresh({
+    enabled: canRead,
+    eventTypes: ["k8s_event"],
+    onEvent: () => {
+      void load();
+    },
+  });
 
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();

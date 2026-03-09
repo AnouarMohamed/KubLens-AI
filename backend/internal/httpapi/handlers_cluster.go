@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"errors"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -10,7 +11,6 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"kubelens-backend/internal/apperrors"
-	"kubelens-backend/internal/diagnostics"
 	"kubelens-backend/internal/model"
 )
 
@@ -182,6 +182,45 @@ func (s *Server) handlePodLogs(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte(s.cluster.PodLogs(r.Context(), namespace, name, container, lines)))
 }
 
+func (s *Server) handlePodLogsStream(w http.ResponseWriter, r *http.Request) {
+	namespace := chi.URLParam(r, "namespace")
+	name := chi.URLParam(r, "name")
+	container := strings.TrimSpace(r.URL.Query().Get("container"))
+	lines := parsePositiveIntWithMax(r.URL.Query().Get("lines"), 50, 500)
+
+	stream, err := s.cluster.StreamPodLogs(r.Context(), namespace, name, container, lines)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to stream pod logs")
+		return
+	}
+	defer stream.Close()
+
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("X-Accel-Buffering", "no")
+
+	_, _ = io.Copy(w, stream)
+}
+
+func (s *Server) handlePodDescribe(w http.ResponseWriter, r *http.Request) {
+	namespace := chi.URLParam(r, "namespace")
+	name := chi.URLParam(r, "name")
+
+	pod, err := s.cluster.PodDetail(r.Context(), namespace, name)
+	if err != nil {
+		if errors.Is(err, apperrors.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "Pod not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "Failed to describe pod")
+		return
+	}
+	events := s.cluster.PodEvents(r.Context(), namespace, name)
+
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	_, _ = w.Write([]byte(renderPodDescribe(pod, events)))
+}
+
 func (s *Server) handleRestartPod(w http.ResponseWriter, r *http.Request) {
 	namespace := chi.URLParam(r, "namespace")
 	name := chi.URLParam(r, "name")
@@ -268,8 +307,8 @@ func (s *Server) handleStats(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleDiagnostics(w http.ResponseWriter, r *http.Request) {
-	pods, nodes := s.cluster.Snapshot(r.Context())
-	writeJSON(w, http.StatusOK, diagnostics.BuildDiagnostics(pods, nodes))
+	report := s.runDiagnostics(r.Context())
+	writeJSON(w, http.StatusOK, s.mapDiagnosticsReport(report))
 }
 
 func countPods(pods []model.PodSummary, status model.PodStatus) int {
