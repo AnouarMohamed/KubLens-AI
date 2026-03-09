@@ -1,13 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   Bar,
   BarChart,
-  CartesianGrid,
   Cell,
   Line,
   LineChart,
-  Pie,
-  PieChart,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -16,13 +14,24 @@ import {
 import { api } from "../../lib/api";
 import type { ApiMetricsSnapshot, ClusterStats, DiagnosticsResult, K8sEvent, Node, Pod } from "../../types";
 
-const DOCKER_BLUE = "#2496ed";
-const CHART_BLUE = "#4f7bff";
-const CHART_GREEN = "#34c759";
-const CHART_AMBER = "#eab308";
-const CHART_MAGENTA = "#d946ef";
-const CHART_SLATE = "#a9b4cc";
-const TOOLTIP_STYLE = { background: "#ffffff", border: "1px solid #d8dde6", color: "#1f2937" };
+const ACCENT = "#00d4a8";
+const RED = "#ff4444";
+const AMBER = "#f59e0b";
+const BLUE = "#3b82f6";
+const MUTED = "#333333";
+const GRID_BASELINE = "#1f1f1f";
+
+const TOOLTIP_STYLE = {
+  background: "#161616",
+  border: "1px solid #2a2a2a",
+  color: "#e8e8e8",
+  fontSize: "11px",
+  fontFamily: "monospace",
+  borderRadius: "4px",
+  padding: "6px 10px",
+};
+
+const AXIS_TICK = { fill: "#444444", fontSize: 11, fontFamily: "monospace" };
 
 export default function Dashboard() {
   const [stats, setStats] = useState<ClusterStats | null>(null);
@@ -77,96 +86,77 @@ export default function Dashboard() {
   const pendingRate = useMemo(() => percentage(stats?.pods.pending ?? 0, stats?.pods.total ?? 0), [stats]);
   const failedRate = useMemo(() => percentage(stats?.pods.failed ?? 0, stats?.pods.total ?? 0), [stats]);
   const notReadyRate = useMemo(() => percentage(stats?.nodes.notReady ?? 0, stats?.nodes.total ?? 0), [stats]);
+  const nodeAvailabilityPercent = useMemo(() => percentage(stats?.nodes.ready ?? 0, stats?.nodes.total ?? 0), [stats]);
+
+  const kpis = useMemo(
+    () => [
+      { label: "Cluster CPU", value: stats?.cluster.cpu ?? "-", critical: false },
+      { label: "Cluster Memory", value: stats?.cluster.memory ?? "-", critical: false },
+      { label: "Failed Rate", value: `${failedRate.toFixed(1)}%`, critical: failedRate > 0 },
+      {
+        label: "Node Availability",
+        value: `${stats?.nodes.ready ?? 0}/${stats?.nodes.total ?? 0}`,
+        critical: nodeAvailabilityPercent > 0 && nodeAvailabilityPercent < 80,
+      },
+    ],
+    [stats, failedRate, nodeAvailabilityPercent],
+  );
 
   return (
     <div className="space-y-6">
-      <header className="surface p-6 text-zinc-100">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <p className="text-[11px] uppercase tracking-[0.2em] text-zinc-500">Operations Overview</p>
-            <h2 className="mt-2 text-3xl font-semibold tracking-tight text-zinc-100">Cluster Command Deck</h2>
-            <p className="text-sm text-zinc-300 mt-2 max-w-2xl">
-              Deeper telemetry with comparative, trend, and hotspot charts for faster decisions.
-            </p>
-          </div>
-          <button
-            onClick={() => void load()}
-            disabled={isLoading}
-            className="h-10 rounded-xl border border-zinc-600 px-4 text-sm font-medium text-zinc-100 hover:bg-zinc-800 disabled:opacity-50"
-          >
-            {isLoading ? "Refreshing" : "Refresh Data"}
-          </button>
+      <header className="flex items-center justify-between mb-6">
+        <div>
+          <p className="text-[11px] font-mono uppercase tracking-[0.2em] text-[#666666]">cluster overview</p>
+          <p className="mt-1 text-lg font-mono font-semibold text-[#e8e8e8]">
+            {stats ? `${stats.pods.total} pods | ${stats.nodes.ready}/${stats.nodes.total} nodes ready` : "loading..."}
+          </p>
         </div>
+        <button onClick={() => void load()} disabled={isLoading} className="btn-sm font-mono">
+          {isLoading ? "refreshing..." : "refresh"}
+        </button>
       </header>
 
       {error && (
         <div className="rounded-xl border border-zinc-700 bg-zinc-900/80 px-3 py-2 text-sm text-zinc-200">{error}</div>
       )}
 
-      <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-        <KPI label="Cluster CPU" value={stats?.cluster.cpu ?? "-"} />
-        <KPI label="Cluster Memory" value={stats?.cluster.memory ?? "-"} />
-        <KPI label="Total Pods" value={String(stats?.pods.total ?? 0)} />
-        <KPI label="Node Availability" value={`${stats?.nodes.ready ?? 0}/${stats?.nodes.total ?? 0}`} />
+      <section className="flex items-stretch border border-[#1f1f1f] rounded-lg overflow-hidden mb-6">
+        {kpis.map((kpi, index) => (
+          <div key={kpi.label} className={`flex-1 px-5 py-4 ${index > 0 ? "border-l border-[#1f1f1f]" : ""}`}>
+            <p className="text-[10px] font-mono uppercase tracking-[0.15em] text-[#444444]">{kpi.label}</p>
+            <p
+              className={`mt-1.5 text-2xl font-mono font-semibold ${kpi.critical ? "text-[#ff4444]" : "text-[#e8e8e8]"}`}
+            >
+              {kpi.value}
+            </p>
+          </div>
+        ))}
       </section>
 
       <section className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <RiskRail label="Pending Pod Rate" value={pendingRate} tone="warning" />
-        <RiskRail label="Failed Pod Rate" value={failedRate} tone="critical" />
-        <RiskRail label="NotReady Node Rate" value={notReadyRate} tone="info" />
+        <RiskRail label="Pending Pod Rate" value={pendingRate} />
+        <RiskRail label="Failed Pod Rate" value={failedRate} />
+        <RiskRail label="NotReady Node Rate" value={notReadyRate} />
       </section>
 
       <section className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         <ChartCard title="Pod Lifecycle Mix" subtitle="Composition of running, pending, failed, and succeeded pods.">
-          {podMixData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={320}>
-              <PieChart>
-                <Pie
-                  data={podMixData}
-                  dataKey="value"
-                  nameKey="name"
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={68}
-                  outerRadius={118}
-                  paddingAngle={1}
-                  labelLine={false}
-                  label={renderCompactLabel}
-                  stroke="#d8dde6"
-                  strokeWidth={2}
-                >
-                  {podMixData.map((entry) => (
-                    <Cell key={entry.name} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(value: number) => [value, "Pods"]} />
-              </PieChart>
-            </ResponsiveContainer>
-          ) : (
-            <EmptyChart message="No pod lifecycle data available." />
-          )}
+          <PodLifecycleMix data={podMixData} />
         </ChartCard>
 
         <ChartCard title="Node Utilization" subtitle="CPU and memory percentage by node (top 8).">
           {nodeUsageBars.length > 0 ? (
             <ResponsiveContainer width="100%" height={320}>
               <BarChart data={nodeUsageBars} margin={{ top: 6, right: 8, left: 0, bottom: 0 }}>
-                <CartesianGrid stroke="#d8dde6" strokeDasharray="3 3" vertical={false} />
-                <XAxis
-                  dataKey="name"
-                  tick={{ fill: "#5d6674", fontSize: 12 }}
-                  interval={0}
-                  angle={-20}
-                  textAnchor="end"
-                  height={48}
-                />
-                <YAxis domain={[0, 100]} tick={{ fill: "#5d6674", fontSize: 12 }} unit="%" />
+                <ReferenceLine y={0} stroke={GRID_BASELINE} />
+                <XAxis dataKey="name" tick={AXIS_TICK} interval={0} angle={-20} textAnchor="end" height={48} />
+                <YAxis domain={[0, 100]} tick={AXIS_TICK} unit="%" />
                 <Tooltip
                   contentStyle={TOOLTIP_STYLE}
                   formatter={(value: number, key: string) => [`${value.toFixed(1)}%`, key === "cpu" ? "CPU" : "Memory"]}
                 />
-                <Bar dataKey="cpu" fill={CHART_BLUE} radius={[4, 4, 0, 0]} />
-                <Bar dataKey="memory" fill={CHART_GREEN} radius={[4, 4, 0, 0]} />
+                <Bar dataKey="cpu" fill={ACCENT} />
+                <Bar dataKey="memory" fill="rgba(0, 212, 168, 0.4)" />
               </BarChart>
             </ResponsiveContainer>
           ) : (
@@ -178,9 +168,8 @@ export default function Dashboard() {
           {nodeCPUTrend.length > 0 ? (
             <ResponsiveContainer width="100%" height={320}>
               <LineChart data={nodeCPUTrend} margin={{ top: 6, right: 8, left: 0, bottom: 0 }}>
-                <CartesianGrid stroke="#d8dde6" strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="time" tick={{ fill: "#5d6674", fontSize: 12 }} />
-                <YAxis domain={[0, 100]} tick={{ fill: "#5d6674", fontSize: 12 }} unit="%" />
+                <XAxis dataKey="time" tick={AXIS_TICK} />
+                <YAxis domain={[0, 100]} tick={AXIS_TICK} unit="%" />
                 <Tooltip
                   contentStyle={TOOLTIP_STYLE}
                   formatter={(value: number) => [`${value.toFixed(1)}%`, "Avg CPU"]}
@@ -188,10 +177,10 @@ export default function Dashboard() {
                 <Line
                   type="monotone"
                   dataKey="value"
-                  stroke={DOCKER_BLUE}
-                  strokeWidth={2}
-                  dot={{ r: 2 }}
-                  activeDot={{ r: 4 }}
+                  stroke={ACCENT}
+                  strokeWidth={1.5}
+                  dot={false}
+                  activeDot={{ r: 3, fill: ACCENT, stroke: ACCENT }}
                 />
               </LineChart>
             </ResponsiveContainer>
@@ -204,18 +193,11 @@ export default function Dashboard() {
           {eventReasonBars.length > 0 ? (
             <ResponsiveContainer width="100%" height={320}>
               <BarChart data={eventReasonBars} margin={{ top: 6, right: 8, left: 0, bottom: 0 }}>
-                <CartesianGrid stroke="#d8dde6" strokeDasharray="3 3" vertical={false} />
-                <XAxis
-                  dataKey="name"
-                  tick={{ fill: "#5d6674", fontSize: 12 }}
-                  interval={0}
-                  angle={-20}
-                  textAnchor="end"
-                  height={48}
-                />
-                <YAxis allowDecimals={false} tick={{ fill: "#5d6674", fontSize: 12 }} />
+                <ReferenceLine y={0} stroke={GRID_BASELINE} />
+                <XAxis dataKey="name" tick={AXIS_TICK} interval={0} angle={-20} textAnchor="end" height={48} />
+                <YAxis allowDecimals={false} tick={AXIS_TICK} />
                 <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(value: number) => [value, "Events"]} />
-                <Bar dataKey="count" fill={CHART_AMBER} radius={[4, 4, 0, 0]} />
+                <Bar dataKey="count" fill={BLUE} />
               </BarChart>
             </ResponsiveContainer>
           ) : (
@@ -227,11 +209,11 @@ export default function Dashboard() {
           {restartHotspots.length > 0 ? (
             <ResponsiveContainer width="100%" height={320}>
               <BarChart data={restartHotspots} layout="vertical" margin={{ top: 6, right: 8, left: 16, bottom: 0 }}>
-                <CartesianGrid stroke="#d8dde6" strokeDasharray="3 3" horizontal={false} />
-                <XAxis type="number" allowDecimals={false} tick={{ fill: "#5d6674", fontSize: 12 }} />
-                <YAxis type="category" dataKey="name" width={130} tick={{ fill: "#5d6674", fontSize: 12 }} />
+                <ReferenceLine x={0} stroke={GRID_BASELINE} />
+                <XAxis type="number" allowDecimals={false} tick={AXIS_TICK} />
+                <YAxis type="category" dataKey="name" width={130} tick={AXIS_TICK} />
                 <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(value: number) => [value, "Restarts"]} />
-                <Bar dataKey="restarts" radius={[0, 4, 4, 0]}>
+                <Bar dataKey="restarts">
                   {restartHotspots.map((row) => (
                     <Cell key={row.name} fill={row.color} />
                   ))}
@@ -246,10 +228,10 @@ export default function Dashboard() {
         <ChartCard title="API Response Class Mix" subtitle="2xx, 3xx, 4xx, and 5xx totals from API observability.">
           {apiStatusMix.total > 0 ? (
             <div className="space-y-3 pt-1">
-              <StackBar label="2xx" value={apiStatusMix.ok} total={apiStatusMix.total} color={CHART_GREEN} />
-              <StackBar label="3xx" value={apiStatusMix.redirect} total={apiStatusMix.total} color={CHART_BLUE} />
-              <StackBar label="4xx" value={apiStatusMix.clientError} total={apiStatusMix.total} color={CHART_AMBER} />
-              <StackBar label="5xx" value={apiStatusMix.serverError} total={apiStatusMix.total} color={CHART_MAGENTA} />
+              <StackBar label="2xx" value={apiStatusMix.ok} total={apiStatusMix.total} color={ACCENT} />
+              <StackBar label="3xx" value={apiStatusMix.redirect} total={apiStatusMix.total} color={BLUE} />
+              <StackBar label="4xx" value={apiStatusMix.clientError} total={apiStatusMix.total} color={AMBER} />
+              <StackBar label="5xx" value={apiStatusMix.serverError} total={apiStatusMix.total} color={RED} />
               <div className="rounded-lg border border-zinc-700 bg-zinc-900/60 px-3 py-2 text-xs text-zinc-300">
                 Total responses observed: <span className="font-semibold text-zinc-100">{apiStatusMix.total}</span>
               </div>
@@ -264,18 +246,23 @@ export default function Dashboard() {
         <div className="surface p-5">
           <h3 className="text-sm font-semibold text-zinc-100">Top Risk Pods</h3>
           <p className="text-xs text-zinc-400 mt-1">Highest restart pressure.</p>
-          <div className="mt-3 space-y-2">
-            {topRiskPods.map((pod) => (
-              <div key={pod.id} className="rounded-lg border border-zinc-700 bg-zinc-800/60 px-3 py-2">
-                <div className="flex items-center justify-between gap-2 text-xs">
-                  <span className="font-semibold text-zinc-100 truncate">{pod.name}</span>
-                  <span className="rounded-full bg-[#d946ef]/18 px-2 py-0.5 text-zinc-100 font-semibold">
-                    {pod.restarts} restarts
-                  </span>
+          <div className="mt-3">
+            {topRiskPods.map((pod, index) => (
+              <div
+                key={pod.id}
+                className={`flex items-center justify-between py-2.5 gap-3 ${index > 0 ? "border-t border-[#1f1f1f]" : ""}`}
+              >
+                <div className="min-w-0">
+                  <p className="text-xs font-mono font-semibold text-[#e8e8e8] truncate">{pod.name}</p>
+                  <p className="text-[11px] font-mono text-[#444444] mt-0.5">
+                    {pod.namespace} | {pod.status}
+                  </p>
                 </div>
-                <p className="text-[11px] text-zinc-400 mt-1">
-                  {pod.namespace} | {pod.status}
-                </p>
+                <span
+                  className={`text-xs font-mono font-semibold flex-shrink-0 ${restartCountColorClass(pod.restarts)}`}
+                >
+                  {pod.restarts}r
+                </span>
               </div>
             ))}
             {topRiskPods.length === 0 && <p className="text-sm text-zinc-400">No pod risk signals yet.</p>}
@@ -285,17 +272,19 @@ export default function Dashboard() {
         <div className="surface p-5">
           <h3 className="text-sm font-semibold text-zinc-100">Recent Events</h3>
           <p className="text-xs text-zinc-400 mt-1">Latest {Math.min(events.length, 8)} items.</p>
-          <div className="mt-3 space-y-2">
+          <div className="mt-3">
             {events.slice(0, 8).map((event, index) => (
               <div
                 key={`${event.reason}-${index}`}
-                className="rounded-lg border border-zinc-700 bg-zinc-800/60 px-3 py-2"
+                className={`flex items-start justify-between py-2.5 gap-3 ${index > 0 ? "border-t border-[#1f1f1f]" : ""}`}
               >
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-semibold text-zinc-100">{event.reason}</span>
-                  <span className="text-zinc-400">{event.age}</span>
+                <div className="min-w-0">
+                  <p className="text-xs font-mono font-semibold text-[#e8e8e8]">{event.reason}</p>
+                  <p className="text-[11px] font-mono text-[#444444] mt-0.5 leading-relaxed line-clamp-2">
+                    {event.message}
+                  </p>
                 </div>
-                <p className="text-[11px] text-zinc-300 mt-1 leading-relaxed">{event.message}</p>
+                <span className="text-[11px] font-mono text-[#666666] flex-shrink-0">{event.age}</span>
               </div>
             ))}
             {events.length === 0 && <p className="text-sm text-zinc-400">No recent events available.</p>}
@@ -306,20 +295,42 @@ export default function Dashboard() {
           <h3 className="text-sm font-semibold text-zinc-100">Health Snapshot</h3>
           <p className="text-xs text-zinc-400 mt-1">At-a-glance diagnostics state.</p>
           {diagnostics ? (
-            <div className="mt-4 space-y-3">
-              <MiniMetric label="Health Score" value={`${diagnostics.healthScore}/100`} />
-              <MiniMetric label="Critical" value={String(diagnostics.criticalIssues)} />
-              <MiniMetric label="Warnings" value={String(diagnostics.warningIssues)} />
-              <div>
+            <div className="mt-3">
+              {[
+                {
+                  label: "Health Score",
+                  value: `${diagnostics.healthScore}/100`,
+                  critical: diagnostics.healthScore < 75,
+                },
+                {
+                  label: "Critical",
+                  value: String(diagnostics.criticalIssues),
+                  critical: diagnostics.criticalIssues > 0,
+                },
+                { label: "Warnings", value: String(diagnostics.warningIssues), critical: false },
+              ].map((item, index) => (
+                <div
+                  key={item.label}
+                  className={`flex items-center justify-between py-2.5 gap-3 ${index > 0 ? "border-t border-[#1f1f1f]" : ""}`}
+                >
+                  <span className="text-[11px] font-mono text-[#444444]">{item.label}</span>
+                  <span
+                    className={`text-xs font-mono font-semibold ${item.critical ? "text-[#ff4444]" : "text-[#e8e8e8]"}`}
+                  >
+                    {item.value}
+                  </span>
+                </div>
+              ))}
+              <div className="mt-3">
                 <p className="text-[11px] uppercase tracking-wide text-zinc-500 font-semibold">Health Trend</p>
-                <div className="mt-2 h-2 rounded-full bg-zinc-700 overflow-hidden">
+                <div className="mt-2 h-1 rounded-none bg-zinc-700 overflow-hidden">
                   <div
-                    className="h-full bg-[#4f7bff]"
+                    className="h-full rounded-none bg-[#3b82f6]"
                     style={{ width: `${Math.max(0, Math.min(100, diagnostics.healthScore))}%` }}
                   />
                 </div>
               </div>
-              <p className="text-xs text-zinc-500">Updated: {formatTimestamp(diagnostics.timestamp)}</p>
+              <p className="text-xs text-zinc-500 mt-3">Updated: {formatTimestamp(diagnostics.timestamp)}</p>
             </div>
           ) : (
             <p className="text-sm text-zinc-400 mt-3">Diagnostics data unavailable.</p>
@@ -388,17 +399,8 @@ export default function Dashboard() {
   );
 }
 
-function KPI({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="kpi">
-      <p className="text-[11px] uppercase tracking-wide text-zinc-400 font-semibold">{label}</p>
-      <p className="mt-2 text-3xl font-semibold text-zinc-100 tracking-tight">{value}</p>
-    </div>
-  );
-}
-
-function RiskRail({ label, value, tone }: { label: string; value: number; tone: "critical" | "warning" | "info" }) {
-  const color = tone === "critical" ? CHART_MAGENTA : tone === "warning" ? CHART_AMBER : CHART_BLUE;
+function RiskRail({ label, value }: { label: string; value: number }) {
+  const color = riskColor(value);
 
   return (
     <div className="rounded-xl border border-zinc-700 bg-zinc-900 p-4">
@@ -406,14 +408,17 @@ function RiskRail({ label, value, tone }: { label: string; value: number; tone: 
         <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">{label}</p>
         <p className="text-sm font-semibold text-zinc-100">{value.toFixed(1)}%</p>
       </div>
-      <div className="mt-3 h-2 rounded-full bg-zinc-700 overflow-hidden">
-        <div className="h-full" style={{ width: `${Math.max(0, Math.min(100, value))}%`, backgroundColor: color }} />
+      <div className="mt-3 h-1 rounded-none bg-zinc-700 overflow-hidden">
+        <div
+          className="h-full rounded-none"
+          style={{ width: `${Math.max(0, Math.min(100, value))}%`, backgroundColor: color }}
+        />
       </div>
     </div>
   );
 }
 
-function ChartCard({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) {
+function ChartCard({ title, subtitle, children }: { title: string; subtitle: string; children: ReactNode }) {
   return (
     <div className="surface p-5">
       <h3 className="text-sm font-semibold text-zinc-100">{title}</h3>
@@ -441,18 +446,12 @@ function StackBar({ label, value, total, color }: { label: string; value: number
           {value} ({ratio.toFixed(1)}%)
         </p>
       </div>
-      <div className="mt-1.5 h-2 rounded-full bg-zinc-700 overflow-hidden">
-        <div className="h-full" style={{ width: `${Math.max(0, Math.min(100, ratio))}%`, backgroundColor: color }} />
+      <div className="mt-1.5 h-1.5 rounded-none bg-zinc-700 overflow-hidden">
+        <div
+          className="h-full rounded-none"
+          style={{ width: `${Math.max(0, Math.min(100, ratio))}%`, backgroundColor: color }}
+        />
       </div>
-    </div>
-  );
-}
-
-function MiniMetric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-xl border border-zinc-700 bg-zinc-800/60 px-3 py-2">
-      <p className="text-[11px] uppercase tracking-wide text-zinc-400 font-semibold">{label}</p>
-      <p className="text-base font-semibold text-zinc-100 mt-0.5">{value}</p>
     </div>
   );
 }
@@ -479,35 +478,80 @@ function FindingCard({
   details: string;
   recommendation: string;
 }) {
+  const severityColor = severity === "critical" ? RED : severity === "warning" ? AMBER : BLUE;
+
   return (
-    <article className="rounded-md border border-zinc-700 bg-zinc-900/60 p-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <SeverityBadge severity={severity} />
-        <p className="text-sm font-semibold text-zinc-100">{title}</p>
-        {resource && <span className="text-xs text-zinc-500">{resource}</span>}
+    <article className="pl-3 border-l-2 py-2" style={{ borderLeftColor: severityColor }}>
+      <div className="flex items-center gap-2">
+        <span className="text-[10px] font-mono font-semibold uppercase" style={{ color: severityColor }}>
+          {severity}
+        </span>
+        <p className="text-xs font-mono font-semibold text-[#e8e8e8]">{title}</p>
+        {resource && <span className="text-[11px] font-mono text-[#444444]">{resource}</span>}
       </div>
-      <p className="mt-2 text-sm text-zinc-300">{details}</p>
-      <p className="mt-2 text-sm text-zinc-200">
-        <span className="font-semibold text-zinc-100">Action:</span> {recommendation}
-      </p>
+      <p className="mt-1 text-xs font-mono text-[#666666] leading-relaxed">{details}</p>
+      <p className="mt-1 text-[11px] font-mono text-[#666666]">-&gt; {recommendation}</p>
     </article>
   );
 }
 
-function SeverityBadge({ severity }: { severity: "critical" | "warning" | "info" }) {
-  const label = severity.toUpperCase();
-  const className =
-    severity === "critical"
-      ? "border-[#d946ef]/50 bg-[#d946ef]/16 text-zinc-100"
-      : severity === "warning"
-        ? "border-[#eab308]/50 bg-[#eab308]/14 text-zinc-100"
-        : "border-[#4f7bff]/50 bg-[#4f7bff]/14 text-zinc-100";
+function PodLifecycleMix({ data }: { data: Array<{ name: string; value: number; color: string }> }) {
+  const total = data.reduce((sum, row) => sum + row.value, 0);
+  if (total === 0) {
+    return <EmptyChart message="No pod lifecycle data." />;
+  }
+
+  const runningCount = lifecycleCount(data, "running");
+  const pendingCount = lifecycleCount(data, "pending");
+  const failedCount = lifecycleCount(data, "failed");
 
   return (
-    <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold tracking-wide ${className}`}>
-      {label}
-    </span>
+    <div className="h-[320px] flex flex-col py-2">
+      <div className="space-y-3">
+        {data.map((row) => {
+          const pct = total > 0 ? (row.value / total) * 100 : 0;
+          return (
+            <div key={row.name} className="flex items-center gap-3">
+              <span className="text-[11px] font-mono text-[#666666] w-20 flex-shrink-0">{row.name}</span>
+              <div className="flex-1 h-1 bg-[#1f1f1f] overflow-hidden">
+                <div
+                  className="h-full transition-all duration-300"
+                  style={{ width: `${pct}%`, backgroundColor: row.color }}
+                />
+              </div>
+              <span className="text-xs font-mono font-semibold text-[#e8e8e8] w-4 text-right flex-shrink-0">
+                {row.value}
+              </span>
+              <span className="text-[11px] font-mono text-[#444444] w-9 text-right flex-shrink-0">
+                {pct.toFixed(0)}%
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="mt-auto pt-4 border-t border-[#1f1f1f] grid grid-cols-3 gap-4">
+        <div>
+          <p className="text-[10px] font-mono uppercase tracking-[0.15em] text-[#444444]">Total</p>
+          <p className="mt-1 text-lg font-mono font-semibold text-[#e8e8e8]">{total}</p>
+        </div>
+        <div>
+          <p className="text-[10px] font-mono uppercase tracking-[0.15em] text-[#444444]">Healthy</p>
+          <p className="mt-1 text-lg font-mono font-semibold text-[#00d4a8]">
+            {((runningCount / total) * 100).toFixed(0)}%
+          </p>
+        </div>
+        <div>
+          <p className="text-[10px] font-mono uppercase tracking-[0.15em] text-[#444444]">At risk</p>
+          <p className="mt-1 text-lg font-mono font-semibold text-[#ff4444]">{pendingCount + failedCount}</p>
+        </div>
+      </div>
+    </div>
   );
+}
+
+function lifecycleCount(data: Array<{ name: string; value: number }>, target: string): number {
+  return data.find((row) => row.name.toLowerCase() === target)?.value ?? 0;
 }
 
 function buildPrioritizedIssues(diagnostics: DiagnosticsResult | null) {
@@ -526,10 +570,10 @@ function buildPodMixData(stats: ClusterStats | null): Array<{ name: string; valu
 
   const succeeded = Math.max(stats.pods.total - stats.pods.running - stats.pods.pending - stats.pods.failed, 0);
   return [
-    { name: "Running", value: stats.pods.running, color: CHART_BLUE },
-    { name: "Pending", value: stats.pods.pending, color: CHART_AMBER },
-    { name: "Failed", value: stats.pods.failed, color: CHART_MAGENTA },
-    { name: "Succeeded", value: succeeded, color: CHART_GREEN },
+    { name: "Running", value: stats.pods.running, color: ACCENT },
+    { name: "Pending", value: stats.pods.pending, color: AMBER },
+    { name: "Failed", value: stats.pods.failed, color: RED },
+    { name: "Succeeded", value: succeeded, color: MUTED },
   ].filter((row) => row.value > 0);
 }
 
@@ -548,7 +592,6 @@ function buildNodeCPUTrend(nodes: Node[]): Array<{ time: string; value: number }
   }
 
   const rows: Array<{ time: string; value: number }> = [];
-
   for (let i = 0; i < pointCount; i++) {
     let total = 0;
     let count = 0;
@@ -581,16 +624,15 @@ function buildRestartHotspots(pods: Pod[]): Array<{ name: string; restarts: numb
   return [...pods]
     .sort((a, b) => b.restarts - a.restarts)
     .slice(0, 7)
-    .map((pod, index) => ({
+    .map((pod) => ({
       name: compactLabel(pod.name),
       restarts: pod.restarts,
-      color: [CHART_MAGENTA, CHART_AMBER, CHART_BLUE, CHART_GREEN, CHART_SLATE][index % 5],
+      color: restartSeverityColor(pod.restarts),
     }));
 }
 
 function buildEventReasonBars(events: K8sEvent[]): Array<{ name: string; count: number }> {
   const byReason = new Map<string, number>();
-
   for (const event of events) {
     const reason = (event.reason || "Unknown").trim() || "Unknown";
     byReason.set(reason, (byReason.get(reason) ?? 0) + (event.count && event.count > 0 ? event.count : 1));
@@ -622,13 +664,6 @@ function parsePercentNumber(value: string): number {
   return Number(Math.max(0, Math.min(100, numeric)).toFixed(2));
 }
 
-function renderCompactLabel({ name, percent }: { name?: string | number; percent?: number }) {
-  if (!name || !percent || percent < 0.06) {
-    return "";
-  }
-  return `${name} ${(percent * 100).toFixed(0)}%`;
-}
-
 function percentage(part: number, whole: number): number {
   if (!Number.isFinite(part) || !Number.isFinite(whole) || whole <= 0) {
     return 0;
@@ -649,4 +684,34 @@ function formatTimestamp(value: string): string {
     return value;
   }
   return date.toLocaleString();
+}
+
+function riskColor(value: number): string {
+  if (value > 20) {
+    return RED;
+  }
+  if (value > 5) {
+    return AMBER;
+  }
+  return ACCENT;
+}
+
+function restartSeverityColor(restarts: number): string {
+  if (restarts > 10) {
+    return RED;
+  }
+  if (restarts >= 3) {
+    return AMBER;
+  }
+  return "#666666";
+}
+
+function restartCountColorClass(restarts: number): string {
+  if (restarts > 10) {
+    return "text-[#ff4444]";
+  }
+  if (restarts > 3) {
+    return "text-[#f59e0b]";
+  }
+  return "text-[#666666]";
 }

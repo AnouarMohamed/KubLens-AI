@@ -1,4 +1,5 @@
 import type { Pod } from "../../../types";
+import { KpiStrip } from "../../../components/KpiStrip";
 
 export function PodsSummary({ pods, filteredCount }: { pods: Pod[]; filteredCount: number }) {
   const totals = pods.reduce(
@@ -14,21 +15,16 @@ export function PodsSummary({ pods, filteredCount }: { pods: Pod[]; filteredCoun
   );
 
   const cards = [
-    { label: "Visible Pods", value: filteredCount },
-    { label: "Running", value: totals.running },
-    { label: "Pending", value: totals.pending },
-    { label: "Failed", value: totals.failed },
-    { label: "Restarts", value: pods.reduce((sum, pod) => sum + pod.restarts, 0) },
+    { label: "Visible Pods", value: filteredCount, tone: "default" as const },
+    { label: "Running", value: totals.running, tone: "healthy" as const },
+    { label: "Pending", value: totals.pending, tone: totals.pending > 0 ? ("warning" as const) : ("default" as const) },
+    { label: "Failed", value: totals.failed, tone: totals.failed > 0 ? ("critical" as const) : ("default" as const) },
+    {
+      label: "Restarts",
+      value: pods.reduce((sum, pod) => sum + pod.restarts, 0),
+      tone: pods.some((pod) => pod.restarts > 0) ? ("warning" as const) : ("default" as const),
+    },
   ];
 
-  return (
-    <section className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-      {cards.map((card) => (
-        <article key={card.label} className="kpi">
-          <p className="text-[11px] uppercase tracking-wide text-zinc-500 font-semibold">{card.label}</p>
-          <p className="mt-2 text-2xl font-semibold text-zinc-100">{card.value}</p>
-        </article>
-      ))}
-    </section>
-  );
+  return <KpiStrip items={cards} className="lg:grid-cols-5" />;
 }

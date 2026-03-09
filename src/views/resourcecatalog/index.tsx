@@ -241,7 +241,7 @@ export default function ResourceCatalog({ view }: { view: View }) {
       </header>
 
       {message && (
-        <div className="rounded-xl border border-[#2496ed]/40 bg-[#2496ed]/12 px-3 py-2 text-sm text-zinc-100">
+        <div className="rounded-xl border border-[#00d4a8]/40 bg-[#00d4a8]/12 px-3 py-2 text-sm text-zinc-100">
           {message}
         </div>
       )}

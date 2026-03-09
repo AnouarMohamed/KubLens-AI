@@ -17,11 +17,11 @@ import { api } from "../../lib/api";
 import type { ApiMetricsSnapshot, ClusterStats, Node, Pod } from "../../types";
 import { MetricsKpiStrip } from "./components/MetricsKpiStrip";
 
-const DOCKER_BLUE = "#2496ed";
-const CHART_BLUE = "#4f7bff";
+const DOCKER_BLUE = "#00d4a8";
+const CHART_BLUE = "#3b82f6";
 const CHART_GREEN = "#34c759";
 const CHART_AMBER = "#eab308";
-const CHART_MAGENTA = "#d946ef";
+const CHART_MAGENTA = "#ff4444";
 const CHART_SLATE = "#a9b4cc";
 const CHART_COLORS = [CHART_BLUE, CHART_GREEN, CHART_AMBER, CHART_MAGENTA, CHART_SLATE, DOCKER_BLUE];
 const TOOLTIP_STYLE = { background: "#ffffff", border: "1px solid #d8dde6", color: "#1f2937" };
@@ -444,7 +444,7 @@ export default function Metrics() {
                   <span className="text-zinc-300">{route.avgLatencyMs.toFixed(2)}ms</span>
                 </div>
                 <div className="mt-2 h-2 rounded-full bg-zinc-800 overflow-hidden">
-                  <div className="h-full bg-[#2496ed]" style={{ width: `${route.normalized}%` }} />
+                  <div className="h-full bg-[#00d4a8]" style={{ width: `${route.normalized}%` }} />
                 </div>
               </div>
             ))}
@@ -463,7 +463,7 @@ function SignalCard({ label, value, detail, fill }: { label: string; value: stri
       <p className="mt-2 text-3xl font-semibold tracking-tight text-zinc-100">{value}</p>
       <p className="mt-1 text-xs text-zinc-400">{detail}</p>
       <div className="mt-3 h-2 rounded-full bg-zinc-800 overflow-hidden">
-        <div className="h-full bg-[#4f7bff]" style={{ width: `${fill}%` }} />
+        <div className="h-full bg-[#3b82f6]" style={{ width: `${fill}%` }} />
       </div>
     </div>
   );
@@ -483,7 +483,7 @@ function TabButton({ label, active, onClick }: { label: string; active: boolean;
     <button
       onClick={onClick}
       className={`rounded-xl border px-3 py-2 text-sm font-medium transition-colors ${
-        active ? "border-[#4f7bff] bg-[#4f7bff]/18 text-zinc-100" : "border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+        active ? "border-[#3b82f6] bg-[#3b82f6]/18 text-zinc-100" : "border-zinc-700 text-zinc-300 hover:bg-zinc-800"
       }`}
     >
       {label}

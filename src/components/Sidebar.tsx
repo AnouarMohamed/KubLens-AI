@@ -1,4 +1,31 @@
 import { useEffect, useMemo, useState } from "react";
+import {
+  Activity,
+  Archive,
+  Bot,
+  Boxes,
+  Briefcase,
+  ClipboardList,
+  Clock3,
+  Copy,
+  Cpu,
+  Database,
+  FileText,
+  FolderTree,
+  Globe,
+  HardDrive,
+  KeyRound,
+  Layers,
+  LayoutDashboard,
+  LineChart,
+  Network,
+  Rocket,
+  Server,
+  Shield,
+  ShieldCheck,
+  Users,
+  type LucideIcon,
+} from "lucide-react";
 import { VIEW_SECTIONS, type ViewSection } from "../features/viewCatalog";
 import { ApiError, api } from "../lib/api";
 import type { BuildInfo, ClusterStats, View } from "../types";
@@ -8,6 +35,35 @@ interface SidebarProps {
   onViewChange: (view: View) => void;
   sections?: ViewSection[];
 }
+
+const VIEW_ICON: Record<View, LucideIcon> = {
+  overview: LayoutDashboard,
+  pods: Boxes,
+  deployments: Rocket,
+  replicasets: Copy,
+  statefulsets: Database,
+  daemonsets: Server,
+  jobs: Briefcase,
+  cronjobs: Clock3,
+  services: Network,
+  ingresses: Globe,
+  networkpolicies: Shield,
+  configmaps: FileText,
+  secrets: KeyRound,
+  persistentvolumes: HardDrive,
+  persistentvolumeclaims: Archive,
+  storageclasses: Layers,
+  nodes: Cpu,
+  namespaces: FolderTree,
+  events: Activity,
+  serviceaccounts: Users,
+  rbac: ShieldCheck,
+  metrics: LineChart,
+  audit: ClipboardList,
+  predictions: Activity,
+  diagnostics: ClipboardList,
+  assistant: Bot,
+};
 
 export default function Sidebar({ currentView, onViewChange, sections = VIEW_SECTIONS }: SidebarProps) {
   const [isReal, setIsReal] = useState(false);
@@ -54,70 +110,83 @@ export default function Sidebar({ currentView, onViewChange, sections = VIEW_SEC
     };
   }, []);
 
-  const clusterPills = useMemo(
-    () => [
-      { label: "Pods", value: String(stats?.pods.total ?? 0) },
-      { label: "Nodes", value: String(stats?.nodes.total ?? 0) },
-      { label: "Ready", value: String(stats?.nodes.ready ?? 0) },
-    ],
-    [stats],
-  );
+  const statusSummary = useMemo(() => {
+    const podReady = stats?.pods.running ?? 0;
+    const podTotal = stats?.pods.total ?? 0;
+    const nodeReady = stats?.nodes.ready ?? 0;
+    const nodeTotal = stats?.nodes.total ?? 0;
+    const readyTotal = podReady + nodeReady;
+    const observedTotal = podTotal + nodeTotal;
+    const readiness = observedTotal > 0 ? Math.round((readyTotal / observedTotal) * 100) : 0;
+
+    return {
+      podReady,
+      podTotal,
+      nodeReady,
+      nodeTotal,
+      readyTotal,
+      observedTotal,
+      readiness,
+    };
+  }, [stats]);
 
   return (
-    <aside className="w-80 h-screen p-4 pr-3">
+    <aside className="w-80 h-screen p-3 pr-2">
       <div className="app-shell h-full flex flex-col overflow-hidden">
-        <header className="px-5 py-5 border-b border-zinc-700">
-          <p className="text-[11px] uppercase tracking-[0.22em] text-zinc-400 font-semibold">Kubernetes Ops</p>
-          <h1 className="mt-2 text-2xl font-semibold text-zinc-100 tracking-tight">Cluster Control Console</h1>
-          <div className="mt-4 flex items-center gap-2">
-            <span className={`h-2.5 w-2.5 rounded-full ${isReal ? "bg-[#2496ed]" : "bg-zinc-500"}`} />
-            <span className="text-xs font-medium text-zinc-400">
-              {isReal ? "Live cluster connection" : "Mock runtime mode"}
+        <header className="px-4 py-4 border-b border-zinc-700">
+          <p className="text-[10px] uppercase tracking-[0.28em] text-zinc-300">KUBELENS</p>
+          <p className="mt-2 text-[11px] text-zinc-500">{isReal ? "cluster: live-runtime" : "cluster: mock-runtime"}</p>
+
+          <div className="mt-3 flex items-center gap-2">
+            <span className={`live-dot ${isReal ? "live-dot--active" : ""}`} />
+            <span className="text-[11px] text-zinc-400">
+              {isReal ? "live connection established" : "mock mode active"}
             </span>
           </div>
 
-          <div className="mt-4 grid grid-cols-3 gap-2">
-            {clusterPills.map((pill) => (
-              <div key={pill.label} className="rounded-xl border border-zinc-700 bg-zinc-800/70 px-2 py-2 text-center">
-                <p className="text-[10px] uppercase tracking-wide text-zinc-400">{pill.label}</p>
-                <p className="text-sm font-semibold text-zinc-100 mt-0.5">{pill.value}</p>
-              </div>
-            ))}
+          <div className="mt-3 border border-zinc-700 bg-zinc-950 px-3 py-2">
+            <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.18em] text-zinc-500">
+              <span>
+                Pods {statusSummary.podReady}/{statusSummary.podTotal}
+              </span>
+              <span>
+                Nodes {statusSummary.nodeReady}/{statusSummary.nodeTotal}
+              </span>
+              <span>
+                Ready {statusSummary.readyTotal}/{statusSummary.observedTotal}
+              </span>
+            </div>
+            <div className="mt-2 h-1 bg-zinc-800">
+              <div className="h-full bg-[var(--accent)]" style={{ width: `${statusSummary.readiness}%` }} />
+            </div>
           </div>
         </header>
 
-        <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-5 scrollbar-hide">
+        <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-4 scrollbar-hide">
           {sections.map((section) => (
             <section key={section.id}>
-              <p className="px-2 pb-2 text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
-                {section.label}
-              </p>
-              <div className="space-y-1.5">
+              <p className="px-2 pb-1 text-[10px] uppercase tracking-[0.24em] text-zinc-500">{section.label}</p>
+              <div className="space-y-1">
                 {section.items.map((item) => {
                   const active = item.id === currentView;
+                  const Icon = VIEW_ICON[item.id];
                   return (
                     <button
                       key={item.id}
                       onClick={() => onViewChange(item.id)}
-                      className={`w-full rounded-xl border px-3 py-2.5 text-left transition-all ${
-                        active
-                          ? "border-[#2496ed] bg-[#2496ed]/16 text-zinc-100"
-                          : "border-transparent hover:border-zinc-700 hover:bg-zinc-800/70 text-zinc-300"
+                      className={`w-full border-l-2 px-2 py-2 text-left ${
+                        active ? "border-l-[var(--accent)]" : "border-l-transparent hover:border-l-zinc-600"
                       }`}
                     >
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="text-sm font-medium">{item.label}</p>
-                        {item.id === "metrics" && (
-                          <span
-                            className={`rounded-full px-2 py-0.5 text-[9px] font-semibold ${active ? "bg-[#2496ed]/25 text-zinc-100" : "bg-zinc-700 text-zinc-300"}`}
-                          >
-                            Live
-                          </span>
-                        )}
+                      <div className="flex items-start gap-2.5">
+                        <Icon size={14} className={active ? "text-[var(--accent)]" : "text-zinc-500"} />
+                        <div className="min-w-0">
+                          <p className="text-sm text-zinc-200 truncate">{item.label}</p>
+                          <p className="text-[11px] leading-relaxed text-zinc-500 max-h-8 overflow-hidden prose-text">
+                            {item.description}
+                          </p>
+                        </div>
                       </div>
-                      <p className={`text-[11px] mt-1 leading-relaxed ${active ? "text-zinc-300" : "text-zinc-500"}`}>
-                        {item.description}
-                      </p>
                     </button>
                   );
                 })}
@@ -126,19 +195,19 @@ export default function Sidebar({ currentView, onViewChange, sections = VIEW_SEC
           ))}
         </nav>
 
-        <footer className="px-5 py-4 border-t border-zinc-700 bg-zinc-800/60">
-          <p className="text-[11px] uppercase tracking-wide text-zinc-500">Tip</p>
-          <p className="text-xs text-zinc-300 mt-1">
-            Press <span className="font-mono font-semibold">/</span> to focus search.
+        <footer className="px-4 py-3 border-t border-zinc-700 bg-zinc-900">
+          <p className="text-[10px] uppercase tracking-[0.2em] text-zinc-500">Operator Tip</p>
+          <p className="mt-1 text-[11px] text-zinc-400 prose-text">
+            Press <span className="font-mono text-zinc-300">/</span> to jump into command search.
           </p>
-          <div className="mt-3 rounded-lg border border-zinc-700 bg-zinc-900/70 px-2 py-1.5">
-            <p className="text-[10px] uppercase tracking-wide text-zinc-500">Backend Build</p>
+          <div className="mt-2 border border-zinc-700 bg-zinc-950 px-2 py-1.5">
+            <p className="text-[10px] uppercase tracking-[0.2em] text-zinc-500">Backend Build</p>
             {build ? (
-              <p className="mt-1 text-[11px] text-zinc-300 font-mono">
+              <p className="mt-1 text-[11px] text-zinc-300">
                 {build.version} @ {shortCommit(build.commit)}
               </p>
             ) : backendLegacy ? (
-              <p className="mt-1 text-[11px] text-[#eab308]">legacy backend detected</p>
+              <p className="mt-1 text-[11px] text-[var(--amber)]">legacy backend detected</p>
             ) : (
               <p className="mt-1 text-[11px] text-zinc-500">unavailable</p>
             )}

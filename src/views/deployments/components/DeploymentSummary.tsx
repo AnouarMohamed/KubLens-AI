@@ -1,4 +1,5 @@
 import type { ResourceRecord } from "../../../types";
+import { KpiStrip } from "../../../components/KpiStrip";
 
 function isHealthyStatus(status: string): boolean {
   const normalized = status.toLowerCase();
@@ -11,21 +12,12 @@ export function DeploymentSummary({ items, filteredCount }: { items: ResourceRec
   const namespaces = new Set(items.map((item) => item.namespace).filter(Boolean)).size;
 
   const cards = [
-    { label: "Visible", value: filteredCount },
-    { label: "Total", value: items.length },
-    { label: "Healthy", value: healthy },
-    { label: "At Risk", value: unhealthy },
-    { label: "Namespaces", value: namespaces },
+    { label: "Visible", value: filteredCount, tone: "default" as const },
+    { label: "Total", value: items.length, tone: "default" as const },
+    { label: "Healthy", value: healthy, tone: "healthy" as const },
+    { label: "At Risk", value: unhealthy, tone: unhealthy > 0 ? ("critical" as const) : ("default" as const) },
+    { label: "Namespaces", value: namespaces, tone: "default" as const },
   ];
 
-  return (
-    <section className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-      {cards.map((card) => (
-        <article key={card.label} className="kpi">
-          <p className="text-[11px] uppercase tracking-wide text-zinc-500 font-semibold">{card.label}</p>
-          <p className="mt-2 text-2xl font-semibold text-zinc-100">{card.value}</p>
-        </article>
-      ))}
-    </section>
-  );
+  return <KpiStrip items={cards} className="lg:grid-cols-5" />;
 }

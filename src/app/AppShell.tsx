@@ -4,7 +4,6 @@ import { getViewItem } from "../features/viewCatalog";
 import { useAuthSession } from "../context/AuthSessionContext";
 import { HeaderBar } from "./components/HeaderBar";
 import { WorkspacePanels } from "./components/WorkspacePanels";
-import { ModeBanner } from "./components/ModeBanner";
 import { useCurrentView } from "./hooks/useCurrentView";
 import { useNotifications } from "./hooks/useNotifications";
 import { useUserSettings } from "./hooks/useUserSettings";
@@ -128,10 +127,8 @@ export function AppShell() {
             searchRef={searchRef}
           />
 
-          <ModeBanner runtime={runtime} />
-
           {transientMessage && (
-            <div className="px-6 py-2 bg-[#2496ed]/16 text-zinc-100 text-xs tracking-wide border-b border-[#2496ed]/30">
+            <div className="px-6 py-2 bg-[var(--accent-dim)] text-zinc-100 text-xs tracking-wide border-b border-zinc-700">
               {transientMessage}
             </div>
           )}

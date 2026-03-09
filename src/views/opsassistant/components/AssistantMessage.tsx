@@ -29,9 +29,9 @@ export default function AssistantMessage({ message, copied, onCopy, onRunPrompt 
         <div
           className={`rounded-lg border px-3.5 py-3 text-sm leading-relaxed ${
             message.role === "user"
-              ? "border-[#2496ed]/55 bg-[#2496ed]/14 text-zinc-100"
+              ? "border-[#00d4a8]/55 bg-[#00d4a8]/14 text-zinc-100"
               : message.isError
-                ? "border-[#d946ef]/45 bg-[#d946ef]/12 text-zinc-100"
+                ? "border-[#ff4444]/45 bg-[#ff4444]/12 text-zinc-100"
                 : "border-zinc-700 bg-zinc-800/55 text-zinc-200"
           }`}
         >
@@ -137,10 +137,10 @@ function AssistantLine({ line }: { line: string }) {
     const details = severityMatch[2];
     const tone =
       severity === "CRITICAL"
-        ? "border-[#d946ef]/45 bg-[#d946ef]/12"
+        ? "border-[#ff4444]/45 bg-[#ff4444]/12"
         : severity === "WARNING"
           ? "border-[#eab308]/45 bg-[#eab308]/10"
-          : "border-[#4f7bff]/45 bg-[#4f7bff]/10";
+          : "border-[#3b82f6]/45 bg-[#3b82f6]/10";
 
     return (
       <div className={`rounded-md border px-2 py-1.5 ${tone}`}>

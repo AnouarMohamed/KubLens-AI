@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuthSession } from "../../context/AuthSessionContext";
 import { api } from "../../lib/api";
 import { useStreamRefresh } from "../../app/hooks/useStreamRefresh";
+import { KpiStrip } from "../../components/KpiStrip";
 import type { K8sEvent } from "../../types";
 
 const EVENT_TYPES = ["All", "Warning", "Normal"] as const;
@@ -94,12 +95,15 @@ export default function Events() {
         </div>
       </header>
 
-      <section className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <Kpi label="Visible Events" value={String(filtered.length)} />
-        <Kpi label="Total Events" value={String(events.length)} />
-        <Kpi label="Warnings" value={String(warningsCount)} />
-        <Kpi label="Unique Reasons" value={String(uniqueReasons)} />
-      </section>
+      <KpiStrip
+        items={[
+          { label: "Visible Events", value: String(filtered.length), tone: "default" },
+          { label: "Total Events", value: String(events.length), tone: "default" },
+          { label: "Warnings", value: String(warningsCount), tone: warningsCount > 0 ? "warning" : "default" },
+          { label: "Unique Reasons", value: String(uniqueReasons), tone: "default" },
+        ]}
+        className="lg:grid-cols-4"
+      />
 
       {error && (
         <div className="rounded-xl border border-zinc-700 bg-zinc-900/80 px-3 py-2 text-sm text-zinc-200">{error}</div>
@@ -122,8 +126,12 @@ export default function Events() {
               <tr key={`${event.reason}-${event.age}-${index}`} className="table-row">
                 <td className="px-4 py-3">
                   <span
-                    className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
-                      event.type === "Warning" ? "bg-amber-200 text-amber-900" : "bg-emerald-200 text-emerald-900"
+                    className={`status-pill ${
+                      event.type === "Warning"
+                        ? "status-warning"
+                        : event.type === "Normal"
+                          ? "status-running"
+                          : "status-unknown"
                     }`}
                   >
                     {event.type || "Unknown"}
@@ -145,14 +153,5 @@ export default function Events() {
         )}
       </div>
     </div>
-  );
-}
-
-function Kpi({ label, value }: { label: string; value: string }) {
-  return (
-    <article className="kpi">
-      <p className="text-[11px] uppercase tracking-wide text-zinc-500 font-semibold">{label}</p>
-      <p className="mt-2 text-2xl font-semibold text-zinc-100">{value}</p>
-    </article>
   );
 }

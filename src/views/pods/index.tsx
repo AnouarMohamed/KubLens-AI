@@ -4,7 +4,7 @@ import { useAuthSession } from "../../context/AuthSessionContext";
 import { useStreamRefresh } from "../../app/hooks/useStreamRefresh";
 import type { Pod, PodDetail, PodCreateRequest } from "../../types";
 import PodDetailModal from "../../components/pods/PodDetailModal";
-import PodStatusBadge from "../../components/pods/PodStatusBadge";
+import StatusText from "../../components/pods/PodStatusBadge";
 import { PodsSummary } from "./components/PodsSummary";
 
 type PodDetailTab = "specs" | "events" | "describe";
@@ -400,12 +400,11 @@ export default function Pods() {
                     className="text-left hover:underline"
                   >
                     <p className="font-medium">{pod.name}</p>
-                    <p className="text-xs text-zinc-500">{pod.id}</p>
                   </button>
                 </td>
                 <td className="px-4 py-3 text-zinc-400">{pod.namespace}</td>
                 <td className="px-4 py-3">
-                  <PodStatusBadge status={pod.status} />
+                  <StatusText status={pod.status} />
                 </td>
                 <td className="px-4 py-3 text-zinc-400">{pod.cpu}</td>
                 <td className="px-4 py-3 text-zinc-400">{pod.memory}</td>
@@ -415,21 +414,21 @@ export default function Pods() {
                   <div className="flex gap-2">
                     <button
                       onClick={() => void openLogs(pod.namespace, pod.name)}
-                      className="btn-sm"
+                      className="text-xs font-mono text-[#444444] hover:text-[#e8e8e8] transition-colors"
                       disabled={!canRead}
                     >
                       Logs
                     </button>
                     <button
                       onClick={() => void streamLogs(pod.namespace, pod.name)}
-                      className="btn-sm"
+                      className="text-xs font-mono text-[#444444] hover:text-[#e8e8e8] transition-colors"
                       disabled={!canRead}
                     >
                       Stream
                     </button>
                     <button
                       onClick={() => void restartPod(pod.namespace, pod.name)}
-                      className="btn-sm"
+                      className="text-xs font-mono text-[#444444] hover:text-[#e8e8e8] transition-colors"
                       disabled={!canWrite}
                     >
                       Restart
@@ -437,7 +436,7 @@ export default function Pods() {
                     <button
                       onClick={() => void deletePod(pod.namespace, pod.name)}
                       disabled={!canWrite}
-                      className="btn-sm border-zinc-600"
+                      className="text-xs font-mono text-[#ff4444]/50 hover:text-[#ff4444] transition-colors"
                     >
                       Delete
                     </button>

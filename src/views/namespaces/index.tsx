@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuthSession } from "../../context/AuthSessionContext";
+import { KpiStrip } from "../../components/KpiStrip";
 import { api } from "../../lib/api";
 import type { Pod, ResourceRecord } from "../../types";
 
@@ -95,12 +96,15 @@ export default function Namespaces() {
         </div>
       </header>
 
-      <section className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <Kpi label="Visible Namespaces" value={String(filtered.length)} />
-        <Kpi label="Total Namespaces" value={String(rows.length)} />
-        <Kpi label="Tracked Pods" value={String(totalPods)} />
-        <Kpi label="Failed Pods" value={String(totalFailedPods)} />
-      </section>
+      <KpiStrip
+        items={[
+          { label: "Visible Namespaces", value: String(filtered.length), tone: "default" },
+          { label: "Total Namespaces", value: String(rows.length), tone: "default" },
+          { label: "Tracked Pods", value: String(totalPods), tone: "default" },
+          { label: "Failed Pods", value: String(totalFailedPods), tone: totalFailedPods > 0 ? "critical" : "default" },
+        ]}
+        className="lg:grid-cols-4"
+      />
 
       {error && (
         <div className="rounded-xl border border-zinc-700 bg-zinc-900/80 px-3 py-2 text-sm text-zinc-200">{error}</div>
@@ -138,14 +142,5 @@ export default function Namespaces() {
         )}
       </div>
     </div>
-  );
-}
-
-function Kpi({ label, value }: { label: string; value: string }) {
-  return (
-    <article className="kpi">
-      <p className="text-[11px] uppercase tracking-wide text-zinc-500 font-semibold">{label}</p>
-      <p className="mt-2 text-2xl font-semibold text-zinc-100">{value}</p>
-    </article>
   );
 }

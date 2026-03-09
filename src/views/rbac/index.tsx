@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuthSession } from "../../context/AuthSessionContext";
+import { KpiStrip } from "../../components/KpiStrip";
 import { api } from "../../lib/api";
 import type { ResourceRecord } from "../../types";
 
@@ -116,13 +117,16 @@ export default function RBAC() {
         </div>
       </header>
 
-      <section className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-        <Kpi label="Visible" value={String(filtered.length)} />
-        <Kpi label="Roles" value={String(counts.roles)} />
-        <Kpi label="RoleBindings" value={String(counts.roleBindings)} />
-        <Kpi label="ClusterRoles" value={String(counts.clusterRoles)} />
-        <Kpi label="ClusterRoleBindings" value={String(counts.clusterRoleBindings)} />
-      </section>
+      <KpiStrip
+        items={[
+          { label: "Visible", value: String(filtered.length), tone: "default" },
+          { label: "Roles", value: String(counts.roles), tone: "default" },
+          { label: "RoleBindings", value: String(counts.roleBindings), tone: "default" },
+          { label: "ClusterRoles", value: String(counts.clusterRoles), tone: "default" },
+          { label: "ClusterRoleBindings", value: String(counts.clusterRoleBindings), tone: "default" },
+        ]}
+        className="lg:grid-cols-5"
+      />
 
       {error && (
         <div className="rounded-xl border border-zinc-700 bg-zinc-900/80 px-3 py-2 text-sm text-zinc-200">{error}</div>
@@ -158,14 +162,5 @@ export default function RBAC() {
         )}
       </div>
     </div>
-  );
-}
-
-function Kpi({ label, value }: { label: string; value: string }) {
-  return (
-    <article className="kpi">
-      <p className="text-[11px] uppercase tracking-wide text-zinc-500 font-semibold">{label}</p>
-      <p className="mt-2 text-2xl font-semibold text-zinc-100">{value}</p>
-    </article>
   );
 }

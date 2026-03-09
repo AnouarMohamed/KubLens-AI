@@ -142,7 +142,7 @@ export default function Diagnostics() {
                 <p className="text-[11px] uppercase tracking-wide text-zinc-500 font-semibold">Health Progress</p>
                 <div className="mt-2 h-2 rounded-full bg-zinc-700 overflow-hidden">
                   <div
-                    className="h-full bg-[#4f7bff]"
+                    className="h-full bg-[#3b82f6]"
                     style={{ width: `${Math.max(0, Math.min(100, diagnostics.healthScore))}%` }}
                   />
                 </div>
@@ -285,10 +285,10 @@ function FindingCard({
 function SeverityBadge({ severity }: { severity: DiagnosticSeverity }) {
   const className =
     severity === "critical"
-      ? "border-[#d946ef]/50 bg-[#d946ef]/16 text-zinc-100"
+      ? "border-[#ff4444]/50 bg-[#ff4444]/16 text-zinc-100"
       : severity === "warning"
         ? "border-[#eab308]/50 bg-[#eab308]/14 text-zinc-100"
-        : "border-[#4f7bff]/50 bg-[#4f7bff]/14 text-zinc-100";
+        : "border-[#3b82f6]/50 bg-[#3b82f6]/14 text-zinc-100";
 
   return (
     <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${className}`}>

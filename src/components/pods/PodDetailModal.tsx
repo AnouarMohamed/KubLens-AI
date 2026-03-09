@@ -218,7 +218,7 @@ function TabButton({ active, label, onClick }: { active: boolean; label: string;
     <button
       onClick={onClick}
       className={`rounded-md border px-3 py-1.5 text-xs font-medium ${
-        active ? "border-[#2496ed] bg-[#2496ed]/18 text-zinc-100" : "border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+        active ? "border-[#00d4a8] bg-[#00d4a8]/18 text-zinc-100" : "border-zinc-700 text-zinc-300 hover:bg-zinc-800"
       }`}
     >
       {label}
@@ -237,11 +237,11 @@ function StatusChip({
 }) {
   const toneClass =
     tone === "critical"
-      ? "border-[#d946ef]/45 bg-[#d946ef]/12"
+      ? "border-[#ff4444]/45 bg-[#ff4444]/12"
       : tone === "warning"
         ? "border-[#eab308]/45 bg-[#eab308]/12"
         : tone === "info"
-          ? "border-[#2496ed]/45 bg-[#2496ed]/12"
+          ? "border-[#00d4a8]/45 bg-[#00d4a8]/12"
           : "border-zinc-700 bg-zinc-800/60";
 
   return (

@@ -90,7 +90,7 @@ export default function Predictions() {
         </div>
         <div className="mt-3 h-4 overflow-hidden rounded-lg border border-zinc-700 bg-zinc-800">
           <div className="h-full flex">
-            <div className="bg-[#d946ef]" style={{ width: `${summary.highPct}%` }} />
+            <div className="bg-[#ff4444]" style={{ width: `${summary.highPct}%` }} />
             <div className="bg-[#eab308]" style={{ width: `${summary.mediumPct}%` }} />
             <div className="bg-[#34c759]" style={{ width: `${summary.lowPct}%` }} />
           </div>
@@ -209,7 +209,7 @@ function StatCard({
 function RiskBadge({ score }: { score: number }) {
   let className = "border-[#34c759]/45 bg-[#34c759]/14";
   if (score >= 80) {
-    className = "border-[#d946ef]/45 bg-[#d946ef]/14";
+    className = "border-[#ff4444]/45 bg-[#ff4444]/14";
   } else if (score >= 60) {
     className = "border-[#eab308]/45 bg-[#eab308]/14";
   }

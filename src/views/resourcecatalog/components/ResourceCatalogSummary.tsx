@@ -1,4 +1,5 @@
 import type { ResourceRecord } from "../../../types";
+import { KpiStrip } from "../../../components/KpiStrip";
 
 export function ResourceCatalogSummary({
   resources,
@@ -12,21 +13,12 @@ export function ResourceCatalogSummary({
   const withErrors = resources.filter((item) => item.status.toLowerCase().includes("error")).length;
 
   const cards = [
-    { label: "Visible", value: filteredCount },
-    { label: "Total", value: resources.length },
-    { label: "Namespaces", value: namespaces },
-    { label: "Warnings", value: withWarnings },
-    { label: "Errors", value: withErrors },
+    { label: "Visible", value: filteredCount, tone: "default" as const },
+    { label: "Total", value: resources.length, tone: "default" as const },
+    { label: "Namespaces", value: namespaces, tone: "default" as const },
+    { label: "Warnings", value: withWarnings, tone: withWarnings > 0 ? ("warning" as const) : ("default" as const) },
+    { label: "Errors", value: withErrors, tone: withErrors > 0 ? ("critical" as const) : ("default" as const) },
   ];
 
-  return (
-    <section className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-      {cards.map((card) => (
-        <article key={card.label} className="kpi">
-          <p className="text-[11px] uppercase tracking-wide text-zinc-500 font-semibold">{card.label}</p>
-          <p className="mt-2 text-2xl font-semibold text-zinc-100">{card.value}</p>
-        </article>
-      ))}
-    </section>
-  );
+  return <KpiStrip items={cards} className="lg:grid-cols-5" />;
 }

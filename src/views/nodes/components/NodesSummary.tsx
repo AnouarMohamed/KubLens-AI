@@ -1,4 +1,5 @@
 import type { Node } from "../../../types";
+import { KpiStrip } from "../../../components/KpiStrip";
 
 function parsePercent(raw: string): number {
   const value = Number.parseFloat(raw.replace("%", ""));
@@ -17,21 +18,20 @@ export function NodesSummary({ nodes, filteredCount }: { nodes: Node[]; filtered
     nodes.length > 0 ? nodes.reduce((sum, node) => sum + parsePercent(node.memUsage), 0) / nodes.length : 0;
 
   const cards = [
-    { label: "Visible Nodes", value: filteredCount },
-    { label: "Ready", value: ready },
-    { label: "NotReady", value: notReady },
-    { label: "Avg CPU", value: `${avgCPU.toFixed(1)}%` },
-    { label: "Avg Memory", value: `${avgMemory.toFixed(1)}%` },
+    { label: "Visible Nodes", value: filteredCount, tone: "default" as const },
+    { label: "Ready", value: ready, tone: "healthy" as const },
+    { label: "NotReady", value: notReady, tone: notReady > 0 ? ("critical" as const) : ("default" as const) },
+    {
+      label: "Avg CPU",
+      value: `${avgCPU.toFixed(1)}%`,
+      tone: avgCPU >= 80 ? ("warning" as const) : ("default" as const),
+    },
+    {
+      label: "Avg Memory",
+      value: `${avgMemory.toFixed(1)}%`,
+      tone: avgMemory >= 80 ? ("warning" as const) : ("default" as const),
+    },
   ];
 
-  return (
-    <section className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-      {cards.map((card) => (
-        <article key={card.label} className="kpi">
-          <p className="text-[11px] uppercase tracking-wide text-zinc-500 font-semibold">{card.label}</p>
-          <p className="mt-2 text-2xl font-semibold text-zinc-100">{card.value}</p>
-        </article>
-      ))}
-    </section>
-  );
+  return <KpiStrip items={cards} className="lg:grid-cols-5" />;
 }
