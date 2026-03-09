@@ -4,6 +4,7 @@ import Events from "../index";
 
 const mockAPI = vi.hoisted(() => ({
   getEvents: vi.fn(),
+  getStreamWSURL: vi.fn().mockReturnValue("ws://localhost/api/stream/ws"),
 }));
 
 const mockAuth = vi.hoisted(() => ({

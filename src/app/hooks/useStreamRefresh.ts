@@ -15,7 +15,17 @@ export function useStreamRefresh<T>({ enabled, eventTypes, onEvent }: UseStreamR
     }
 
     let cancelled = false;
-    const socket = new WebSocket(api.getStreamWSURL());
+    const url = typeof api.getStreamWSURL === "function" ? api.getStreamWSURL() : "";
+    if (!url) {
+      return;
+    }
+
+    let socket: WebSocket | null = null;
+    try {
+      socket = new WebSocket(url);
+    } catch {
+      return;
+    }
 
     socket.onmessage = (event) => {
       if (cancelled) {
@@ -33,7 +43,7 @@ export function useStreamRefresh<T>({ enabled, eventTypes, onEvent }: UseStreamR
 
     return () => {
       cancelled = true;
-      socket.close();
+      socket?.close();
     };
   }, [enabled, eventTypes, onEvent]);
 }
