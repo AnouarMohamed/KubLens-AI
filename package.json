@@ -15,6 +15,7 @@
     "test:web:watch": "vitest",
     "test:e2e": "playwright test",
     "test:predictor": "python -m pytest predictor/tests -q",
+    "ci:backend": "node scripts/ci-backend.mjs",
     "fmt:go": "gofmt -w backend/cmd backend/internal",
     "tidy:go": "node scripts/go-task.mjs -C backend mod tidy",
     "docker:build": "docker build -t kubernetes-operations-dashboard:v0.2.0 .",

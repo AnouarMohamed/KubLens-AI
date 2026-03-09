@@ -361,6 +361,7 @@ PAGERDUTY_ROUTING_KEY=
 npm run lint              # ESLint + Prettier
 npm run test:web          # Vitest (frontend)
 npm run test:go           # Go tests
+npm run ci:backend        # Backend CI parity (fmt + vet + ineffassign + tests)
 npm run test:predictor    # Pytest
 npm run test:e2e          # Playwright (Chromium + Firefox)
 npm run build             # Production build
@@ -372,7 +373,7 @@ CI runs all of the above plus:
 - Changelog discipline check
 - OpenAPI contract validation
 - Kustomize build + kubeconform schema validation for all overlays
-- Go linting via golangci-lint
+- Go linting via `go vet` and `ineffassign`
 - Trivy filesystem scan + hadolint for Dockerfiles
 - Docker builds for both images
 
