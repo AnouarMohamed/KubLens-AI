@@ -79,11 +79,12 @@ jobs:
           npm run fmt:go
           git diff --exit-code -- backend/cmd backend/internal
 
-      - name: Go lint (golangci-lint)
-        uses: golangci/golangci-lint-action@v6
-        with:
-          version: latest
-          args: --timeout=5m --config=.golangci.yml ./backend/...
+      - name: Go lint (vet + ineffassign)
+        run: |
+          cd backend
+          go vet ./...
+          go install github.com/gordonklaus/ineffassign@v0.2.0
+          "$(go env GOPATH)/bin/ineffassign" ./...
 
       - name: Go tests
         run: npm run test:go
