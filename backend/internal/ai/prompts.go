@@ -21,6 +21,27 @@ func SystemPrompt() string {
 	}, "\n")
 }
 
+func SystemPromptWithContext(clusterContext string) string {
+	base := SystemPrompt()
+	context := strings.TrimSpace(clusterContext)
+	if context == "" {
+		return base
+	}
+
+	return strings.Join([]string{
+		context,
+		"",
+		"## YOUR TASK",
+		"You are a Kubernetes operations assistant with access to live cluster state shown above.",
+		"When answering, reference the actual pod names, statuses, and error conditions from the cluster data.",
+		"Do not give generic advice when specific cluster data is available.",
+		"If diagnostics already identified an issue, build on that finding rather than restating it.",
+		"If data is insufficient, explicitly say what data is missing.",
+		"",
+		base,
+	}, "\n")
+}
+
 func UserPrompt(in Input) string {
 	docRefs := make([]string, 0, len(in.DocumentationRefs))
 	for _, ref := range in.DocumentationRefs {

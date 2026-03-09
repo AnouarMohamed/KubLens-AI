@@ -86,11 +86,23 @@ func Build(cfg config.Config) (Result, error) {
 		warnings = append(warnings, fmt.Sprintf("assistant provider warning: %v", providerErr))
 	}
 
+	var embeddingClient *rag.EmbeddingClient
+	if strings.TrimSpace(cfg.Assistant.EmbeddingBaseURL) != "" {
+		client, err := rag.NewEmbeddingClient(
+			cfg.Assistant.EmbeddingBaseURL,
+			cfg.Assistant.EmbeddingModel,
+			nil,
+		)
+		if err != nil {
+			warnings = append(warnings, fmt.Sprintf("assistant embedding warning: %v", err))
+		} else {
+			embeddingClient = client
+		}
+	}
+
 	ragger := rag.NewService(rag.Config{
-		Enabled:          cfg.Assistant.RAGEnabled,
-		EmbeddingModel:   cfg.Assistant.EmbeddingModel,
-		EmbeddingBaseURL: cfg.Assistant.EmbeddingBaseURL,
-		EmbeddingAPIKey:  cfg.Assistant.EmbeddingAPIKey,
+		Enabled:         cfg.Assistant.RAGEnabled,
+		EmbeddingClient: embeddingClient,
 	})
 	alertDispatcher := alerts.New(alerts.Config{
 		AlertmanagerURL:     cfg.Alerts.AlertmanagerURL,

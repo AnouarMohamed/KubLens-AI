@@ -220,10 +220,10 @@ export const api = {
   getStats: () => requestJson<ClusterStats>(apiPath("stats")),
   getDiagnostics: () => requestJson<DiagnosticsResult>(apiPath("diagnostics")),
   getPredictions: (force = false) => requestPredictions(force),
-  askAssistant: (message: string) =>
+  askAssistant: (message: string, namespace?: string) =>
     requestJson<AssistantResponse>(apiPath("assistant"), {
       method: "POST",
-      body: JSON.stringify({ message }),
+      body: JSON.stringify({ message, namespace }),
     }),
 };
 

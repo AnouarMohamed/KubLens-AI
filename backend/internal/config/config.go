@@ -146,12 +146,16 @@ func Load() (Config, error) {
 	}
 
 	embeddingAPIKey := strings.TrimSpace(os.Getenv("ASSISTANT_EMBEDDING_API_KEY"))
-	if embeddingAPIKey == "" {
-		embeddingAPIKey = strings.TrimSpace(os.Getenv("ASSISTANT_API_KEY"))
-	}
-	embeddingBaseURL := strings.TrimSpace(os.Getenv("ASSISTANT_EMBEDDING_BASE_URL"))
-	if embeddingBaseURL == "" {
-		embeddingBaseURL = strings.TrimSpace(os.Getenv("ASSISTANT_API_BASE_URL"))
+	embeddingBaseURL := strings.TrimSpace(firstNonEmpty(
+		os.Getenv("OLLAMA_BASE_URL"),
+		os.Getenv("ASSISTANT_EMBEDDING_BASE_URL"),
+	))
+	embeddingModel := strings.TrimSpace(firstNonEmpty(
+		os.Getenv("OLLAMA_EMBEDDING_MODEL"),
+		os.Getenv("ASSISTANT_EMBEDDING_MODEL"),
+	))
+	if embeddingBaseURL != "" && embeddingModel == "" {
+		embeddingModel = "nomic-embed-text"
 	}
 
 	cfg.Assistant = AssistantConfig{
@@ -164,7 +168,7 @@ func Load() (Config, error) {
 		MaxTokens:        parseIntDefault(os.Getenv("ASSISTANT_MAX_TOKENS"), 700),
 		RAGEnabled:       parseBoolDefault(os.Getenv("ASSISTANT_RAG_ENABLED"), p.ragEnabled),
 		PromptTimeout:    parseSecondsAsDuration(os.Getenv("ASSISTANT_PROMPT_TIMEOUT_SECONDS"), 8*time.Second),
-		EmbeddingModel:   strings.TrimSpace(os.Getenv("ASSISTANT_EMBEDDING_MODEL")),
+		EmbeddingModel:   embeddingModel,
 		EmbeddingBaseURL: embeddingBaseURL,
 		EmbeddingAPIKey:  embeddingAPIKey,
 	}

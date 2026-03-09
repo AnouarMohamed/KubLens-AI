@@ -2,11 +2,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import AssistantMessage from "./components/AssistantMessage";
 import { useAssistantChat } from "./hooks/useAssistantChat";
 import type { AssistantMessage as Message } from "./types";
+import { api } from "../../lib/api";
 
 export default function OpsAssistant() {
   const { messages, isLoading, lastAssistant, suggestionPool, send, clear } = useAssistantChat();
   const [input, setInput] = useState("");
   const [copiedMessageID, setCopiedMessageID] = useState<string | null>(null);
+  const [namespaces, setNamespaces] = useState<string[]>([]);
+  const [selectedNamespace, setSelectedNamespace] = useState("All");
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -14,6 +17,25 @@ export default function OpsAssistant() {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages, isLoading]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadNamespaces = async () => {
+      try {
+        const rows = await api.getNamespaces();
+        if (cancelled) {
+          return;
+        }
+        setNamespaces(rows);
+      } catch {
+        // Namespace context is optional for assistant prompts.
+      }
+    };
+    void loadNamespaces();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const quickActions = useMemo(
     () => [
@@ -39,7 +61,7 @@ export default function OpsAssistant() {
       return;
     }
     setInput("");
-    await send(content);
+    await send(content, selectedNamespace === "All" ? undefined : selectedNamespace);
   };
 
   const copyMessage = async (message: Message) => {
@@ -66,6 +88,19 @@ export default function OpsAssistant() {
             <div className="flex items-center gap-2">
               <StatusPill label="Mode" value="Interactive" />
               <StatusPill label="Messages" value={String(messages.length)} />
+              <select
+                value={selectedNamespace}
+                onChange={(event) => setSelectedNamespace(event.target.value)}
+                className="field h-8 w-40 text-[11px]"
+                aria-label="Assistant namespace scope"
+              >
+                <option value="All">All namespaces</option>
+                {namespaces.map((namespace) => (
+                  <option key={namespace} value={namespace}>
+                    {namespace}
+                  </option>
+                ))}
+              </select>
               <button onClick={clear} className="btn-sm">
                 Clear
               </button>

@@ -23,15 +23,15 @@ import (
 )
 
 const (
-	defaultRefreshInterval  = 6 * time.Hour
-	defaultHTTPTimeout      = 8 * time.Second
-	defaultMaxBodyBytes     = int64(1 << 20) // 1MB
-	defaultResultLimit      = 3
-	maxResultLimit          = 8
-	defaultChunkSize        = 900
-	defaultChunkOverlap     = 140
-	defaultEmbeddingBatch   = 24
-	defaultEmbeddingBaseURL = "https://api.openai.com/v1"
+	defaultRefreshInterval = 6 * time.Hour
+	defaultHTTPTimeout     = 8 * time.Second
+	defaultMaxBodyBytes    = int64(1 << 20) // 1MB
+	defaultResultLimit     = 3
+	maxResultLimit         = 8
+	defaultChunkSize       = 900
+	defaultChunkOverlap    = 140
+	defaultOllamaBaseURL   = "http://localhost:11434"
+	defaultEmbeddingModel  = "nomic-embed-text"
 )
 
 var (
@@ -57,15 +57,13 @@ type SourceDoc struct {
 }
 
 type Config struct {
-	Enabled          bool
-	Sources          []SourceDoc
-	RefreshInterval  time.Duration
-	HTTPTimeout      time.Duration
-	MaxBodyBytes     int64
-	EmbeddingModel   string
-	EmbeddingBaseURL string
-	EmbeddingAPIKey  string
-	Logger           *slog.Logger
+	Enabled         bool
+	Sources         []SourceDoc
+	RefreshInterval time.Duration
+	HTTPTimeout     time.Duration
+	MaxBodyBytes    int64
+	EmbeddingClient *EmbeddingClient
+	Logger          *slog.Logger
 }
 
 type Service struct {
@@ -76,15 +74,16 @@ type Service struct {
 	client          *http.Client
 	logger          *slog.Logger
 	now             func() time.Time
-	embedder        embedder
+	embeddingClient *EmbeddingClient
 
-	mu        sync.RWMutex
-	chunks    []chunk
-	tokenIdx  map[string][]int
-	expiresAt time.Time
-	indexedAt time.Time
-	staleWarn time.Time
-	group     singleflight.Group
+	mu         sync.RWMutex
+	chunks     []chunk
+	embeddings [][]float32
+	tokenIdx   map[string][]int
+	expiresAt  time.Time
+	indexedAt  time.Time
+	staleWarn  time.Time
+	group      singleflight.Group
 }
 
 type chunk struct {
@@ -94,7 +93,6 @@ type chunk struct {
 	text      string
 	textLower string
 	tokenSet  map[string]struct{}
-	embedding []float32
 }
 
 func NewService(cfg Config) *Service {
@@ -123,21 +121,6 @@ func NewService(cfg Config) *Service {
 		sources = defaultSources()
 	}
 
-	var embedderInstance embedder
-	if cfg.Enabled && strings.TrimSpace(cfg.EmbeddingModel) != "" {
-		embeddingClient, err := newOpenAIEmbedder(embeddingConfig{
-			BaseURL:    cfg.EmbeddingBaseURL,
-			APIKey:     cfg.EmbeddingAPIKey,
-			Model:      cfg.EmbeddingModel,
-			HTTPClient: &http.Client{Timeout: timeout},
-		})
-		if err != nil {
-			logger.Warn("rag embedding disabled", "error", err.Error())
-		} else {
-			embedderInstance = embeddingClient
-		}
-	}
-
 	return &Service{
 		enabled:         cfg.Enabled,
 		sources:         append([]SourceDoc(nil), sources...),
@@ -146,7 +129,7 @@ func NewService(cfg Config) *Service {
 		client:          &http.Client{Timeout: timeout},
 		logger:          logger,
 		now:             time.Now,
-		embedder:        embedderInstance,
+		embeddingClient: cfg.EmbeddingClient,
 	}
 }
 
@@ -173,13 +156,13 @@ func (s *Service) Retrieve(ctx context.Context, query string, limit int) []model
 
 	s.ensureLoaded(ctx)
 
-	chunks, tokenIdx, expiresAt, indexedAt := s.snapshotIndex()
+	chunks, embeddings, tokenIdx, expiresAt, indexedAt := s.snapshotIndex()
 	if len(chunks) == 0 {
 		return nil
 	}
 	s.warnIfStaleIndex(expiresAt, indexedAt)
 
-	if refs, ok := s.retrieveWithEmbeddings(ctx, query, chunks, limit); ok {
+	if refs, ok := s.retrieveWithEmbeddings(ctx, query, chunks, embeddings, limit); ok {
 		return refs
 	}
 
@@ -246,9 +229,9 @@ func (s *Service) ensureLoaded(ctx context.Context) {
 			return nil, nil
 		}
 
-		chunks := s.buildIndex(ctx)
+		chunks, embeddings := s.buildIndex(ctx)
 		if len(chunks) == 0 {
-			chunks = s.fallbackIndex()
+			chunks, embeddings = s.fallbackIndex()
 		}
 		if len(chunks) == 0 {
 			return nil, nil
@@ -256,6 +239,7 @@ func (s *Service) ensureLoaded(ctx context.Context) {
 
 		s.mu.Lock()
 		s.chunks = chunks
+		s.embeddings = embeddings
 		s.tokenIdx = buildTokenIndex(chunks)
 		s.expiresAt = s.now().Add(s.refreshInterval)
 		s.indexedAt = s.now()
@@ -274,10 +258,10 @@ func (s *Service) hasFreshIndex() bool {
 	return len(s.chunks) > 0 && s.now().Before(s.expiresAt)
 }
 
-func (s *Service) snapshotIndex() ([]chunk, map[string][]int, time.Time, time.Time) {
+func (s *Service) snapshotIndex() ([]chunk, [][]float32, map[string][]int, time.Time, time.Time) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.chunks, s.tokenIdx, s.expiresAt, s.indexedAt
+	return s.chunks, s.embeddings, s.tokenIdx, s.expiresAt, s.indexedAt
 }
 
 func (s *Service) warnIfStaleIndex(expiresAt, indexedAt time.Time) {
@@ -308,7 +292,7 @@ func (s *Service) warnIfStaleIndex(expiresAt, indexedAt time.Time) {
 	)
 }
 
-func (s *Service) buildIndex(ctx context.Context) []chunk {
+func (s *Service) buildIndex(ctx context.Context) ([]chunk, [][]float32) {
 	results := make([][]chunk, len(s.sources))
 	var wg sync.WaitGroup
 	wg.Add(len(s.sources))
@@ -344,11 +328,10 @@ func (s *Service) buildIndex(ctx context.Context) []chunk {
 		out = append(out, chunks...)
 	}
 
-	s.applyEmbeddings(ctx, out)
-	return out
+	return out, s.buildEmbeddings(ctx, out)
 }
 
-func (s *Service) fallbackIndex() []chunk {
+func (s *Service) fallbackIndex() ([]chunk, [][]float32) {
 	out := make([]chunk, 0, len(s.sources))
 	for _, source := range s.sources {
 		for _, part := range chunkText(source.Fallback, defaultChunkSize, defaultChunkOverlap) {
@@ -359,8 +342,7 @@ func (s *Service) fallbackIndex() []chunk {
 			out = append(out, item)
 		}
 	}
-	s.applyEmbeddings(context.Background(), out)
-	return out
+	return out, s.buildEmbeddings(context.Background(), out)
 }
 
 func newChunk(source SourceDoc, raw string) chunk {
@@ -384,68 +366,62 @@ func newChunk(source SourceDoc, raw string) chunk {
 	}
 }
 
-func (s *Service) applyEmbeddings(ctx context.Context, chunks []chunk) {
-	if s.embedder == nil || len(chunks) == 0 {
-		return
+func (s *Service) buildEmbeddings(ctx context.Context, chunks []chunk) [][]float32 {
+	if s.embeddingClient == nil || len(chunks) == 0 {
+		return nil
 	}
 
-	texts := make([]string, len(chunks))
-	for i, item := range chunks {
-		texts[i] = item.text
-	}
-
-	for start := 0; start < len(texts); start += defaultEmbeddingBatch {
-		end := start + defaultEmbeddingBatch
-		if end > len(texts) {
-			end = len(texts)
-		}
-		embeddings, err := s.embedder.Embed(ctx, texts[start:end])
+	embeddings := make([][]float32, len(chunks))
+	for i := range chunks {
+		vector, err := s.embeddingClient.Embed(ctx, chunks[i].text)
 		if err != nil {
 			if s.logger != nil {
 				s.logger.Warn("rag embeddings failed", "error", err.Error())
 			}
-			return
+			return nil
 		}
-		if len(embeddings) != end-start {
-			if s.logger != nil {
-				s.logger.Warn("rag embeddings incomplete", "expected", end-start, "got", len(embeddings))
-			}
-			return
-		}
-		for i := range embeddings {
-			chunks[start+i].embedding = embeddings[i]
-		}
+		embeddings[i] = vector
 	}
+	return embeddings
 }
 
-func (s *Service) retrieveWithEmbeddings(ctx context.Context, query string, chunks []chunk, limit int) ([]model.DocumentationReference, bool) {
-	if s.embedder == nil {
+func (s *Service) retrieveWithEmbeddings(
+	ctx context.Context,
+	query string,
+	chunks []chunk,
+	embeddings [][]float32,
+	limit int,
+) ([]model.DocumentationReference, bool) {
+	if s.embeddingClient == nil || len(chunks) == 0 || len(embeddings) == 0 {
 		return nil, false
 	}
 
-	embeddings, err := s.embedder.Embed(ctx, []string{query})
-	if err != nil || len(embeddings) == 0 {
-		if s.logger != nil && err != nil {
+	queryEmbedding, err := s.embeddingClient.Embed(ctx, query)
+	if err != nil {
+		if s.logger != nil {
 			s.logger.Warn("rag query embedding failed", "error", err.Error())
 		}
 		return nil, false
 	}
-	queryEmbedding := embeddings[0]
 	if len(queryEmbedding) == 0 {
 		return nil, false
 	}
 
 	type scored struct {
 		chunk chunk
-		score float64
+		score float32
 	}
 
 	ranked := make([]scored, 0, len(chunks))
-	for _, item := range chunks {
-		if len(item.embedding) == 0 || len(item.embedding) != len(queryEmbedding) {
+	for i, item := range chunks {
+		if i >= len(embeddings) {
+			break
+		}
+		vector := embeddings[i]
+		if len(vector) == 0 || len(vector) != len(queryEmbedding) {
 			continue
 		}
-		score := cosineSimilarity(queryEmbedding, item.embedding)
+		score := cosineSimilarity(queryEmbedding, vector)
 		ranked = append(ranked, scored{chunk: item, score: score})
 	}
 
@@ -712,100 +688,213 @@ func defaultSources() []SourceDoc {
 		},
 		{
 			Source:   "kubernetes",
-			Title:    "Kubernetes debug running pods",
+			Title:    "Kubernetes Services",
+			URL:      "https://kubernetes.io/docs/concepts/services-networking/service/",
+			Fallback: "Services provide stable virtual IPs and DNS names for pod backends. Troubleshoot selectors, endpoints, and target ports when connectivity fails.",
+		},
+		{
+			Source:   "kubernetes",
+			Title:    "Kubernetes Ingress",
+			URL:      "https://kubernetes.io/docs/concepts/services-networking/ingress/",
+			Fallback: "Ingress routes HTTP/S traffic to services. Validate ingress class, host/path rules, TLS secrets, and controller health.",
+		},
+		{
+			Source:   "kubernetes",
+			Title:    "Kubernetes NetworkPolicy",
+			URL:      "https://kubernetes.io/docs/concepts/services-networking/network-policies/",
+			Fallback: "NetworkPolicy controls pod ingress and egress. Deny-by-default behavior can block service communication if allow rules are incomplete.",
+		},
+		{
+			Source:   "kubernetes",
+			Title:    "Kubernetes DNS",
+			URL:      "https://kubernetes.io/docs/concepts/services-networking/dns-pod-service/",
+			Fallback: "Kubernetes DNS resolves service and pod names. Check CoreDNS health and namespace-qualified names when resolution fails.",
+		},
+		{
+			Source:   "kubernetes",
+			Title:    "Kubernetes Deployments",
+			URL:      "https://kubernetes.io/docs/concepts/workloads/controllers/deployment/",
+			Fallback: "Deployments manage rollout and rollback of ReplicaSets. Analyze unavailable replicas, rollout status, and revision history for failures.",
+		},
+		{
+			Source:   "kubernetes",
+			Title:    "Kubernetes StatefulSets",
+			URL:      "https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/",
+			Fallback: "StatefulSets provide stable identity and ordered rollout for stateful workloads. Storage, ordinals, and update strategy often drive failures.",
+		},
+		{
+			Source:   "kubernetes",
+			Title:    "Kubernetes DaemonSets",
+			URL:      "https://kubernetes.io/docs/concepts/workloads/controllers/daemonset/",
+			Fallback: "DaemonSets schedule one pod per node by selector. Taints, selectors, and node readiness determine daemon pod coverage.",
+		},
+		{
+			Source:   "kubernetes",
+			Title:    "Kubernetes Jobs",
+			URL:      "https://kubernetes.io/docs/concepts/workloads/controllers/job/",
+			Fallback: "Jobs run finite workloads to completion. Backoff limits, pod failures, and parallelism settings affect completion behavior.",
+		},
+		{
+			Source:   "kubernetes",
+			Title:    "Kubernetes HPA",
+			URL:      "https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/",
+			Fallback: "HPA scales workloads from metrics. Missing metrics, incorrect target values, or unavailable metrics-server cause scaling issues.",
+		},
+		{
+			Source:   "kubernetes",
+			Title:    "Kubernetes Node Affinity",
+			URL:      "https://kubernetes.io/docs/concepts/scheduling-eviction/assign-pod-node/",
+			Fallback: "Node affinity and selectors constrain pod placement. Unsatisfiable constraints produce Pending pods with scheduling failures.",
+		},
+		{
+			Source:   "kubernetes",
+			Title:    "Kubernetes Taints and Tolerations",
+			URL:      "https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration/",
+			Fallback: "Taints repel pods without matching tolerations. Scheduling and eviction issues can stem from taints not accounted for in workload specs.",
+		},
+		{
+			Source:   "kubernetes",
+			Title:    "Kubernetes Resource Quotas",
+			URL:      "https://kubernetes.io/docs/concepts/policy/resource-quotas/",
+			Fallback: "ResourceQuotas cap namespace resource usage. Pod creation or scaling can fail when quotas are reached.",
+		},
+		{
+			Source:   "kubernetes",
+			Title:    "Kubernetes Pod Priority",
+			URL:      "https://kubernetes.io/docs/concepts/scheduling-eviction/pod-priority-preemption/",
+			Fallback: "Priority classes influence scheduling and preemption. Lower-priority pods may be evicted when higher-priority workloads arrive.",
+		},
+		{
+			Source:   "kubernetes",
+			Title:    "Kubernetes Persistent Volumes",
+			URL:      "https://kubernetes.io/docs/concepts/storage/persistent-volumes/",
+			Fallback: "PersistentVolumes and claims back stateful storage. Binding, access modes, and storage class mismatches are common causes of mount failures.",
+		},
+		{
+			Source:   "kubernetes",
+			Title:    "Kubernetes ConfigMaps",
+			URL:      "https://kubernetes.io/docs/concepts/configuration/configmap/",
+			Fallback: "ConfigMaps inject non-secret config into pods. Invalid keys or stale mounts can break startup configuration.",
+		},
+		{
+			Source:   "kubernetes",
+			Title:    "Kubernetes Secrets",
+			URL:      "https://kubernetes.io/docs/concepts/configuration/secret/",
+			Fallback: "Secrets store sensitive data for workloads. Missing secrets or key mismatches commonly cause startup and auth failures.",
+		},
+		{
+			Source:   "kubernetes",
+			Title:    "Kubernetes RBAC",
+			URL:      "https://kubernetes.io/docs/reference/access-authn-authz/rbac/",
+			Fallback: "RBAC roles and bindings control API access. Forbidden errors indicate missing permissions or wrong service accounts.",
+		},
+		{
+			Source:   "kubernetes",
+			Title:    "Kubernetes Security Contexts",
+			URL:      "https://kubernetes.io/docs/tasks/configure-pod-container/security-context/",
+			Fallback: "SecurityContext configures UID/GID, capabilities, and file permissions. Misconfiguration can block process startup or volume access.",
+		},
+		{
+			Source:   "kubernetes",
+			Title:    "Kubernetes Service Accounts",
+			URL:      "https://kubernetes.io/docs/concepts/security/service-accounts/",
+			Fallback: "Service accounts provide pod identity for API access. Missing bindings can cause in-cluster auth and permission failures.",
+		},
+		{
+			Source:   "kubernetes",
+			Title:    "Kubernetes Troubleshoot Clusters",
+			URL:      "https://kubernetes.io/docs/tasks/debug/debug-cluster/",
+			Fallback: "Cluster troubleshooting starts with node status, component health, and warning events. Verify control plane and networking first.",
+		},
+		{
+			Source:   "kubernetes",
+			Title:    "Kubernetes Troubleshoot Applications",
+			URL:      "https://kubernetes.io/docs/tasks/debug/debug-application/",
+			Fallback: "Application troubleshooting focuses on events, logs, probes, and configuration drift across pods and deployments.",
+		},
+		{
+			Source:   "kubernetes",
+			Title:    "Kubernetes CrashLoopBackOff",
 			URL:      "https://kubernetes.io/docs/tasks/debug/debug-application/debug-running-pod/",
-			Fallback: "Use kubectl describe pod to inspect events, kubectl logs to inspect container output, and kubectl exec for runtime checks. Start debugging from events and probe failures.",
+			Fallback: "CrashLoopBackOff means repeated container crashes. Inspect termination reason, startup command, env, and dependencies.",
 		},
 		{
 			Source:   "kubernetes",
-			Title:    "Kubernetes manage container resources",
+			Title:    "Kubernetes OOMKilled",
 			URL:      "https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/",
-			Fallback: "Set CPU and memory requests and limits carefully. OOMKilled indicates memory pressure and limit breaches. Throttling can happen with low CPU limits.",
+			Fallback: "OOMKilled indicates container memory exceeded limit. Adjust limits/requests and investigate memory growth or leaks.",
 		},
 		{
 			Source:   "kubernetes",
-			Title:    "Kubernetes probes",
+			Title:    "Kubernetes ImagePullBackOff",
+			URL:      "https://kubernetes.io/docs/concepts/containers/images/",
+			Fallback: "ImagePullBackOff typically means auth issues, wrong image name/tag, registry outages, or network restrictions.",
+		},
+		{
+			Source:   "kubernetes",
+			Title:    "Kubernetes Node Pressure",
+			URL:      "https://kubernetes.io/docs/concepts/scheduling-eviction/node-pressure-eviction/",
+			Fallback: "Node pressure triggers evictions for memory, disk, or PID shortages. Check eviction signals and kubelet thresholds.",
+		},
+		{
+			Source:   "kubernetes",
+			Title:    "Kubernetes Node Problem Detector",
+			URL:      "https://kubernetes.io/docs/tasks/debug/debug-cluster/monitor-node-health/",
+			Fallback: "Node Problem Detector surfaces kernel and system-level node faults that impact scheduling and workload stability.",
+		},
+		{
+			Source:   "kubernetes",
+			Title:    "Kubernetes Probes",
 			URL:      "https://kubernetes.io/docs/concepts/configuration/liveness-readiness-startup-probes/",
-			Fallback: "Liveness probes restart unhealthy containers, readiness probes control traffic routing, startup probes protect slow-start applications. Misconfigured probes can cause restart loops.",
-		},
-		{
-			Source:   "docker",
-			Title:    "Docker daemon troubleshooting",
-			URL:      "https://docs.docker.com/engine/daemon/troubleshoot/",
-			Fallback: "For Docker daemon issues, inspect daemon logs and service status, validate storage and permissions, and verify networking and DNS configuration.",
-		},
-		{
-			Source:   "docker",
-			Title:    "Docker container resource constraints",
-			URL:      "https://docs.docker.com/engine/containers/resource_constraints/",
-			Fallback: "Docker supports memory and CPU constraints. Memory limits can trigger OOM kills. CPU quotas and shares affect scheduling fairness and performance.",
+			Fallback: "Probe misconfiguration causes false restarts and traffic drops. Validate probe path, port, timing, and thresholds.",
 		},
 	}
 }
 
-type embedder interface {
-	Embed(ctx context.Context, inputs []string) ([][]float32, error)
-}
-
-type embeddingConfig struct {
-	BaseURL    string
-	APIKey     string
-	Model      string
-	HTTPClient *http.Client
-}
-
-type openAIEmbedder struct {
+type EmbeddingClient struct {
 	baseURL string
-	apiKey  string
 	model   string
 	client  *http.Client
 }
 
-func newOpenAIEmbedder(cfg embeddingConfig) (*openAIEmbedder, error) {
-	baseURL := strings.TrimRight(strings.TrimSpace(cfg.BaseURL), "/")
-	if baseURL == "" {
-		baseURL = defaultEmbeddingBaseURL
+func NewEmbeddingClient(baseURL, model string, httpClient *http.Client) (*EmbeddingClient, error) {
+	trimmedBaseURL := strings.TrimRight(strings.TrimSpace(baseURL), "/")
+	if trimmedBaseURL == "" {
+		trimmedBaseURL = defaultOllamaBaseURL
 	}
-	if strings.TrimSpace(cfg.Model) == "" {
-		return nil, errors.New("missing embedding model")
+	trimmedModel := strings.TrimSpace(model)
+	if trimmedModel == "" {
+		trimmedModel = defaultEmbeddingModel
 	}
-	client := cfg.HTTPClient
+	client := httpClient
 	if client == nil {
 		client = &http.Client{Timeout: defaultHTTPTimeout}
 	}
-	return &openAIEmbedder{
-		baseURL: baseURL,
-		apiKey:  strings.TrimSpace(cfg.APIKey),
-		model:   cfg.Model,
+	return &EmbeddingClient{
+		baseURL: trimmedBaseURL,
+		model:   trimmedModel,
 		client:  client,
 	}, nil
 }
 
-func (e *openAIEmbedder) Embed(ctx context.Context, inputs []string) ([][]float32, error) {
-	if len(inputs) == 0 {
-		return nil, nil
-	}
-
+func (c *EmbeddingClient) Embed(ctx context.Context, text string) ([]float32, error) {
 	payload, err := json.Marshal(map[string]any{
-		"model": e.model,
-		"input": inputs,
+		"model":  c.model,
+		"prompt": text,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("encode embedding request: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, e.baseURL+"/embeddings", bytes.NewReader(payload))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/api/embeddings", bytes.NewReader(payload))
 	if err != nil {
 		return nil, fmt.Errorf("build embedding request: %w", err)
 	}
 
-	if e.apiKey != "" {
-		req.Header.Set("Authorization", "Bearer "+e.apiKey)
-	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 
-	resp, err := e.client.Do(req)
+	resp, err := c.client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("request embeddings: %w", err)
 	}
@@ -817,39 +906,35 @@ func (e *openAIEmbedder) Embed(ctx context.Context, inputs []string) ([][]float3
 	}
 
 	var out struct {
-		Data []struct {
-			Embedding []float32 `json:"embedding"`
-		} `json:"data"`
+		Embedding []float64 `json:"embedding"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
 		return nil, fmt.Errorf("decode embeddings: %w", err)
 	}
-	if len(out.Data) == 0 {
+	if len(out.Embedding) == 0 {
 		return nil, errors.New("empty embeddings response")
 	}
 
-	result := make([][]float32, 0, len(out.Data))
-	for _, item := range out.Data {
-		result = append(result, item.Embedding)
+	vector := make([]float32, len(out.Embedding))
+	for i, value := range out.Embedding {
+		vector[i] = float32(value)
 	}
-	return result, nil
+	return vector, nil
 }
 
-func cosineSimilarity(a []float32, b []float32) float64 {
+func cosineSimilarity(a []float32, b []float32) float32 {
 	if len(a) == 0 || len(b) == 0 || len(a) != len(b) {
 		return 0
 	}
-	var dot float64
-	var sumA float64
-	var sumB float64
+	var dot float32
+	var sumA float32
+	var sumB float32
 	for i := range a {
-		ai := float64(a[i])
-		bi := float64(b[i])
-		dot += ai * bi
-		sumA += ai * ai
-		sumB += bi * bi
+		dot += a[i] * b[i]
+		sumA += a[i] * a[i]
+		sumB += b[i] * b[i]
 	}
-	denom := math.Sqrt(sumA) * math.Sqrt(sumB)
+	denom := float32(math.Sqrt(float64(sumA))) * float32(math.Sqrt(float64(sumB)))
 	if denom == 0 {
 		return 0
 	}

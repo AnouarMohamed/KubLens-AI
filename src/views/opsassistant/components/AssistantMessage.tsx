@@ -42,6 +42,17 @@ export default function AssistantMessage({ message, copied, onCopy, onRunPrompt 
           )}
         </div>
 
+        {message.role === "assistant" && (message.resources?.length ?? 0) > 0 && (
+          <div className="mt-2 flex flex-wrap gap-1">
+            <span className="text-[10px] font-mono text-[#444444]">grounded on:</span>
+            {message.resources?.map((resource) => (
+              <span key={`${message.id}-ground-${resource}`} className="text-[10px] font-mono text-[#00d4a8]">
+                {resource}
+              </span>
+            ))}
+          </div>
+        )}
+
         {message.role === "assistant" && ((message.hints?.length ?? 0) > 0 || (message.resources?.length ?? 0) > 0) && (
           <div className="mt-2 flex flex-wrap items-center gap-2">
             {(message.hints ?? []).slice(0, 5).map((hint) => (

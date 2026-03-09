@@ -76,7 +76,7 @@ func (p *OpenAICompatibleProvider) Generate(ctx context.Context, in Input) (stri
 	body, err := json.Marshal(chatCompletionsRequest{
 		Model: p.model,
 		Messages: []chatMessage{
-			{Role: "system", Content: SystemPrompt()},
+			{Role: "system", Content: SystemPromptWithContext(in.SystemContext)},
 			{Role: "user", Content: UserPrompt(in)},
 		},
 		Temperature: p.temperature,

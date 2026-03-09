@@ -62,7 +62,7 @@ export function useAssistantChat() {
     return dedupeStrings([...basePrompts, ...fromHints, ...fromResources]).slice(0, 10);
   }, [lastAssistant?.hints, lastAssistant?.resources]);
 
-  const send = async (content: string) => {
+  const send = async (content: string, namespace?: string) => {
     const message = content.trim();
     if (message === "" || isLoading) {
       return;
@@ -78,7 +78,7 @@ export function useAssistantChat() {
     setIsLoading(true);
 
     try {
-      const response: AssistantResponse = await api.askAssistant(message);
+      const response: AssistantResponse = await api.askAssistant(message, namespace);
       const assistantMessage: AssistantMessage = {
         id: createID(),
         role: "assistant",

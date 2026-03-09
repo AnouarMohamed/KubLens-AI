@@ -76,6 +76,22 @@ func TestProdDisallowsHeaderTokenAuth(t *testing.T) {
 	}
 }
 
+func TestLoadOllamaEmbeddingDefaults(t *testing.T) {
+	clearConfigEnv(t)
+	t.Setenv("OLLAMA_BASE_URL", "http://localhost:11434")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.Assistant.EmbeddingBaseURL != "http://localhost:11434" {
+		t.Fatalf("embedding base URL = %q, want http://localhost:11434", cfg.Assistant.EmbeddingBaseURL)
+	}
+	if cfg.Assistant.EmbeddingModel != "nomic-embed-text" {
+		t.Fatalf("embedding model = %q, want nomic-embed-text", cfg.Assistant.EmbeddingModel)
+	}
+}
+
 func clearConfigEnv(t *testing.T) {
 	t.Helper()
 
@@ -101,6 +117,8 @@ func clearConfigEnv(t *testing.T) {
 		"ASSISTANT_EMBEDDING_MODEL",
 		"ASSISTANT_EMBEDDING_BASE_URL",
 		"ASSISTANT_EMBEDDING_API_KEY",
+		"OLLAMA_BASE_URL",
+		"OLLAMA_EMBEDDING_MODEL",
 		"PREDICTOR_BASE_URL",
 		"PREDICTOR_TIMEOUT_SECONDS",
 		"PREDICTOR_SHARED_SECRET",

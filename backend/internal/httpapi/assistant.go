@@ -31,7 +31,8 @@ var (
 )
 
 type assistantRequest struct {
-	Message string `json:"message"`
+	Message   string `json:"message"`
+	Namespace string `json:"namespace,omitempty"`
 }
 
 type assistantIntent int
@@ -56,13 +57,34 @@ func (s *Server) handleAssistant(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "message is required")
 		return
 	}
+	namespace := strings.TrimSpace(req.Namespace)
 
 	pods, nodes := s.cluster.Snapshot(r.Context())
+	if namespace != "" {
+		pods = filterPodsByNamespace(pods, namespace)
+	}
 	report := s.runDiagnostics(r.Context())
 	diag := s.mapDiagnosticsReport(report)
 	lower := strings.ToLower(message)
 	docRefs := s.retrieveDocReferences(r.Context(), message, diag.Summary)
 	diagnosticBriefs := mapDiagnosticsForAI(report.Diagnostics)
+	assistantPromptContext := BuildAssistantContext(
+		r.Context(),
+		message,
+		namespace,
+		s.cluster,
+		diagnosticsReaderFunc(func(context.Context) (model.DiagnosticsResult, error) {
+			return diag, nil
+		}),
+	)
+	clusterContext := assistantPromptContext.FormatForPrompt()
+	groundedResources := assistantPromptContext.ReferencedResources()
+	mergeResources := func(resources ...string) []string {
+		out := make([]string, 0, len(resources)+len(groundedResources))
+		out = append(out, resources...)
+		out = append(out, groundedResources...)
+		return dedupeStrings(out)
+	}
 
 	if match := diagnoseRegex.FindStringSubmatch(lower); len(match) == 2 {
 		hint := match[1]
@@ -73,7 +95,7 @@ func (s *Server) handleAssistant(w http.ResponseWriter, r *http.Request) {
 				userMessage:        message,
 				localAnswer:        "I could not find a pod matching `" + hint + "`. Try a fuller pod name from the Pods tab.",
 				hints:              []string{"Diagnose payment-gateway", "Show cluster health", "What should I fix first"},
-				resources:          nil,
+				resources:          mergeResources(),
 				docReferences:      docRefs,
 				diagnosticsSummary: diag.Summary,
 				diagnostics:        diag,
@@ -81,6 +103,7 @@ func (s *Server) handleAssistant(w http.ResponseWriter, r *http.Request) {
 				priorityActions:    diagnostics.BuildPriorityActions(diag),
 				pods:               pods,
 				nodes:              nodes,
+				promptContext:      clusterContext,
 			})
 			return
 		}
@@ -101,7 +124,7 @@ func (s *Server) handleAssistant(w http.ResponseWriter, r *http.Request) {
 			userMessage:        message,
 			localAnswer:        answer,
 			hints:              []string{"Show failed pods", "Show node risks", "Generate deployment manifest"},
-			resources:          []string{pod.Namespace + "/" + pod.Name},
+			resources:          mergeResources(pod.Namespace + "/" + pod.Name),
 			docReferences:      docRefs,
 			diagnosticsSummary: diag.Summary,
 			diagnostics:        diag,
@@ -109,6 +132,7 @@ func (s *Server) handleAssistant(w http.ResponseWriter, r *http.Request) {
 			priorityActions:    diagnostics.BuildPriorityActions(diag),
 			pods:               pods,
 			nodes:              nodes,
+			promptContext:      clusterContext,
 		})
 		return
 	}
@@ -120,7 +144,7 @@ func (s *Server) handleAssistant(w http.ResponseWriter, r *http.Request) {
 			userMessage:        message,
 			localAnswer:        "Here is a production-safe starter deployment template:\n\n" + diagnostics.GenerateManifestTemplate(),
 			hints:              defaultHints,
-			resources:          nil,
+			resources:          mergeResources(),
 			docReferences:      docRefs,
 			diagnosticsSummary: diag.Summary,
 			diagnostics:        diag,
@@ -128,6 +152,7 @@ func (s *Server) handleAssistant(w http.ResponseWriter, r *http.Request) {
 			priorityActions:    diagnostics.BuildPriorityActions(diag),
 			pods:               pods,
 			nodes:              nodes,
+			promptContext:      clusterContext,
 		})
 		return
 	case intentHealth:
@@ -136,7 +161,7 @@ func (s *Server) handleAssistant(w http.ResponseWriter, r *http.Request) {
 			userMessage:        message,
 			localAnswer:        report.Summary,
 			hints:              healthHints,
-			resources:          collectIssueResources(diag.Issues),
+			resources:          mergeResources(collectIssueResources(diag.Issues)...),
 			docReferences:      docRefs,
 			diagnosticsSummary: diag.Summary,
 			diagnostics:        diag,
@@ -144,6 +169,7 @@ func (s *Server) handleAssistant(w http.ResponseWriter, r *http.Request) {
 			priorityActions:    diagnostics.BuildPriorityActions(diag),
 			pods:               pods,
 			nodes:              nodes,
+			promptContext:      clusterContext,
 		})
 		return
 	case intentPriority:
@@ -152,7 +178,7 @@ func (s *Server) handleAssistant(w http.ResponseWriter, r *http.Request) {
 			userMessage:        message,
 			localAnswer:        diagnostics.BuildPriorityActions(diag),
 			hints:              defaultHints,
-			resources:          collectIssueResources(diag.Issues),
+			resources:          mergeResources(collectIssueResources(diag.Issues)...),
 			docReferences:      docRefs,
 			diagnosticsSummary: diag.Summary,
 			diagnostics:        diag,
@@ -160,6 +186,7 @@ func (s *Server) handleAssistant(w http.ResponseWriter, r *http.Request) {
 			priorityActions:    diagnostics.BuildPriorityActions(diag),
 			pods:               pods,
 			nodes:              nodes,
+			promptContext:      clusterContext,
 		})
 		return
 	default:
@@ -176,7 +203,7 @@ func (s *Server) handleAssistant(w http.ResponseWriter, r *http.Request) {
 				"- `Generate deployment manifest`",
 			}, "\n"),
 			hints:              defaultHints,
-			resources:          nil,
+			resources:          mergeResources(),
 			docReferences:      docRefs,
 			diagnosticsSummary: diag.Summary,
 			diagnostics:        diag,
@@ -184,6 +211,7 @@ func (s *Server) handleAssistant(w http.ResponseWriter, r *http.Request) {
 			priorityActions:    diagnostics.BuildPriorityActions(diag),
 			pods:               pods,
 			nodes:              nodes,
+			promptContext:      clusterContext,
 		})
 	}
 }
@@ -201,6 +229,7 @@ type assistantContext struct {
 	priorityActions    string
 	pods               []model.PodSummary
 	nodes              []model.NodeSummary
+	promptContext      string
 }
 
 func (s *Server) writeAssistantResponse(w http.ResponseWriter, reqCtx context.Context, ctx assistantContext) {
@@ -231,6 +260,7 @@ func (s *Server) enhanceAssistantAnswer(ctx context.Context, c assistantContext)
 	in := ai.Input{
 		UserMessage:          c.userMessage,
 		Intent:               c.intent,
+		SystemContext:        c.promptContext,
 		LocalAnswer:          c.localAnswer,
 		DiagnosticsSummary:   c.diagnosticsSummary,
 		Diagnostics:          c.diagnosticBriefs,
@@ -973,7 +1003,7 @@ var assistantTools = []ai.ToolDefinition{
 
 func (s *Server) generateAssistantWithTools(ctx context.Context, provider ai.ToolingProvider, in ai.Input) (string, error) {
 	messages := []ai.ChatMessage{
-		{Role: "system", Content: ai.SystemPrompt()},
+		{Role: "system", Content: ai.SystemPromptWithContext(in.SystemContext)},
 		{Role: "user", Content: ai.UserPrompt(in)},
 	}
 

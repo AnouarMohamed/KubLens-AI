@@ -80,12 +80,17 @@ PREDICTOR_SHARED_SECRET=your-shared-secret
 
 ## 7) Ops assistant (optional)
 
-Local Ollama:
+### Enable semantic RAG (recommended)
+
+Install Ollama and pull both chat + embedding models:
 
 ```bash
 curl -fsSL https://ollama.com/install.sh | sh
+ollama pull nomic-embed-text
 ollama pull llama3.2
 ```
+
+Set environment values:
 
 ```text
 ASSISTANT_PROVIDER=openai_compatible
@@ -93,14 +98,14 @@ ASSISTANT_API_BASE_URL=http://localhost:11434/v1
 ASSISTANT_MODEL=llama3.2
 ASSISTANT_API_KEY=ollama
 ASSISTANT_RAG_ENABLED=true
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_EMBEDDING_MODEL=nomic-embed-text
 ```
 
-RAG embeddings (optional):
+Behavior:
 
-```text
-ASSISTANT_EMBEDDING_MODEL=nomic-embed-text
-ASSISTANT_EMBEDDING_BASE_URL=http://localhost:11434/v1
-```
+- Without `OLLAMA_BASE_URL`, assistant documentation retrieval falls back to keyword matching.
+- Without `ASSISTANT_PROVIDER`, assistant Q&A is disabled, but deterministic diagnostics still run.
 
 ## 8) Docker compose
 

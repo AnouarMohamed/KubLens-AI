@@ -691,6 +691,9 @@ paths:
               properties:
                 message:
                   type: string
+                namespace:
+                  type: string
+                  description: Optional namespace scope for assistant context.
       responses:
         "200":
           description: Assistant response

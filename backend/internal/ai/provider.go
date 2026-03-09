@@ -13,6 +13,7 @@ type DocReference struct {
 type Input struct {
 	UserMessage          string
 	Intent               string
+	SystemContext        string
 	LocalAnswer          string
 	DiagnosticsSummary   string
 	Diagnostics          []DiagnosticBrief
