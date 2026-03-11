@@ -18,7 +18,7 @@ const ACCENT = "#00d4a8";
 const RED = "#ff4444";
 const AMBER = "#f59e0b";
 const BLUE = "#3b82f6";
-const MUTED = "#333333";
+const MUTED = "#52525b";
 const GRID_BASELINE = "#1f1f1f";
 
 const TOOLTIP_STYLE = {
@@ -510,53 +510,164 @@ function PodLifecycleMix({ data }: { data: Array<{ name: string; value: number; 
     return <EmptyChart message="No pod lifecycle data." />;
   }
 
-  const runningCount = lifecycleCount(data, "running");
-  const pendingCount = lifecycleCount(data, "pending");
-  const failedCount = lifecycleCount(data, "failed");
+  const rows = normalizeLifecycleRows(data);
+  const runningCount = lifecycleCount(rows, "running");
+  const pendingCount = lifecycleCount(rows, "pending");
+  const failedCount = lifecycleCount(rows, "failed");
+  const succeededCount = lifecycleCount(rows, "succeeded");
+  const healthyPercent = percentage(runningCount, total);
+  const atRiskCount = pendingCount + failedCount;
+  const atRiskPercent = percentage(atRiskCount, total);
+  const dominant = [...rows].sort((a, b) => b.value - a.value)[0];
 
   return (
-    <div className="h-[320px] flex flex-col py-2">
-      <div className="space-y-3">
-        {data.map((row) => {
-          const pct = total > 0 ? (row.value / total) * 100 : 0;
-          return (
-            <div key={row.name} className="flex items-center gap-3">
-              <span className="text-[11px] font-mono text-[#666666] w-20 flex-shrink-0">{row.name}</span>
-              <div className="flex-1 h-1 bg-[#1f1f1f] overflow-hidden">
-                <div
-                  className="h-full transition-all duration-300"
-                  style={{ width: `${pct}%`, backgroundColor: row.color }}
-                />
-              </div>
-              <span className="text-xs font-mono font-semibold text-[#e8e8e8] w-4 text-right flex-shrink-0">
-                {row.value}
-              </span>
-              <span className="text-[11px] font-mono text-[#444444] w-9 text-right flex-shrink-0">
-                {pct.toFixed(0)}%
-              </span>
-            </div>
-          );
-        })}
-      </div>
-
-      <div className="mt-auto pt-4 border-t border-[#1f1f1f] grid grid-cols-3 gap-4">
-        <div>
-          <p className="text-[10px] font-mono uppercase tracking-[0.15em] text-[#444444]">Total</p>
-          <p className="mt-1 text-lg font-mono font-semibold text-[#e8e8e8]">{total}</p>
-        </div>
-        <div>
-          <p className="text-[10px] font-mono uppercase tracking-[0.15em] text-[#444444]">Healthy</p>
-          <p className="mt-1 text-lg font-mono font-semibold text-[#00d4a8]">
-            {((runningCount / total) * 100).toFixed(0)}%
+    <div className="h-[320px] flex flex-col py-1">
+      <div className="rounded-md border border-zinc-700 bg-zinc-900/60 px-3 py-2">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-[10px] font-mono uppercase tracking-[0.15em] text-[#555555]">Live Distribution</p>
+          <p className="text-[11px] font-mono text-[#888888]">
+            Dominant: <span className="text-[#e8e8e8]">{dominant.name}</span>{" "}
+            {percentage(dominant.value, total).toFixed(0)}%
           </p>
         </div>
+        <div className="mt-2 h-2 bg-[#1f1f1f] overflow-hidden flex">
+          {rows.map((row) => {
+            const pct = percentage(row.value, total);
+            return (
+              <div
+                key={`mix-segment-${row.name}`}
+                className="h-full transition-all duration-300"
+                style={{ width: `${pct}%`, backgroundColor: row.color, minWidth: row.value > 0 ? "2px" : "0px" }}
+              />
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="mt-3 grid grid-cols-1 sm:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)] gap-3 flex-1 min-h-0">
+        <div className="space-y-2">
+          {rows.map((row) => {
+            const pct = percentage(row.value, total);
+            return (
+              <article key={row.name} className="rounded-md border border-zinc-800 bg-zinc-900/45 px-3 py-2">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-[11px] font-mono text-[#666666] flex items-center gap-2">
+                    <span
+                      className="inline-block h-2 w-2 rounded-full border"
+                      style={{
+                        backgroundColor: row.value > 0 ? row.color : "transparent",
+                        borderColor: row.value > 0 ? row.color : "#3f3f46",
+                      }}
+                    />
+                    {row.name}
+                  </p>
+                  <p className="text-xs font-mono">
+                    <span className="font-semibold text-[#e8e8e8]">{row.value}</span>
+                    <span className="text-[#555555] ml-2">{pct.toFixed(0)}%</span>
+                  </p>
+                </div>
+                <div className="mt-1.5 h-1.5 bg-[#1f1f1f] overflow-hidden">
+                  <div
+                    className="h-full transition-all duration-300"
+                    style={{ width: `${pct}%`, backgroundColor: row.color }}
+                  />
+                </div>
+              </article>
+            );
+          })}
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 content-start">
+          <LifecycleMiniStat label="Total" value={String(total)} tone="neutral" />
+          <LifecycleMiniStat label="Healthy" value={`${healthyPercent.toFixed(0)}%`} tone="good" />
+          <LifecycleMiniStat label="At Risk" value={String(atRiskCount)} tone="bad" />
+          <LifecycleMiniStat
+            label="Succeeded"
+            value={String(succeededCount)}
+            tone={succeededCount > 0 ? "good" : "neutral"}
+          />
+          <div className="col-span-2 rounded-md border border-zinc-800 bg-zinc-900/45 px-2.5 py-2">
+            <p className="text-[10px] font-mono uppercase tracking-[0.12em] text-[#555555]">Operational Signal</p>
+            <p className={`mt-1 text-xs font-mono ${lifecycleSignalTone(atRiskPercent)}`}>
+              {atRiskPercent >= 30
+                ? "High pod lifecycle risk detected."
+                : atRiskPercent >= 10
+                  ? "Watch pending and failed pod pressure."
+                  : "Lifecycle mix is within normal operating bounds."}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-3 pt-3 border-t border-[#1f1f1f] grid grid-cols-3 gap-4">
         <div>
-          <p className="text-[10px] font-mono uppercase tracking-[0.15em] text-[#444444]">At risk</p>
-          <p className="mt-1 text-lg font-mono font-semibold text-[#ff4444]">{pendingCount + failedCount}</p>
+          <p className="text-[10px] font-mono uppercase tracking-[0.15em] text-[#444444]">Running</p>
+          <p className="mt-1 text-lg font-mono font-semibold text-[#00d4a8]">{runningCount}</p>
+        </div>
+        <div>
+          <p className="text-[10px] font-mono uppercase tracking-[0.15em] text-[#444444]">Pending</p>
+          <p className="mt-1 text-lg font-mono font-semibold text-[#f59e0b]">{pendingCount}</p>
+        </div>
+        <div>
+          <p className="text-[10px] font-mono uppercase tracking-[0.15em] text-[#444444]">Failed</p>
+          <p className="mt-1 text-lg font-mono font-semibold text-[#ff4444]">{failedCount}</p>
         </div>
       </div>
     </div>
   );
+}
+
+function LifecycleMiniStat({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone: "neutral" | "good" | "bad" | "info";
+}) {
+  const valueClass =
+    tone === "good"
+      ? "text-[#00d4a8]"
+      : tone === "bad"
+        ? "text-[#ff4444]"
+        : tone === "info"
+          ? "text-[#3b82f6]"
+          : "text-[#e8e8e8]";
+
+  return (
+    <div className="rounded-md border border-zinc-800 bg-zinc-900/45 px-2.5 py-2">
+      <p className="text-[10px] font-mono uppercase tracking-[0.12em] text-[#555555]">{label}</p>
+      <p className={`mt-1 text-sm font-mono font-semibold ${valueClass}`}>{value}</p>
+    </div>
+  );
+}
+
+function lifecycleSignalTone(atRiskPercent: number): string {
+  if (atRiskPercent >= 30) {
+    return "text-[#ff4444]";
+  }
+  if (atRiskPercent >= 10) {
+    return "text-[#f59e0b]";
+  }
+  return "text-[#00d4a8]";
+}
+
+function normalizeLifecycleRows(
+  data: Array<{ name: string; value: number; color: string }>,
+): Array<{ name: string; value: number; color: string }> {
+  const defaults = [
+    { name: "Running", color: ACCENT },
+    { name: "Pending", color: AMBER },
+    { name: "Failed", color: RED },
+    { name: "Succeeded", color: MUTED },
+  ];
+
+  return defaults.map((item) => ({
+    name: item.name,
+    color: item.color,
+    value: data.find((row) => row.name.toLowerCase() === item.name.toLowerCase())?.value ?? 0,
+  }));
 }
 
 function lifecycleCount(data: Array<{ name: string; value: number }>, target: string): number {
@@ -583,7 +694,7 @@ function buildPodMixData(stats: ClusterStats | null): Array<{ name: string; valu
     { name: "Pending", value: stats.pods.pending, color: AMBER },
     { name: "Failed", value: stats.pods.failed, color: RED },
     { name: "Succeeded", value: succeeded, color: MUTED },
-  ].filter((row) => row.value > 0);
+  ];
 }
 
 function buildNodeUsageBars(nodes: Node[]): Array<{ name: string; cpu: number; memory: number }> {
