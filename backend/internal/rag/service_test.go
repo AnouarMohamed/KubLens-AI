@@ -14,13 +14,13 @@ func TestRetrieveReturnsReferences(t *testing.T) {
 			{
 				Source:   "kubernetes",
 				Title:    "Pod lifecycle",
-				URL:      "https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/",
+				URL:      "https://docs.invalid/pod-lifecycle",
 				Fallback: "Pending often indicates scheduling issues. Failed indicates terminated containers.",
 			},
 			{
 				Source:   "docker",
 				Title:    "Resource constraints",
-				URL:      "https://docs.docker.com/engine/containers/resource_constraints/",
+				URL:      "https://docs.invalid/resource-constraints",
 				Fallback: "Memory limits may lead to OOM kills. CPU quotas can throttle workloads.",
 			},
 		},
@@ -54,13 +54,13 @@ func TestRetrievePrefersKeywordCoverage(t *testing.T) {
 			{
 				Source:   "kubernetes",
 				Title:    "Kubernetes OOMKilled",
-				URL:      "https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/",
+				URL:      "https://docs.invalid/manage-resources-containers",
 				Fallback: "OOMKilled indicates a container exceeded memory limit. Tune memory requests and limits to avoid repeated restarts.",
 			},
 			{
 				Source:   "kubernetes",
 				Title:    "Kubernetes Services",
-				URL:      "https://kubernetes.io/docs/concepts/services-networking/service/",
+				URL:      "https://docs.invalid/service-networking",
 				Fallback: "Services provide stable networking frontends for pods.",
 			},
 		},
@@ -87,13 +87,13 @@ func TestRetrieveDedupesSameDocumentURL(t *testing.T) {
 			{
 				Source:   "kubernetes",
 				Title:    "CrashLoop troubleshooting",
-				URL:      "https://kubernetes.io/docs/tasks/debug/debug-application/debug-running-pod/",
+				URL:      "https://docs.invalid/debug-running-pod",
 				Fallback: repeated,
 			},
 			{
 				Source:   "kubernetes",
 				Title:    "Pod lifecycle",
-				URL:      "https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/",
+				URL:      "https://docs.invalid/pod-lifecycle",
 				Fallback: "Pods transition through Pending, Running, Succeeded and Failed phases.",
 			},
 		},
