@@ -14,6 +14,7 @@ func TestRequiredRole(t *testing.T) {
 	}{
 		{name: "viewer get", method: http.MethodGet, path: "/api/pods", want: RoleViewer},
 		{name: "assistant post", method: http.MethodPost, path: "/api/assistant", want: RoleViewer},
+		{name: "assistant feedback post", method: http.MethodPost, path: "/api/assistant/references/feedback", want: RoleViewer},
 		{name: "incident create", method: http.MethodPost, path: "/api/incidents", want: RoleViewer},
 		{name: "remediation propose", method: http.MethodPost, path: "/api/remediation/propose", want: RoleViewer},
 		{name: "remediation reject", method: http.MethodPost, path: "/api/remediation/rem-1/reject", want: RoleViewer},

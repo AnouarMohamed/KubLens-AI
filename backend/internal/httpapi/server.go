@@ -385,6 +385,8 @@ func (s *Server) Router(distDir string) http.Handler {
 		api.Get("/predictions", s.handlePredictions)
 		api.Get("/predictive-incidents", s.handlePredictions) // Backward-compatible alias for older frontend builds.
 		api.Post("/assistant", s.handleAssistant)
+		api.Post("/assistant/references/feedback", s.handleAssistantReferenceFeedback)
+		api.Get("/rag/telemetry", s.handleRAGTelemetry)
 		api.Post("/incidents", s.handleCreateIncident)
 		api.Get("/incidents", s.handleListIncidents)
 		api.Get("/incidents/{id}", s.handleGetIncident)

@@ -16,6 +16,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/sync/singleflight"
@@ -34,6 +35,9 @@ const (
 	defaultOllamaBaseURL   = "http://localhost:11434"
 	defaultEmbeddingModel  = "nomic-embed-text"
 	minNormalizedLineLen   = 12
+	defaultTraceLimit      = 24
+	maxTraceLimit          = 80
+	maxFeedbackTermScore   = int32(50)
 )
 
 var (
@@ -63,6 +67,28 @@ var (
 		"evicted":          {"pressure", "node", "eviction"},
 		"probe":            {"liveness", "readiness", "startup"},
 		"forbidden":        {"rbac", "permission", "serviceaccount"},
+	}
+	sourceRoutingHints = map[string][]string{
+		"oom":              {"manage-resources-containers", "memory", "resources"},
+		"oomkilled":        {"manage-resources-containers", "memory", "resources"},
+		"crashloop":        {"debug-running-pod", "debug-application", "probes"},
+		"crashloopbackoff": {"debug-running-pod", "debug-application", "probes"},
+		"imagepullbackoff": {"containers/images", "images", "registry"},
+		"imagepull":        {"containers/images", "images", "registry"},
+		"pending":          {"assign-pod-node", "taint-and-toleration", "resource-quotas", "scheduling-eviction"},
+		"unschedulable":    {"assign-pod-node", "taint-and-toleration", "resource-quotas", "scheduling-eviction"},
+		"notready":         {"node-pressure-eviction", "debug-cluster", "monitor-node-health"},
+		"evicted":          {"node-pressure-eviction", "scheduling-eviction"},
+		"probe":            {"liveness-readiness-startup-probes", "probes"},
+		"forbidden":        {"rbac", "service-accounts", "authn-authz"},
+		"rbac":             {"rbac", "service-accounts", "authn-authz"},
+		"networkpolicy":    {"network-policies", "services-networking"},
+		"dns":              {"dns-pod-service", "services-networking"},
+		"ingress":          {"ingress", "services-networking"},
+		"service":          {"service/", "services-networking"},
+		"pvc":              {"persistent-volumes", "storage"},
+		"pv":               {"persistent-volumes", "storage"},
+		"storage":          {"persistent-volumes", "storage"},
 	}
 )
 
@@ -101,6 +127,19 @@ type Service struct {
 	indexedAt  time.Time
 	staleWarn  time.Time
 	group      singleflight.Group
+
+	queryTotal   atomic.Uint64
+	emptyTotal   atomic.Uint64
+	resultTotal  atomic.Uint64
+	feedbackAll  atomic.Uint64
+	feedbackUp   atomic.Uint64
+	feedbackDown atomic.Uint64
+
+	traceLimit int
+
+	feedbackMu sync.RWMutex
+	feedback   map[string]*docFeedback
+	traces     []retrievalTrace
 }
 
 type chunk struct {
@@ -116,6 +155,36 @@ type retrievalQuery struct {
 	rawLower      string
 	terms         []string
 	expandedTerms []string
+}
+
+type docFeedback struct {
+	helpful    uint64
+	notHelpful uint64
+	termScores map[string]int32
+	updatedAt  time.Time
+}
+
+type retrievalTrace struct {
+	timestamp      time.Time
+	query          string
+	queryTerms     []string
+	usedSemantic   bool
+	candidateCount int
+	resultCount    int
+	duration       time.Duration
+	results        []retrievalTraceResult
+}
+
+type retrievalTraceResult struct {
+	title         string
+	url           string
+	source        string
+	final         float64
+	lexical       float64
+	semantic      float64
+	coverage      float64
+	sourceBoost   float64
+	feedbackBoost float64
 }
 
 func NewService(cfg Config) *Service {
@@ -153,6 +222,8 @@ func NewService(cfg Config) *Service {
 		logger:          logger,
 		now:             time.Now,
 		embeddingClient: cfg.EmbeddingClient,
+		traceLimit:      defaultTraceLimit,
+		feedback:        make(map[string]*docFeedback, 16),
 	}
 }
 
@@ -160,11 +231,129 @@ func (s *Service) Enabled() bool {
 	return s != nil && s.enabled
 }
 
+func (s *Service) RecordFeedback(query, url string, helpful bool) bool {
+	if s == nil || !s.Enabled() {
+		return false
+	}
+
+	normalizedURL := strings.TrimSpace(url)
+	if normalizedURL == "" {
+		return false
+	}
+
+	terms := expandQueryTerms(tokenize(strings.ToLower(strings.TrimSpace(query))))
+	now := s.now()
+
+	s.feedbackMu.Lock()
+	entry, exists := s.feedback[normalizedURL]
+	if !exists {
+		entry = &docFeedback{
+			termScores: make(map[string]int32, len(terms)),
+		}
+		s.feedback[normalizedURL] = entry
+	}
+	if entry.termScores == nil {
+		entry.termScores = make(map[string]int32, len(terms))
+	}
+	if helpful {
+		entry.helpful++
+	} else {
+		entry.notHelpful++
+	}
+	for _, term := range terms {
+		if term == "" {
+			continue
+		}
+		current := entry.termScores[term]
+		if helpful {
+			if current < maxFeedbackTermScore {
+				current++
+			}
+		} else {
+			if current > -maxFeedbackTermScore {
+				current--
+			}
+		}
+		entry.termScores[term] = current
+	}
+	entry.updatedAt = now
+	s.feedbackMu.Unlock()
+
+	s.feedbackAll.Add(1)
+	if helpful {
+		s.feedbackUp.Add(1)
+	} else {
+		s.feedbackDown.Add(1)
+	}
+	return true
+}
+
+func (s *Service) TelemetrySnapshot(limit int) model.RAGTelemetry {
+	if s == nil {
+		return model.RAGTelemetry{
+			TopFeedbackDocs: []model.RAGDocFeedback{},
+			RecentQueries:   []model.RAGQueryTrace{},
+		}
+	}
+	if limit <= 0 {
+		limit = defaultTraceLimit
+	}
+	if limit > maxTraceLimit {
+		limit = maxTraceLimit
+	}
+
+	_, _, _, expiresAt, indexedAt := s.snapshotIndex()
+
+	totalQueries := s.queryTotal.Load()
+	emptyResults := s.emptyTotal.Load()
+	resultTotal := s.resultTotal.Load()
+	feedbackAll := s.feedbackAll.Load()
+	feedbackUp := s.feedbackUp.Load()
+	feedbackDown := s.feedbackDown.Load()
+
+	hitRate := 0.0
+	averageResults := 0.0
+	if totalQueries > 0 {
+		hitRate = float64(totalQueries-emptyResults) / float64(totalQueries)
+		averageResults = float64(resultTotal) / float64(totalQueries)
+	}
+
+	s.feedbackMu.RLock()
+	topDocs := s.topFeedbackDocsLocked(10)
+	recent := s.recentTracesLocked(limit)
+	s.feedbackMu.RUnlock()
+
+	indexedAtText := ""
+	if !indexedAt.IsZero() {
+		indexedAtText = indexedAt.UTC().Format(time.RFC3339)
+	}
+	expiresAtText := ""
+	if !expiresAt.IsZero() {
+		expiresAtText = expiresAt.UTC().Format(time.RFC3339)
+	}
+
+	return model.RAGTelemetry{
+		Enabled:          s.Enabled(),
+		IndexedAt:        indexedAtText,
+		ExpiresAt:        expiresAtText,
+		TotalQueries:     totalQueries,
+		EmptyResults:     emptyResults,
+		HitRate:          hitRate,
+		AverageResults:   averageResults,
+		FeedbackSignals:  feedbackAll,
+		PositiveFeedback: feedbackUp,
+		NegativeFeedback: feedbackDown,
+		TopFeedbackDocs:  topDocs,
+		RecentQueries:    recent,
+	}
+}
+
 func (s *Service) Retrieve(ctx context.Context, query string, limit int) []model.DocumentationReference {
 	if !s.Enabled() {
 		return nil
 	}
 
+	started := s.now()
 	query = strings.TrimSpace(query)
 	if query == "" {
 		return nil
@@ -181,12 +370,14 @@ func (s *Service) Retrieve(ctx context.Context, query string, limit int) []model
 
 	chunks, embeddings, tokenIdx, expiresAt, indexedAt := s.snapshotIndex()
 	if len(chunks) == 0 {
+		s.recordRetrieval(query, nil, false, nil, 0, 0, started)
 		return nil
 	}
 	s.warnIfStaleIndex(expiresAt, indexedAt)
 
 	parsed := buildRetrievalQuery(query)
 	if len(parsed.expandedTerms) == 0 {
+		s.recordRetrieval(query, parsed.terms, false, nil, 0, 0, started)
 		return nil
 	}
 
@@ -197,6 +388,8 @@ func (s *Service) Retrieve(ctx context.Context, query string, limit int) []model
 			candidates[i] = i
 		}
 	}
+
+	sourceHints := buildSourceRoutingHints(parsed.expandedTerms, parsed.rawLower)
 
 	lexicalScores := make(map[int]float64, len(candidates))
 	maxLexical := 0.0
@@ -221,6 +414,7 @@ func (s *Service) Retrieve(ctx context.Context, query string, limit int) []model
 		combinedIndexes[index] = struct{}{}
 	}
 	if len(combinedIndexes) == 0 {
+		s.recordRetrieval(query, parsed.terms, hasSemantic, nil, 0, len(candidates), started)
 		return nil
 	}
 
@@ -230,10 +424,13 @@ func (s *Service) Retrieve(ctx context.Context, query string, limit int) []model
 		lexicalNorm   float64
 		semanticNorm  float64
 		queryCoverage float64
+		sourceBoost   float64
+		feedbackBoost float64
 	}
 
 	ranked := make([]scored, 0, len(combinedIndexes))
 	for index := range combinedIndexes {
+		chunk := chunks[index]
 		lexical := lexicalScores[index]
 		lexicalNorm := 0.0
 		if maxLexical > 0 {
@@ -245,14 +442,16 @@ func (s *Service) Retrieve(ctx context.Context, query string, limit int) []model
 			semanticNorm = normalizeSemanticScore(semanticScores[index])
 		}
 
-		coverage := queryCoverage(chunks[index], parsed.terms)
-		total := lexicalNorm*0.68 + semanticNorm*0.27 + coverage*0.05
+		coverage := queryCoverage(chunk, parsed.terms)
+		sourceBoost := sourceRouteBoost(chunk, sourceHints)
+		feedbackBoost := s.feedbackBoostForQuery(chunk.url, parsed.expandedTerms)
+		total := lexicalNorm*0.58 + semanticNorm*0.22 + coverage*0.05 + sourceBoost*0.10 + feedbackBoost*0.05
 
 		if len(parsed.terms) > 0 && lexical <= 0 {
 			if !hasSemantic || semanticNorm < 0.62 {
 				continue
 			}
-			total *= 0.9
+			total *= 0.88
 		}
 		if total <= 0 {
 			continue
@@ -263,9 +462,12 @@ func (s *Service) Retrieve(ctx context.Context, query string, limit int) []model
 			lexicalNorm:   lexicalNorm,
 			semanticNorm:  semanticNorm,
 			queryCoverage: coverage,
+			sourceBoost:   sourceBoost,
+			feedbackBoost: feedbackBoost,
 		})
 	}
 	if len(ranked) == 0 {
+		s.recordRetrieval(query, parsed.terms, hasSemantic, nil, 0, len(candidates), started)
 		return nil
 	}
 
@@ -285,6 +487,7 @@ func (s *Service) Retrieve(ctx context.Context, query string, limit int) []model
 	})
 
 	refs := make([]model.DocumentationReference, 0, limit)
+	traceResults := make([]retrievalTraceResult, 0, minInt(len(ranked), 5))
 	seenURL := map[string]struct{}{}
 	for _, item := range ranked {
 		if len(refs) >= limit {
@@ -305,8 +508,22 @@ func (s *Service) Retrieve(ctx context.Context, query string, limit int) []model
 			Source:  chunk.source,
 			Snippet: bestSnippet(chunk.text, snippetTerms, 260),
 		})
+		if len(traceResults) < cap(traceResults) {
+			traceResults = append(traceResults, retrievalTraceResult{
+				title:         chunk.title,
+				url:           chunk.url,
+				source:        chunk.source,
+				final:         item.total,
+				lexical:       item.lexicalNorm,
+				semantic:      item.semanticNorm,
+				coverage:      item.queryCoverage,
+				sourceBoost:   item.sourceBoost,
+				feedbackBoost: item.feedbackBoost,
+			})
+		}
 	}
 
+	s.recordRetrieval(query, parsed.terms, hasSemantic, traceResults, len(refs), len(candidates), started)
 	return refs
 }
 
@@ -753,6 +970,268 @@ func normalizeSemanticScore(score float64) float64 {
 		return 1
 	}
 	return normalized
+}
+
+func buildSourceRoutingHints(expandedTerms []string, rawLower string) []string {
+	if len(expandedTerms) == 0 && strings.TrimSpace(rawLower) == "" {
+		return nil
+	}
+	seen := make(map[string]struct{}, 12)
+	out := make([]string, 0, 12)
+	add := func(value string) {
+		normalized := strings.ToLower(strings.TrimSpace(value))
+		if normalized == "" {
+			return
+		}
+		if _, exists := seen[normalized]; exists {
+			return
+		}
+		seen[normalized] = struct{}{}
+		out = append(out, normalized)
+	}
+
+	for _, term := range expandedTerms {
+		if hints, ok := sourceRoutingHints[term]; ok {
+			for _, hint := range hints {
+				add(hint)
+			}
+		}
+	}
+	for term, hints := range sourceRoutingHints {
+		if !strings.Contains(rawLower, term) {
+			continue
+		}
+		for _, hint := range hints {
+			add(hint)
+		}
+	}
+	return out
+}
+
+func sourceRouteBoost(item chunk, hints []string) float64 {
+	if len(hints) == 0 {
+		return 0
+	}
+	haystack := strings.ToLower(item.title + " " + item.url)
+	matches := 0
+	for _, hint := range hints {
+		if hint == "" {
+			continue
+		}
+		if strings.Contains(haystack, hint) {
+			matches++
+		}
+	}
+	if matches == 0 {
+		return 0
+	}
+	coverage := float64(matches) / float64(len(hints))
+	if coverage > 1 {
+		return 1
+	}
+	return coverage
+}
+
+func (s *Service) feedbackBoostForQuery(url string, queryTerms []string) float64 {
+	s.feedbackMu.RLock()
+	entry := s.feedback[strings.TrimSpace(url)]
+	if entry == nil {
+		s.feedbackMu.RUnlock()
+		return 0
+	}
+	helpful := entry.helpful
+	notHelpful := entry.notHelpful
+	termScores := make(map[string]int32, len(entry.termScores))
+	for term, score := range entry.termScores {
+		termScores[term] = score
+	}
+	s.feedbackMu.RUnlock()
+
+	total := float64(helpful + notHelpful)
+	overall := 0.0
+	if total > 0 {
+		overall = float64(int64(helpful)-int64(notHelpful)) / (total + 3.0)
+	}
+
+	termSpecific := 0.0
+	termHits := 0
+	for _, term := range queryTerms {
+		score, ok := termScores[term]
+		if !ok {
+			continue
+		}
+		termSpecific += float64(score) / float64(maxFeedbackTermScore)
+		termHits++
+	}
+	if termHits > 0 {
+		termSpecific /= float64(termHits)
+	}
+
+	boost := overall*0.7 + termSpecific*0.3
+	if boost > 1 {
+		return 1
+	}
+	if boost < -1 {
+		return -1
+	}
+	return boost
+}
+
+func (s *Service) recordRetrieval(
+	query string,
+	queryTerms []string,
+	usedSemantic bool,
+	results []retrievalTraceResult,
+	resultCount int,
+	candidateCount int,
+	started time.Time,
+) {
+	s.queryTotal.Add(1)
+	if resultCount < 0 {
+		resultCount = 0
+	}
+	s.resultTotal.Add(uint64(resultCount))
+	if resultCount == 0 {
+		s.emptyTotal.Add(1)
+	}
+
+	trace := retrievalTrace{
+		timestamp:      s.now(),
+		query:          truncateForTrace(query, 280),
+		queryTerms:     append([]string(nil), queryTerms...),
+		usedSemantic:   usedSemantic,
+		candidateCount: candidateCount,
+		resultCount:    resultCount,
+		duration:       s.now().Sub(started),
+		results:        append([]retrievalTraceResult(nil), results...),
+	}
+
+	s.feedbackMu.Lock()
+	s.traces = append(s.traces, trace)
+	limit := s.traceLimit
+	if limit <= 0 {
+		limit = defaultTraceLimit
+	}
+	if limit > maxTraceLimit {
+		limit = maxTraceLimit
+	}
+	if overflow := len(s.traces) - limit; overflow > 0 {
+		s.traces = append([]retrievalTrace(nil), s.traces[overflow:]...)
+	}
+	s.feedbackMu.Unlock()
+}
+
+func (s *Service) topFeedbackDocsLocked(limit int) []model.RAGDocFeedback {
+	if limit <= 0 {
+		return []model.RAGDocFeedback{}
+	}
+	type scoredDoc struct {
+		url      string
+		helpful  uint64
+		negative uint64
+		net      int64
+		updated  time.Time
+	}
+	scored := make([]scoredDoc, 0, len(s.feedback))
+	for url, entry := range s.feedback {
+		net := int64(entry.helpful) - int64(entry.notHelpful)
+		if entry.helpful == 0 && entry.notHelpful == 0 {
+			continue
+		}
+		scored = append(scored, scoredDoc{
+			url:      url,
+			helpful:  entry.helpful,
+			negative: entry.notHelpful,
+			net:      net,
+			updated:  entry.updatedAt,
+		})
+	}
+	sort.SliceStable(scored, func(i, j int) bool {
+		if scored[i].net == scored[j].net {
+			if scored[i].helpful == scored[j].helpful {
+				return scored[i].updated.After(scored[j].updated)
+			}
+			return scored[i].helpful > scored[j].helpful
+		}
+		return scored[i].net > scored[j].net
+	})
+	if len(scored) > limit {
+		scored = scored[:limit]
+	}
+	out := make([]model.RAGDocFeedback, 0, len(scored))
+	for _, item := range scored {
+		updatedAt := ""
+		if !item.updated.IsZero() {
+			updatedAt = item.updated.UTC().Format(time.RFC3339)
+		}
+		out = append(out, model.RAGDocFeedback{
+			URL:        item.url,
+			Helpful:    item.helpful,
+			NotHelpful: item.negative,
+			NetScore:   item.net,
+			UpdatedAt:  updatedAt,
+		})
+	}
+	return out
+}
+
+func (s *Service) recentTracesLocked(limit int) []model.RAGQueryTrace {
+	if limit <= 0 {
+		return []model.RAGQueryTrace{}
+	}
+	if len(s.traces) == 0 {
+		return []model.RAGQueryTrace{}
+	}
+
+	start := 0
+	if len(s.traces) > limit {
+		start = len(s.traces) - limit
+	}
+	selected := s.traces[start:]
+	out := make([]model.RAGQueryTrace, 0, len(selected))
+	for i := len(selected) - 1; i >= 0; i-- {
+		trace := selected[i]
+		top := make([]model.RAGResultTrace, 0, len(trace.results))
+		for _, item := range trace.results {
+			top = append(top, model.RAGResultTrace{
+				Title:         item.title,
+				URL:           item.url,
+				Source:        item.source,
+				FinalScore:    item.final,
+				LexicalScore:  item.lexical,
+				SemanticScore: item.semantic,
+				CoverageScore: item.coverage,
+				SourceBoost:   item.sourceBoost,
+				FeedbackBoost: item.feedbackBoost,
+			})
+		}
+		out = append(out, model.RAGQueryTrace{
+			Timestamp:      trace.timestamp.UTC().Format(time.RFC3339),
+			Query:          trace.query,
+			QueryTerms:     append([]string(nil), trace.queryTerms...),
+			UsedSemantic:   trace.usedSemantic,
+			CandidateCount: trace.candidateCount,
+			ResultCount:    trace.resultCount,
+			DurationMs:     trace.duration.Seconds() * 1000,
+			TopResults:     top,
+		})
+	}
+	return out
+}
+
+func truncateForTrace(value string, maxLen int) string {
+	trimmed := strings.TrimSpace(value)
+	if maxLen <= 0 || len(trimmed) <= maxLen {
+		return trimmed
+	}
+	return trimmed[:maxLen] + "..."
+}
+
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 func buildTokenIndex(chunks []chunk) map[string][]int {

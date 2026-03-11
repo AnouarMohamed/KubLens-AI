@@ -10,6 +10,7 @@ export interface AssistantMessage {
   role: "user" | "assistant";
   content: string;
   timestamp: string;
+  query?: string;
   hints?: string[];
   resources?: string[];
   references?: AssistantDocRef[];

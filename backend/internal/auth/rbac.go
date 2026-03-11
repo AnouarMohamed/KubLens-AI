@@ -52,6 +52,8 @@ func RequiredRole(method, path string) Role {
 	// Intentionally viewer-level: these endpoints do not mutate cluster state.
 	case cleanMethod == http.MethodPost && cleanPath == "/api/assistant":
 		return RoleViewer
+	case cleanMethod == http.MethodPost && cleanPath == "/api/assistant/references/feedback":
+		return RoleViewer
 	case cleanMethod == http.MethodPost && cleanPath == "/api/clusters/select":
 		return RoleViewer
 	case cleanMethod == http.MethodPost && cleanPath == "/api/incidents":

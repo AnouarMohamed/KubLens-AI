@@ -713,6 +713,48 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AssistantResponse"
+  /assistant/references/feedback:
+    post:
+      operationId: postAssistantReferenceFeedback
+      summary: Record usefulness feedback for a documentation reference
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AssistantReferenceFeedbackRequest"
+      responses:
+        "200":
+          description: Feedback result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActionResult"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /rag/telemetry:
+    get:
+      operationId: getRAGTelemetry
+      summary: RAG retrieval telemetry and recent score traces
+      parameters:
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 80
+      responses:
+        "200":
+          description: RAG telemetry snapshot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RAGTelemetry"
   /incidents:
     post:
       operationId: postIncidentCreate
@@ -1980,6 +2022,123 @@ components:
           type: string
         snippet:
           type: string
+    AssistantReferenceFeedbackRequest:
+      type: object
+      required: [url, helpful]
+      properties:
+        query:
+          type: string
+        url:
+          type: string
+        helpful:
+          type: boolean
+    RAGResultTrace:
+      type: object
+      properties:
+        title:
+          type: string
+        url:
+          type: string
+        source:
+          type: string
+        finalScore:
+          type: number
+        lexicalScore:
+          type: number
+        semanticScore:
+          type: number
+        coverageScore:
+          type: number
+        sourceBoost:
+          type: number
+        feedbackBoost:
+          type: number
+    RAGQueryTrace:
+      type: object
+      properties:
+        timestamp:
+          type: string
+        query:
+          type: string
+        queryTerms:
+          type: array
+          items:
+            type: string
+        usedSemantic:
+          type: boolean
+        candidateCount:
+          type: integer
+        resultCount:
+          type: integer
+        durationMs:
+          type: number
+        topResults:
+          type: array
+          items:
+            $ref: "#/components/schemas/RAGResultTrace"
+    RAGDocFeedback:
+      type: object
+      properties:
+        url:
+          type: string
+        helpful:
+          type: integer
+        notHelpful:
+          type: integer
+        netScore:
+          type: integer
+        updatedAt:
+          type: string
+    RAGTelemetry:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+        indexedAt:
+          type: string
+        expiresAt:
+          type: string
+        totalQueries:
+          type: integer
+        emptyResults:
+          type: integer
+        hitRate:
+          type: number
+        averageResults:
+          type: number
+        feedbackSignals:
+          type: integer
+        positiveFeedback:
+          type: integer
+        negativeFeedback:
+          type: integer
+        topFeedbackDocs:
+          type: array
+          items:
+            $ref: "#/components/schemas/RAGDocFeedback"
+        recentQueries:
+          type: array
+          items:
+            $ref: "#/components/schemas/RAGQueryTrace"
+    RAGMetricsSummary:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+        totalQueries:
+          type: integer
+        emptyResults:
+          type: integer
+        hitRate:
+          type: number
+        averageResults:
+          type: number
+        feedbackSignals:
+          type: integer
+        positiveFeedback:
+          type: integer
+        negativeFeedback:
+          type: integer
     ApiRouteMetrics:
       type: object
       properties:
@@ -2024,6 +2183,8 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ApiRouteMetrics"
+        rag:
+          $ref: "#/components/schemas/RAGMetricsSummary"
     AuditEntry:
       type: object
       properties:

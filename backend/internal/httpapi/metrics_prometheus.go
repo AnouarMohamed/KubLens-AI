@@ -9,6 +9,7 @@ import (
 func (s *Server) handlePrometheusMetrics(w http.ResponseWriter, _ *http.Request) {
 	snap := s.metrics.snapshot()
 	runtime := s.runtimeSnapshot()
+	rag := ragMetricsFromRetriever(s.docs)
 
 	var b strings.Builder
 	writePrometheusMetric(&b, "kubelens_http_requests_total", float64(snap.TotalRequests), nil)
@@ -22,6 +23,14 @@ func (s *Server) handlePrometheusMetrics(w http.ResponseWriter, _ *http.Request)
 	writePrometheusMetric(&b, "kubelens_runtime_write_actions_enabled", boolToGauge(runtime.WriteActionsEnabled), nil)
 	writePrometheusMetric(&b, "kubelens_runtime_predictor_enabled", boolToGauge(runtime.PredictorEnabled), nil)
 	writePrometheusMetric(&b, "kubelens_runtime_predictor_healthy", boolToGauge(runtime.PredictorHealthy), nil)
+	writePrometheusMetric(&b, "kubelens_rag_enabled", boolToGauge(rag.Enabled), nil)
+	writePrometheusMetric(&b, "kubelens_rag_queries_total", float64(rag.TotalQueries), nil)
+	writePrometheusMetric(&b, "kubelens_rag_empty_results_total", float64(rag.EmptyResults), nil)
+	writePrometheusMetric(&b, "kubelens_rag_hit_rate", rag.HitRate, nil)
+	writePrometheusMetric(&b, "kubelens_rag_average_results", rag.AverageResults, nil)
+	writePrometheusMetric(&b, "kubelens_rag_feedback_signals_total", float64(rag.FeedbackSignals), nil)
+	writePrometheusMetric(&b, "kubelens_rag_feedback_positive_total", float64(rag.PositiveFeedback), nil)
+	writePrometheusMetric(&b, "kubelens_rag_feedback_negative_total", float64(rag.NegativeFeedback), nil)
 
 	for _, route := range snap.Routes {
 		labels := map[string]string{"route": route.Route}

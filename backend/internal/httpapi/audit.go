@@ -335,6 +335,8 @@ func actionForRequest(method, path string) string {
 		return "resource.restart"
 	case m == http.MethodPost && path == apiMountPrefix+"/assistant":
 		return "assistant.ask"
+	case m == http.MethodPost && path == apiMountPrefix+"/assistant/references/feedback":
+		return "assistant.reference.feedback"
 	default:
 		route := strings.TrimSpace(path)
 		if route == "" {

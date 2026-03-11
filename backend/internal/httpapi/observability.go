@@ -48,6 +48,7 @@ type metricsSnapshot struct {
 	AvgLatencyMs  float64               `json:"avgLatencyMs"`
 	MaxLatencyMs  float64               `json:"maxLatencyMs"`
 	Routes        []routeMetricsSummary `json:"routes"`
+	RAG           ragMetricsSummary     `json:"rag"`
 }
 
 type routeMetricsSummary struct {
@@ -61,6 +62,17 @@ type routeMetricsSummary struct {
 	Status5xx    uint64  `json:"status5xx"`
 	AvgLatencyMs float64 `json:"avgLatencyMs"`
 	MaxLatencyMs float64 `json:"maxLatencyMs"`
+}
+
+type ragMetricsSummary struct {
+	Enabled          bool    `json:"enabled"`
+	TotalQueries     uint64  `json:"totalQueries"`
+	EmptyResults     uint64  `json:"emptyResults"`
+	HitRate          float64 `json:"hitRate"`
+	AverageResults   float64 `json:"averageResults"`
+	FeedbackSignals  uint64  `json:"feedbackSignals"`
+	PositiveFeedback uint64  `json:"positiveFeedback"`
+	NegativeFeedback uint64  `json:"negativeFeedback"`
 }
 
 func newRequestMetrics(now func() time.Time) *requestMetrics {

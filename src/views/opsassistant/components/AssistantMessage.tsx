@@ -4,11 +4,20 @@ import type { AssistantMessage as Message } from "../types";
 interface Props {
   message: Message;
   copied: boolean;
+  referenceFeedback: Record<string, "helpful" | "not_helpful" | "pending">;
   onCopy: (message: Message) => void;
   onRunPrompt: (prompt: string) => void;
+  onReferenceFeedback: (message: Message, url: string, helpful: boolean) => void;
 }
 
-export default function AssistantMessage({ message, copied, onCopy, onRunPrompt }: Props) {
+export default function AssistantMessage({
+  message,
+  copied,
+  referenceFeedback,
+  onCopy,
+  onRunPrompt,
+  onReferenceFeedback,
+}: Props) {
   return (
     <article className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
       <div className="max-w-[92%] lg:max-w-[86%]">
@@ -77,23 +86,67 @@ export default function AssistantMessage({ message, copied, onCopy, onRunPrompt 
             <p className="text-[11px] uppercase tracking-wide text-zinc-500 font-semibold">Documentation</p>
             <div className="mt-1.5 space-y-1.5">
               {message.references?.map((ref) => (
-                <a
+                <div
                   key={`${message.id}-${ref.url}`}
-                  href={ref.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="block rounded-md border border-zinc-700 bg-zinc-800/60 px-2 py-1.5 hover:bg-zinc-800"
+                  className="rounded-md border border-zinc-700 bg-zinc-800/60 px-2 py-1.5"
                 >
-                  <p className="text-xs font-semibold text-zinc-100">{ref.title}</p>
-                  <p className="text-[11px] text-zinc-500">{ref.source}</p>
-                  {ref.snippet && <p className="text-[11px] text-zinc-300 mt-1 leading-relaxed">{ref.snippet}</p>}
-                </a>
+                  <a href={ref.url} target="_blank" rel="noreferrer" className="block hover:opacity-95">
+                    <p className="text-xs font-semibold text-zinc-100">{ref.title}</p>
+                    <p className="text-[11px] text-zinc-500">{ref.source}</p>
+                    {ref.snippet && <p className="text-[11px] text-zinc-300 mt-1 leading-relaxed">{ref.snippet}</p>}
+                  </a>
+                  <ReferenceFeedbackRow
+                    state={referenceFeedback[`${message.id}::${ref.url}`]}
+                    onHelpful={() => onReferenceFeedback(message, ref.url, true)}
+                    onNotHelpful={() => onReferenceFeedback(message, ref.url, false)}
+                  />
+                </div>
               ))}
             </div>
           </div>
         )}
       </div>
     </article>
+  );
+}
+
+function ReferenceFeedbackRow({
+  state,
+  onHelpful,
+  onNotHelpful,
+}: {
+  state?: "helpful" | "not_helpful" | "pending";
+  onHelpful: () => void;
+  onNotHelpful: () => void;
+}) {
+  const pending = state === "pending";
+  return (
+    <div className="mt-2 flex items-center gap-2">
+      <span className="text-[10px] text-zinc-500">Useful?</span>
+      <button
+        onClick={onHelpful}
+        disabled={pending}
+        className={`rounded border px-1.5 py-0.5 text-[10px] ${
+          state === "helpful"
+            ? "border-[#00d4a8]/50 bg-[#00d4a8]/15 text-zinc-100"
+            : "border-zinc-700 bg-zinc-900 text-zinc-300"
+        }`}
+      >
+        Yes
+      </button>
+      <button
+        onClick={onNotHelpful}
+        disabled={pending}
+        className={`rounded border px-1.5 py-0.5 text-[10px] ${
+          state === "not_helpful"
+            ? "border-[var(--amber)]/50 bg-[var(--amber)]/12 text-zinc-100"
+            : "border-zinc-700 bg-zinc-900 text-zinc-300"
+        }`}
+      >
+        No
+      </button>
+      {pending && <span className="text-[10px] text-zinc-500">Saving...</span>}
+    </div>
   );
 }
 

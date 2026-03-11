@@ -1,5 +1,6 @@
 import type {
   ActionResult,
+  AssistantReferenceFeedbackRequest,
   ApplyResourceYAMLResponse,
   AlertDispatchRequest,
   AlertDispatchResponse,
@@ -14,6 +15,7 @@ import type {
   RemediationRejectRequest,
   RiskAnalyzeRequest,
   RiskReport,
+  RAGTelemetry,
   AuditLogResponse,
   ApiMetricsSnapshot,
   AuthSession,
@@ -251,6 +253,13 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ message, namespace }),
     }),
+  submitAssistantReferenceFeedback: (payload: AssistantReferenceFeedbackRequest) =>
+    requestJson<ActionResult>(apiPath("assistant", "references", "feedback"), {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  getRAGTelemetry: (limit = 24) =>
+    requestJson<RAGTelemetry>(`${apiPath("rag", "telemetry")}?limit=${encodeURIComponent(String(limit))}`),
   createIncident: () =>
     requestJson<Incident>(apiPath("incidents"), {
       method: "POST",

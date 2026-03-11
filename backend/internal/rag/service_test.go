@@ -125,6 +125,98 @@ func TestBestSnippetFindsRelevantWindow(t *testing.T) {
 	}
 }
 
+func TestBuildSourceRoutingHints(t *testing.T) {
+	hints := buildSourceRoutingHints(
+		[]string{"crashloopbackoff", "forbidden"},
+		"payment-gateway crashloopbackoff and forbidden errors",
+	)
+	joined := strings.Join(hints, " ")
+	for _, want := range []string{"debug-running-pod", "rbac"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("expected routing hint %q in %q", want, joined)
+		}
+	}
+}
+
+func TestRecordFeedbackBoostsRanking(t *testing.T) {
+	svc := NewService(Config{
+		Enabled: true,
+		Sources: []SourceDoc{
+			{
+				Source:   "kubernetes",
+				Title:    "Alpha reference",
+				URL:      "https://docs.example/alpha",
+				Fallback: "Troubleshooting startup failures and crashloop events for workloads.",
+			},
+			{
+				Source:   "kubernetes",
+				Title:    "Beta reference",
+				URL:      "https://docs.example/beta",
+				Fallback: "Troubleshooting startup failures and crashloop events for workloads.",
+			},
+		},
+		RefreshInterval: time.Hour,
+	})
+
+	initial := svc.Retrieve(context.Background(), "startup crashloop troubleshooting", 2)
+	if len(initial) < 2 {
+		t.Fatalf("expected at least two references, got %d", len(initial))
+	}
+
+	if !svc.RecordFeedback("startup crashloop troubleshooting", "https://docs.example/beta", true) {
+		t.Fatal("expected helpful feedback to be recorded")
+	}
+	if !svc.RecordFeedback("startup crashloop troubleshooting", "https://docs.example/beta", true) {
+		t.Fatal("expected second helpful feedback to be recorded")
+	}
+	if !svc.RecordFeedback("startup crashloop troubleshooting", "https://docs.example/alpha", false) {
+		t.Fatal("expected negative feedback to be recorded")
+	}
+
+	after := svc.Retrieve(context.Background(), "startup crashloop troubleshooting", 2)
+	if len(after) == 0 {
+		t.Fatal("expected references after feedback")
+	}
+	if after[0].URL != "https://docs.example/beta" {
+		t.Fatalf("expected feedback-boosted URL first, got %s", after[0].URL)
+	}
+}
+
+func TestTelemetrySnapshotIncludesRetrievalAndFeedbackSignals(t *testing.T) {
+	svc := NewService(Config{
+		Enabled: true,
+		Sources: []SourceDoc{
+			{
+				Source:   "kubernetes",
+				Title:    "OOM guide",
+				URL:      "https://docs.example/oom",
+				Fallback: "OOMKilled indicates memory pressure from container limits.",
+			},
+		},
+		RefreshInterval: time.Hour,
+	})
+
+	_ = svc.Retrieve(context.Background(), "oom killed memory limit", 3)
+	_ = svc.Retrieve(context.Background(), "completely unrelated nonmatching phrase", 3)
+	if !svc.RecordFeedback("oom killed memory limit", "https://docs.example/oom", true) {
+		t.Fatal("expected feedback recording to succeed")
+	}
+
+	snapshot := svc.TelemetrySnapshot(10)
+	if snapshot.TotalQueries < 2 {
+		t.Fatalf("totalQueries = %d, want >= 2", snapshot.TotalQueries)
+	}
+	if snapshot.FeedbackSignals == 0 || snapshot.PositiveFeedback == 0 {
+		t.Fatalf("expected feedback counters > 0, got %+v", snapshot)
+	}
+	if len(snapshot.RecentQueries) == 0 {
+		t.Fatal("expected recent query traces")
+	}
+	if len(snapshot.RecentQueries[0].TopResults) > 0 && snapshot.RecentQueries[0].TopResults[0].FinalScore == 0 {
+		t.Fatalf("expected non-zero final score in top trace: %+v", snapshot.RecentQueries[0].TopResults[0])
+	}
+}
+
 func TestRetrieveDisabledReturnsNil(t *testing.T) {
 	svc := NewService(Config{Enabled: false})
 	refs := svc.Retrieve(context.Background(), "pod failed", 3)

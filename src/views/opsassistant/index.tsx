@@ -8,6 +8,7 @@ export default function OpsAssistant() {
   const { messages, isLoading, lastAssistant, suggestionPool, send, clear } = useAssistantChat();
   const [input, setInput] = useState("");
   const [copiedMessageID, setCopiedMessageID] = useState<string | null>(null);
+  const [referenceFeedback, setReferenceFeedback] = useState<Record<string, "helpful" | "not_helpful" | "pending">>({});
   const [namespaces, setNamespaces] = useState<string[]>([]);
   const [selectedNamespace, setSelectedNamespace] = useState("All");
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -74,6 +75,31 @@ export default function OpsAssistant() {
     }
   };
 
+  const submitReferenceFeedback = async (message: Message, url: string, helpful: boolean) => {
+    if (message.role !== "assistant") {
+      return;
+    }
+    const key = `${message.id}::${url}`;
+    setReferenceFeedback((current) => ({ ...current, [key]: "pending" }));
+    try {
+      await api.submitAssistantReferenceFeedback({
+        query: message.query ?? "",
+        url,
+        helpful,
+      });
+      setReferenceFeedback((current) => ({
+        ...current,
+        [key]: helpful ? "helpful" : "not_helpful",
+      }));
+    } catch {
+      setReferenceFeedback((current) => {
+        const next = { ...current };
+        delete next[key];
+        return next;
+      });
+    }
+  };
+
   return (
     <div className="h-[calc(100vh-140px)] app-shell overflow-hidden grid grid-cols-1 xl:grid-cols-[1fr_320px]">
       <section className="flex flex-col overflow-hidden border-r border-zinc-700">
@@ -101,7 +127,13 @@ export default function OpsAssistant() {
                   </option>
                 ))}
               </select>
-              <button onClick={clear} className="btn-sm">
+              <button
+                onClick={() => {
+                  clear();
+                  setReferenceFeedback({});
+                }}
+                className="btn-sm"
+              >
                 Clear
               </button>
             </div>
@@ -125,8 +157,10 @@ export default function OpsAssistant() {
               key={message.id}
               message={message}
               copied={copiedMessageID === message.id}
+              referenceFeedback={referenceFeedback}
               onCopy={copyMessage}
               onRunPrompt={(prompt) => void submit(prompt)}
+              onReferenceFeedback={(row, url, helpful) => void submitReferenceFeedback(row, url, helpful)}
             />
           ))}
 

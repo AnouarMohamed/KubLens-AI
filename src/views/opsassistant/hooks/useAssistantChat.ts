@@ -84,6 +84,7 @@ export function useAssistantChat() {
         role: "assistant",
         content: response.answer,
         timestamp: response.timestamp,
+        query: message,
         hints: response.hints,
         resources: response.referencedResources,
         references: response.references,
