@@ -9,9 +9,13 @@ export interface UserSettings {
   autoRefreshSeconds: number;
   panelWidth: PanelWidth;
   relativeTimestamps: boolean;
+  inactivityLogoutMinutes: number;
   liveNotifications: boolean;
   notificationLimit: number;
+  notificationBurstThreshold: number;
   warningOnlyNotifications: boolean;
+  mutedNotificationKeywords: string[];
+  redactSensitiveNotifications: boolean;
   desktopNotifications: boolean;
 }
 
@@ -20,9 +24,13 @@ export const DEFAULT_SETTINGS: UserSettings = {
   autoRefreshSeconds: 30,
   panelWidth: "standard",
   relativeTimestamps: true,
+  inactivityLogoutMinutes: 0,
   liveNotifications: true,
   notificationLimit: 20,
+  notificationBurstThreshold: 8,
   warningOnlyNotifications: false,
+  mutedNotificationKeywords: [],
+  redactSensitiveNotifications: true,
   desktopNotifications: false,
 };
 
@@ -37,9 +45,26 @@ export function normalizeUserSettings(input: unknown): UserSettings {
     autoRefreshSeconds: toIntInRange(parsed.autoRefreshSeconds, 10, 300, DEFAULT_SETTINGS.autoRefreshSeconds),
     panelWidth: toPanelWidth(parsed.panelWidth),
     relativeTimestamps: toBoolean(parsed.relativeTimestamps, DEFAULT_SETTINGS.relativeTimestamps),
+    inactivityLogoutMinutes: toIntInRange(
+      parsed.inactivityLogoutMinutes,
+      0,
+      240,
+      DEFAULT_SETTINGS.inactivityLogoutMinutes,
+    ),
     liveNotifications: toBoolean(parsed.liveNotifications, DEFAULT_SETTINGS.liveNotifications),
     notificationLimit: toIntInRange(parsed.notificationLimit, 10, 60, DEFAULT_SETTINGS.notificationLimit),
+    notificationBurstThreshold: toIntInRange(
+      parsed.notificationBurstThreshold,
+      3,
+      50,
+      DEFAULT_SETTINGS.notificationBurstThreshold,
+    ),
     warningOnlyNotifications: toBoolean(parsed.warningOnlyNotifications, DEFAULT_SETTINGS.warningOnlyNotifications),
+    mutedNotificationKeywords: normalizeMutedKeywords(parsed.mutedNotificationKeywords),
+    redactSensitiveNotifications: toBoolean(
+      parsed.redactSensitiveNotifications,
+      DEFAULT_SETTINGS.redactSensitiveNotifications,
+    ),
     desktopNotifications: toBoolean(parsed.desktopNotifications, DEFAULT_SETTINGS.desktopNotifications),
   };
 }
@@ -92,4 +117,28 @@ function toPanelWidth(value: unknown): PanelWidth {
     return value;
   }
   return DEFAULT_SETTINGS.panelWidth;
+}
+
+function normalizeMutedKeywords(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [...DEFAULT_SETTINGS.mutedNotificationKeywords];
+  }
+
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const item of value) {
+    if (typeof item !== "string") {
+      continue;
+    }
+    const normalized = item.trim().toLowerCase();
+    if (normalized === "" || normalized.length > 64 || seen.has(normalized)) {
+      continue;
+    }
+    seen.add(normalized);
+    out.push(normalized);
+    if (out.length >= 20) {
+      break;
+    }
+  }
+  return out;
 }

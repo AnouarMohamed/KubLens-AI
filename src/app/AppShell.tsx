@@ -40,6 +40,10 @@ export function AppShell() {
   const {
     session: authSession,
     isLoading: authLoading,
+    lastRefreshAt,
+    lastLoginAt,
+    lastLogoutAt,
+    failedLoginCount,
     can,
     login,
     logout,
@@ -51,6 +55,8 @@ export function AppShell() {
   const [authToken, setAuthToken] = useState("");
   const [authMessage, setAuthMessage] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  const inactivityTimerRef = useRef<number | null>(null);
+  const inactivityLogoutInFlightRef = useRef(false);
 
   const canRead = can("read");
   const runtime = useRuntimeStatus({ authLoading, canRead });
@@ -61,6 +67,8 @@ export function AppShell() {
     notificationStatus,
     notificationLastUpdatedAt,
     notificationUnreadCount,
+    notificationSuppressedCount,
+    notificationSignal,
     markNotificationsRead,
     clearNotifications,
   } = useNotifications({
@@ -70,8 +78,11 @@ export function AppShell() {
     canStream: can("stream"),
     autoRefreshSeconds: settings.autoRefreshSeconds,
     notificationLimit: settings.notificationLimit,
+    notificationBurstThreshold: settings.notificationBurstThreshold,
     liveNotificationsEnabled: settings.liveNotifications,
     desktopNotificationsEnabled: settings.desktopNotifications,
+    mutedKeywords: settings.mutedNotificationKeywords,
+    redactSensitiveNotifications: settings.redactSensitiveNotifications,
   });
 
   const { message: transientMessage, showMessage } = useTransientMessage();
@@ -117,6 +128,77 @@ export function AppShell() {
       showMessage(blockedViewMessage(currentView), 1800);
     }
   }, [authLoading, currentView, isAllowed, setCurrentView, showMessage]);
+
+  useEffect(() => {
+    if (inactivityTimerRef.current !== null) {
+      window.clearTimeout(inactivityTimerRef.current);
+      inactivityTimerRef.current = null;
+    }
+
+    const timeoutMinutes = settings.inactivityLogoutMinutes;
+    if (
+      authLoading ||
+      timeoutMinutes <= 0 ||
+      !authSession?.enabled ||
+      !authSession.authenticated
+    ) {
+      return;
+    }
+
+    const timeoutMs = timeoutMinutes * 60 * 1000;
+    const onTimeout = () => {
+      if (inactivityLogoutInFlightRef.current) {
+        return;
+      }
+      inactivityLogoutInFlightRef.current = true;
+      void logout()
+        .catch(() => {
+          // Best effort: session may already be invalid server-side.
+        })
+        .finally(() => {
+          void refreshSession().finally(() => {
+            inactivityLogoutInFlightRef.current = false;
+            showMessage(`Session auto-logged out after ${timeoutMinutes}m of inactivity.`, 2600);
+          });
+        });
+    };
+
+    const resetTimer = () => {
+      if (inactivityTimerRef.current !== null) {
+        window.clearTimeout(inactivityTimerRef.current);
+      }
+      inactivityTimerRef.current = window.setTimeout(onTimeout, timeoutMs);
+    };
+
+    const activityEvents: Array<keyof WindowEventMap> = [
+      "mousedown",
+      "keydown",
+      "touchstart",
+      "scroll",
+    ];
+    for (const eventName of activityEvents) {
+      window.addEventListener(eventName, resetTimer, { passive: true });
+    }
+    resetTimer();
+
+    return () => {
+      if (inactivityTimerRef.current !== null) {
+        window.clearTimeout(inactivityTimerRef.current);
+        inactivityTimerRef.current = null;
+      }
+      for (const eventName of activityEvents) {
+        window.removeEventListener(eventName, resetTimer);
+      }
+    };
+  }, [
+    authLoading,
+    authSession?.authenticated,
+    authSession?.enabled,
+    logout,
+    refreshSession,
+    settings.inactivityLogoutMinutes,
+    showMessage,
+  ]);
 
   return (
     <div className={`flex h-screen text-zinc-100 ${settings.denseMode ? "text-[13px]" : "text-sm"}`}>
@@ -173,10 +255,16 @@ export function AppShell() {
             login={login}
             logout={logout}
             refreshSession={refreshSession}
+            authLastRefreshAt={lastRefreshAt}
+            authLastLoginAt={lastLoginAt}
+            authLastLogoutAt={lastLogoutAt}
+            authFailedLoginCount={failedLoginCount}
             currentCommand={currentViewMeta.kubectlCommand}
             notificationStatus={notificationStatus}
             notificationLastUpdatedAt={notificationLastUpdatedAt}
             notificationUnreadCount={notificationUnreadCount}
+            notificationSuppressedCount={notificationSuppressedCount}
+            notificationSignal={notificationSignal}
             markNotificationsRead={markNotificationsRead}
             clearNotifications={clearNotifications}
             openEventsView={() => {

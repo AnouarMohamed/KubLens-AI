@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import type { AuthSession, K8sEvent, RuntimeStatus } from "../../types";
-import type { NotificationStatus } from "../hooks/useNotifications";
+import type { NotificationSignal, NotificationStatus } from "../hooks/useNotifications";
 import { DEFAULT_SETTINGS, normalizeUserSettings, type UserSettings } from "../hooks/useUserSettings";
 
 type Panel = "none" | "notifications" | "settings" | "profile";
@@ -14,6 +14,8 @@ interface WorkspacePanelsProps {
   notificationStatus: NotificationStatus;
   notificationLastUpdatedAt: string | null;
   notificationUnreadCount: number;
+  notificationSuppressedCount: number;
+  notificationSignal: NotificationSignal;
   markNotificationsRead: () => void;
   clearNotifications: () => void;
   openEventsView: () => void;
@@ -30,6 +32,10 @@ interface WorkspacePanelsProps {
   login: (token: string) => Promise<AuthSession>;
   logout: () => Promise<void>;
   refreshSession: () => Promise<AuthSession | null>;
+  authLastRefreshAt: string | null;
+  authLastLoginAt: string | null;
+  authLastLogoutAt: string | null;
+  authFailedLoginCount: number;
   currentCommand: string;
 }
 
@@ -40,6 +46,8 @@ export function WorkspacePanels({
   notificationStatus,
   notificationLastUpdatedAt,
   notificationUnreadCount,
+  notificationSuppressedCount,
+  notificationSignal,
   markNotificationsRead,
   clearNotifications,
   openEventsView,
@@ -56,6 +64,10 @@ export function WorkspacePanels({
   login,
   logout,
   refreshSession,
+  authLastRefreshAt,
+  authLastLoginAt,
+  authLastLogoutAt,
+  authFailedLoginCount,
   currentCommand,
 }: WorkspacePanelsProps) {
   const [notificationQuery, setNotificationQuery] = useState("");
@@ -137,6 +149,16 @@ export function WorkspacePanels({
               tone={summary.warning > 0 ? "warning" : "muted"}
             />
             <StatTile label="Normal" value={String(summary.normal)} tone={summary.normal > 0 ? "normal" : "muted"} />
+            <StatTile
+              label="Suppressed"
+              value={String(notificationSuppressedCount)}
+              tone={notificationSuppressedCount > 0 ? "warning" : "muted"}
+            />
+            <StatTile
+              label="Burst risk"
+              value={notificationSignal.burstDetected ? "High" : "Stable"}
+              tone={notificationSignal.burstDetected ? "warning" : "normal"}
+            />
           </div>
 
           <div className="rounded-xl border border-zinc-700 bg-zinc-800/60 px-3 py-2">
@@ -151,6 +173,10 @@ export function WorkspacePanels({
               Last update: {notificationLastUpdatedAt ? formatAbsoluteTime(notificationLastUpdatedAt) : "N/A"}
             </p>
             <p className="text-xs text-zinc-500">Displaying up to {settings.notificationLimit} events</p>
+            <p className="text-xs text-zinc-500">
+              Velocity: {notificationSignal.totalLast5Minutes} events in 5m | {notificationSignal.warningLast10Minutes}{" "}
+              warnings in 10m
+            </p>
           </div>
 
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -187,10 +213,32 @@ export function WorkspacePanels({
             <button onClick={clearNotifications} className="btn-sm" type="button">
               Clear cache
             </button>
+            <button
+              onClick={() => {
+                void copyText(JSON.stringify(filteredNotifications, null, 2)).then(
+                  () => onAuthMessage("Filtered notifications copied."),
+                  () => onAuthMessage("Failed to copy notifications."),
+                );
+              }}
+              className="btn-sm"
+              type="button"
+            >
+              Export filtered
+            </button>
             <button onClick={openEventsView} className="btn-sm" type="button">
               Open events view
             </button>
           </div>
+
+          {notificationSignal.burstDetected && (
+            <div className="rounded-xl border border-[var(--amber)]/45 bg-[var(--amber)]/10 px-3 py-2">
+              <p className="text-xs uppercase tracking-wide text-[var(--amber)]">Operational signal</p>
+              <p className="mt-1 text-sm text-zinc-100">
+                Warning burst detected. Prioritize events with repeated reasons and open incident workflow if trend
+                persists.
+              </p>
+            </div>
+          )}
 
           {notificationError && <p className="text-sm text-zinc-200">{notificationError}</p>}
 
@@ -244,6 +292,27 @@ export function WorkspacePanels({
               onChange={(value) => setSettings((state) => ({ ...state, relativeTimestamps: value }))}
             />
             <label className="block text-xs text-zinc-400">
+              Auto logout on inactivity (minutes, 0 disables)
+              <input
+                type="number"
+                min={0}
+                max={240}
+                value={settings.inactivityLogoutMinutes}
+                onChange={(event) =>
+                  setSettings((state) => ({
+                    ...state,
+                    inactivityLogoutMinutes: clampNumber(
+                      event.target.value,
+                      0,
+                      240,
+                      DEFAULT_SETTINGS.inactivityLogoutMinutes,
+                    ),
+                  }))
+                }
+                className="field mt-2 w-full"
+              />
+            </label>
+            <label className="block text-xs text-zinc-400">
               Panel width
               <select
                 value={settings.panelWidth}
@@ -296,6 +365,27 @@ export function WorkspacePanels({
                 className="field mt-2 w-full"
               />
             </label>
+            <label className="block text-xs text-zinc-400">
+              Warning burst threshold (10m)
+              <input
+                type="number"
+                min={3}
+                max={50}
+                value={settings.notificationBurstThreshold}
+                onChange={(event) =>
+                  setSettings((state) => ({
+                    ...state,
+                    notificationBurstThreshold: clampNumber(
+                      event.target.value,
+                      3,
+                      50,
+                      DEFAULT_SETTINGS.notificationBurstThreshold,
+                    ),
+                  }))
+                }
+                className="field mt-2 w-full"
+              />
+            </label>
             <ToggleField
               label="Use live stream when available"
               value={settings.liveNotifications}
@@ -305,6 +395,26 @@ export function WorkspacePanels({
               label="Default to warning-only filter"
               value={settings.warningOnlyNotifications}
               onChange={(value) => setSettings((state) => ({ ...state, warningOnlyNotifications: value }))}
+            />
+            <label className="block text-xs text-zinc-400">
+              Mute keywords (comma separated)
+              <input
+                type="text"
+                value={settings.mutedNotificationKeywords.join(", ")}
+                onChange={(event) =>
+                  setSettings((state) => ({
+                    ...state,
+                    mutedNotificationKeywords: normalizeKeywordInput(event.target.value),
+                  }))
+                }
+                placeholder="imagepullbackoff, probe, autoscaler"
+                className="field mt-2 w-full"
+              />
+            </label>
+            <ToggleField
+              label="Redact sensitive values in notifications"
+              value={settings.redactSensitiveNotifications}
+              onChange={(value) => setSettings((state) => ({ ...state, redactSensitiveNotifications: value }))}
             />
             <ToggleField
               label="Desktop alerts for streamed events"
@@ -384,6 +494,13 @@ export function WorkspacePanels({
             <InfoRow label="User" value={authSession?.user?.name ?? "N/A"} />
             <InfoRow label="Role" value={authSession?.user?.role ?? "N/A"} />
             <InfoRow label="Mode" value={runtime?.mode ?? "Unknown"} />
+            <InfoRow
+              label="Last auth refresh"
+              value={authLastRefreshAt ? formatAbsoluteTime(authLastRefreshAt) : "N/A"}
+            />
+            <InfoRow label="Last login" value={authLastLoginAt ? formatAbsoluteTime(authLastLoginAt) : "N/A"} />
+            <InfoRow label="Last logout" value={authLastLogoutAt ? formatAbsoluteTime(authLastLogoutAt) : "N/A"} />
+            <InfoRow label="Failed login attempts" value={String(authFailedLoginCount)} />
           </section>
 
           <section className="rounded-xl border border-zinc-700 bg-zinc-800/60 p-3">
@@ -418,6 +535,19 @@ export function WorkspacePanels({
             ) : (
               <p className="mt-2 text-xs text-zinc-500">No runtime warnings reported.</p>
             )}
+          </section>
+
+          <section className="rounded-xl border border-zinc-700 bg-zinc-800/60 p-3">
+            <p className="text-xs uppercase tracking-wide text-zinc-500">Security diagnostics</p>
+            <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+              <StatusCell label="Secure context" ok={isSecureContextAvailable()} />
+              <StatusCell label="Cookies enabled" ok={areCookiesEnabled()} />
+              <StatusCell label="HTTPS" ok={isHTTPSContext()} />
+              <StatusCell label="CSRF guard" ok={authSession?.enabled ?? false} />
+            </div>
+            <p className="mt-2 text-xs text-zinc-500">
+              Cookie auth uses HttpOnly + SameSite=Strict and same-origin checks for mutating requests.
+            </p>
           </section>
 
           <section className="rounded-xl border border-zinc-700 bg-zinc-800/60 p-3 space-y-2">
@@ -469,7 +599,7 @@ export function WorkspacePanels({
                         : "Session authenticated.",
                     );
                   } catch (err) {
-                    onAuthMessage(err instanceof Error ? err.message : "Failed to authenticate");
+                    onAuthMessage(formatAuthErrorMessage(err));
                   }
                 }}
                 className="btn-sm"
@@ -814,4 +944,63 @@ function sanitizeAuthTokenInput(raw: string): string {
     return trimmed.replace(bearerPrefixPattern, "").trim();
   }
   return trimmed;
+}
+
+function normalizeKeywordInput(raw: string): string[] {
+  if (raw.trim() === "") {
+    return [];
+  }
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const token of raw.split(",")) {
+    const normalized = token.trim().toLowerCase();
+    if (normalized === "" || seen.has(normalized) || normalized.length > 64) {
+      continue;
+    }
+    seen.add(normalized);
+    out.push(normalized);
+    if (out.length >= 20) {
+      break;
+    }
+  }
+  return out;
+}
+
+function isSecureContextAvailable(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  return window.isSecureContext;
+}
+
+function areCookiesEnabled(): boolean {
+  if (typeof navigator === "undefined") {
+    return false;
+  }
+  return navigator.cookieEnabled;
+}
+
+function isHTTPSContext(): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+  return window.location.protocol === "https:";
+}
+
+function formatAuthErrorMessage(err: unknown): string {
+  if (isApiErrorLike(err) && err.status === 429) {
+    return `${err.message} Wait before retrying to avoid lockout.`;
+  }
+  if (err instanceof Error) {
+    return err.message;
+  }
+  return "Failed to authenticate";
+}
+
+function isApiErrorLike(value: unknown): value is { status: number; message: string } {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+  const candidate = value as { status?: unknown; message?: unknown };
+  return typeof candidate.status === "number" && typeof candidate.message === "string";
 }

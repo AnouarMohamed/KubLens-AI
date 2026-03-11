@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"kubelens-backend/internal/model"
 )
@@ -115,6 +116,91 @@ func TestAuthLoginCreatesCookieSession(t *testing.T) {
 	router.ServeHTTP(readResp, readReq)
 	if readResp.Code != http.StatusOK {
 		t.Fatalf("cookie-auth read status = %d, want 200", readResp.Code)
+	}
+}
+
+func TestAuthLoginSetsSecureCookieWhenForwardedProtoHTTPS(t *testing.T) {
+	router := newAuthTestServer().Router("")
+
+	loginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(`{"token":"viewer-token"}`))
+	loginReq.Header.Set("Content-Type", "application/json")
+	loginReq.Header.Set("X-Forwarded-Proto", "https")
+	loginResp := httptest.NewRecorder()
+	router.ServeHTTP(loginResp, loginReq)
+	if loginResp.Code != http.StatusOK {
+		t.Fatalf("login status = %d, want 200", loginResp.Code)
+	}
+
+	cookies := loginResp.Result().Cookies()
+	if len(cookies) == 0 {
+		t.Fatal("expected auth cookie")
+	}
+	if !cookies[0].Secure {
+		t.Fatal("expected secure auth cookie when forwarded proto is https")
+	}
+}
+
+func TestAuthLoginRateLimitsFailedAttempts(t *testing.T) {
+	now := time.Date(2026, time.January, 2, 10, 0, 0, 0, time.UTC)
+	currentNow := now
+
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	server := newServer(
+		testClusterReader{},
+		func() time.Time { return currentNow },
+		logger,
+		WithWriteActionsEnabled(true),
+		WithAuth(AuthConfig{
+			Enabled: true,
+			Tokens: []AuthToken{
+				{Token: "viewer-token", User: "viewer", Role: "viewer"},
+			},
+		}),
+		WithAuthLoginProtection(AuthLoginProtectionConfig{
+			Enabled:       true,
+			MaxFailures:   2,
+			FailureWindow: 10 * time.Minute,
+			Lockout:       2 * time.Minute,
+			MaxEntries:    100,
+		}),
+	)
+	router := server.Router("")
+
+	for i := 0; i < 2; i++ {
+		loginReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(`{"token":"bad-token"}`))
+		loginReq.Header.Set("Content-Type", "application/json")
+		loginReq.RemoteAddr = "10.7.1.4:4321"
+		loginResp := httptest.NewRecorder()
+		router.ServeHTTP(loginResp, loginReq)
+		if i == 0 && loginResp.Code != http.StatusUnauthorized {
+			t.Fatalf("first failed login status = %d, want 401", loginResp.Code)
+		}
+		if i == 1 && loginResp.Code != http.StatusTooManyRequests {
+			t.Fatalf("second failed login status = %d, want 429", loginResp.Code)
+		}
+	}
+
+	lockedReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(`{"token":"viewer-token"}`))
+	lockedReq.Header.Set("Content-Type", "application/json")
+	lockedReq.RemoteAddr = "10.7.1.4:9999"
+	lockedResp := httptest.NewRecorder()
+	router.ServeHTTP(lockedResp, lockedReq)
+	if lockedResp.Code != http.StatusTooManyRequests {
+		t.Fatalf("locked login status = %d, want 429", lockedResp.Code)
+	}
+	if strings.TrimSpace(lockedResp.Header().Get("Retry-After")) == "" {
+		t.Fatal("expected retry-after header for locked login")
+	}
+
+	currentNow = currentNow.Add(2*time.Minute + time.Second)
+
+	retryReq := httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(`{"token":"viewer-token"}`))
+	retryReq.Header.Set("Content-Type", "application/json")
+	retryReq.RemoteAddr = "10.7.1.4:10000"
+	retryResp := httptest.NewRecorder()
+	router.ServeHTTP(retryResp, retryReq)
+	if retryResp.Code != http.StatusOK {
+		t.Fatalf("login after lockout expiry status = %d, want 200", retryResp.Code)
 	}
 }
 

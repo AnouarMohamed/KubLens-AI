@@ -1,4 +1,4 @@
-import { renderHook, waitFor } from "@testing-library/react";
+import { cleanup, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import { useNotifications } from "./useNotifications";
 
@@ -26,11 +26,12 @@ describe("useNotifications", () => {
   });
 
   afterEach(() => {
+    cleanup();
     vi.useRealTimers();
   });
 
   it("blocks notification access when read permission is missing", () => {
-    const { result } = renderHook(() =>
+    const { result, unmount } = renderHook(() =>
       useNotifications({
         panel: "none",
         authLoading: false,
@@ -38,14 +39,18 @@ describe("useNotifications", () => {
         canStream: false,
         autoRefreshSeconds: 30,
         notificationLimit: 20,
+        notificationBurstThreshold: 8,
         liveNotificationsEnabled: true,
         desktopNotificationsEnabled: false,
+        mutedKeywords: [],
+        redactSensitiveNotifications: true,
       }),
     );
 
     expect(result.current.notificationStatus).toBe("blocked");
     expect(result.current.notificationError).toBe("Authenticate first to access notifications.");
     expect(result.current.notifications).toEqual([]);
+    unmount();
   });
 
   it("loads snapshots and tracks unread events until panel is opened", async () => {
@@ -65,7 +70,7 @@ describe("useNotifications", () => {
       .mockResolvedValueOnce([baseEvent])
       .mockResolvedValueOnce(secondSnapshot);
 
-    const { result, rerender } = renderHook(
+    const { result, rerender, unmount } = renderHook(
       ({ panel, autoRefreshSeconds }: Props) =>
         useNotifications({
           panel,
@@ -74,8 +79,11 @@ describe("useNotifications", () => {
           canStream: false,
           autoRefreshSeconds,
           notificationLimit: 20,
+          notificationBurstThreshold: 8,
           liveNotificationsEnabled: true,
           desktopNotificationsEnabled: false,
+          mutedKeywords: [],
+          redactSensitiveNotifications: true,
         }),
       {
         initialProps: { panel: "none", autoRefreshSeconds: 10 } as Props,
@@ -99,5 +107,44 @@ describe("useNotifications", () => {
     await waitFor(() => {
       expect(result.current.notificationUnreadCount).toBe(0);
     });
+    unmount();
+  });
+
+  it("suppresses muted events and redacts sensitive fields", async () => {
+    mockAPI.getEvents.mockResolvedValue([
+      {
+        ...baseEvent,
+        reason: "BackOff",
+        message: "token=abcd1234abcd1234abcd1234",
+      },
+      {
+        ...baseEvent,
+        reason: "ImagePullBackOff",
+        message: "Failed to pull image due to registry auth error",
+      },
+    ]);
+
+    const { result, unmount } = renderHook(() =>
+      useNotifications({
+        panel: "none",
+        authLoading: false,
+        canRead: true,
+        canStream: false,
+        autoRefreshSeconds: 30,
+        notificationLimit: 20,
+        notificationBurstThreshold: 8,
+        liveNotificationsEnabled: false,
+        desktopNotificationsEnabled: false,
+        mutedKeywords: ["imagepullbackoff"],
+        redactSensitiveNotifications: true,
+      }),
+    );
+
+    await waitFor(() => {
+      expect(result.current.notifications).toHaveLength(1);
+    });
+    expect(result.current.notificationSuppressedCount).toBe(1);
+    expect(result.current.notifications[0]?.message).toContain("[redacted]");
+    unmount();
   });
 });

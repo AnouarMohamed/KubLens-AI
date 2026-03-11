@@ -50,6 +50,7 @@ type Server struct {
 	metrics      *requestMetrics
 	runtime      model.RuntimeStatus
 	auth         authRuntime
+	authLogin    authLoginProtection
 	limiter      rateLimiter
 	writesOn     bool
 	anonPerms    []string
@@ -290,6 +291,7 @@ func newServer(clusterSvc ClusterReader, now func() time.Time, logger *slog.Logg
 		now:            now,
 		logger:         logger,
 		metrics:        newRequestMetrics(now),
+		authLogin:      newAuthLoginProtection(defaultAuthLoginProtectionConfig()),
 		audit:          newAuditLog(maxAuditLimit, "", logger),
 		eventBus:       events.NewBus(64),
 		aiTTL:          8 * time.Second,

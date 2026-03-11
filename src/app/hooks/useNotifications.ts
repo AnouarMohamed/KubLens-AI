@@ -1,10 +1,15 @@
-import { useCallback, useEffect, useRef, useState, type MutableRefObject } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
 import { api } from "../../lib/api";
 import type { K8sEvent } from "../../types";
 
 type Panel = "none" | "notifications" | "settings" | "profile";
 
 export type NotificationStatus = "idle" | "live" | "snapshot" | "reconnecting" | "blocked";
+export interface NotificationSignal {
+  totalLast5Minutes: number;
+  warningLast10Minutes: number;
+  burstDetected: boolean;
+}
 
 interface UseNotificationsInput {
   panel: Panel;
@@ -13,8 +18,11 @@ interface UseNotificationsInput {
   canStream: boolean;
   autoRefreshSeconds: number;
   notificationLimit: number;
+  notificationBurstThreshold: number;
   liveNotificationsEnabled: boolean;
   desktopNotificationsEnabled: boolean;
+  mutedKeywords: string[];
+  redactSensitiveNotifications: boolean;
 }
 
 export function useNotifications({
@@ -24,14 +32,28 @@ export function useNotifications({
   canStream,
   autoRefreshSeconds,
   notificationLimit,
+  notificationBurstThreshold,
   liveNotificationsEnabled,
   desktopNotificationsEnabled,
+  mutedKeywords,
+  redactSensitiveNotifications,
 }: UseNotificationsInput) {
   const [notifications, setNotifications] = useState<K8sEvent[]>([]);
   const [notificationError, setNotificationError] = useState<string | null>(null);
   const [notificationStatus, setNotificationStatus] = useState<NotificationStatus>("idle");
   const [notificationLastUpdatedAt, setNotificationLastUpdatedAt] = useState<string | null>(null);
   const [notificationUnreadCount, setNotificationUnreadCount] = useState(0);
+  const [notificationSuppressedCount, setNotificationSuppressedCount] = useState(0);
+  const [notificationSignal, setNotificationSignal] = useState<NotificationSignal>({
+    totalLast5Minutes: 0,
+    warningLast10Minutes: 0,
+    burstDetected: false,
+  });
+  const mutedKeywordsSignature = mutedKeywords
+    .map((keyword) => keyword.trim().toLowerCase())
+    .filter((keyword) => keyword !== "")
+    .join("|");
+  const mutedKeywordSet = useMemo(() => keywordSetFromSignature(mutedKeywordsSignature), [mutedKeywordsSignature]);
 
   const knownKeysRef = useRef<Set<string>>(new Set());
   const unreadKeysRef = useRef<Set<string>>(new Set());
@@ -52,6 +74,12 @@ export function useNotifications({
     setNotificationUnreadCount(0);
     setNotificationLastUpdatedAt(null);
     setNotificationError(null);
+    setNotificationSuppressedCount(0);
+    setNotificationSignal({
+      totalLast5Minutes: 0,
+      warningLast10Minutes: 0,
+      burstDetected: false,
+    });
   }, []);
 
   useEffect(() => {
@@ -84,7 +112,6 @@ export function useNotifications({
     let reconnectAttempt = 0;
 
     const trimLimit = Math.max(10, Math.min(notificationLimit, 60));
-
     const ingestEvents = (
       rows: K8sEvent[],
       mode: "replace" | "prepend",
@@ -95,8 +122,24 @@ export function useNotifications({
         return;
       }
 
+      const visibleRows: K8sEvent[] = [];
+      let suppressed = 0;
+      for (const row of rows) {
+        if (matchesMutedKeyword(row, mutedKeywordSet)) {
+          suppressed += 1;
+          continue;
+        }
+        visibleRows.push(redactSensitiveNotifications ? redactEventFields(row) : row);
+      }
+      if (suppressed > 0) {
+        setNotificationSuppressedCount((current) => current + suppressed);
+      }
+      if (visibleRows.length === 0) {
+        return;
+      }
+
       setNotifications((current) => {
-        const merged = mode === "replace" ? rows : [...rows, ...current];
+        const merged = mode === "replace" ? visibleRows : [...visibleRows, ...current];
         const deduped: K8sEvent[] = [];
         const dedupeSeen = new Set<string>();
 
@@ -133,6 +176,7 @@ export function useNotifications({
           unreadKeysRef.current.clear();
         }
         setNotificationUnreadCount(unreadKeysRef.current.size);
+        setNotificationSignal(deriveNotificationSignal(deduped, notificationBurstThreshold));
         return deduped;
       });
 
@@ -256,7 +300,10 @@ export function useNotifications({
     clearNotifications,
     desktopNotificationsEnabled,
     liveNotificationsEnabled,
+    mutedKeywordSet,
+    notificationBurstThreshold,
     notificationLimit,
+    redactSensitiveNotifications,
   ]);
 
   return {
@@ -265,6 +312,8 @@ export function useNotifications({
     notificationStatus,
     notificationLastUpdatedAt,
     notificationUnreadCount,
+    notificationSuppressedCount,
+    notificationSignal,
     markNotificationsRead,
     clearNotifications,
   };
@@ -309,4 +358,105 @@ function maybeSendDesktopNotification(event: K8sEvent, permissionRequestedRef: M
     permissionRequestedRef.current = true;
     void Notification.requestPermission();
   }
+}
+
+function normalizeMutedKeywords(keywords: string[]): Set<string> {
+  const out = new Set<string>();
+  for (const keyword of keywords) {
+    const normalized = keyword.trim().toLowerCase();
+    if (normalized !== "") {
+      out.add(normalized);
+    }
+  }
+  return out;
+}
+
+function keywordSetFromSignature(signature: string): Set<string> {
+  if (signature.trim() === "") {
+    return new Set<string>();
+  }
+  return normalizeMutedKeywords(signature.split("|"));
+}
+
+function matchesMutedKeyword(event: K8sEvent, mutedKeywords: Set<string>): boolean {
+  if (mutedKeywords.size === 0) {
+    return false;
+  }
+  const haystack = `${event.reason} ${event.message} ${event.from} ${event.type}`.toLowerCase();
+  for (const keyword of mutedKeywords) {
+    if (haystack.includes(keyword)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function redactEventFields(event: K8sEvent): K8sEvent {
+  return {
+    ...event,
+    reason: redactSensitiveText(event.reason),
+    message: redactSensitiveText(event.message),
+    from: redactSensitiveText(event.from),
+  };
+}
+
+function redactSensitiveText(value: string): string {
+  if (!value) {
+    return value;
+  }
+
+  let redacted = value;
+  redacted = redacted.replace(/(bearer\s+)[^\s]+/gi, "$1[redacted]");
+  redacted = redacted.replace(/((?:token|password|secret|api[_-]?key)\s*[:=]\s*)[^\s,;]+/gi, "$1[redacted]");
+  redacted = redacted.replace(/\b[A-Za-z0-9+/_-]{24,}\b/g, "[redacted]");
+  return redacted;
+}
+
+function deriveNotificationSignal(events: K8sEvent[], burstThreshold: number): NotificationSignal {
+  const now = Date.now();
+  let totalLast5Minutes = 0;
+  let warningLast10Minutes = 0;
+
+  for (const event of events) {
+    const timestamp = parseTimestampMs(event.lastTimestamp);
+    if (timestamp === 0) {
+      continue;
+    }
+    const ageMs = now - timestamp;
+    if (ageMs <= 5 * 60 * 1000) {
+      totalLast5Minutes += 1;
+    }
+    if (ageMs <= 10 * 60 * 1000 && notificationTone(event.type) === "warning") {
+      warningLast10Minutes += 1;
+    }
+  }
+
+  const threshold = Math.max(3, burstThreshold);
+  return {
+    totalLast5Minutes,
+    warningLast10Minutes,
+    burstDetected: warningLast10Minutes >= threshold,
+  };
+}
+
+function notificationTone(type: string): "warning" | "normal" | "other" {
+  const normalized = type.trim().toLowerCase();
+  if (normalized === "warning") {
+    return "warning";
+  }
+  if (normalized === "normal") {
+    return "normal";
+  }
+  return "other";
+}
+
+function parseTimestampMs(value?: string): number {
+  if (!value) {
+    return 0;
+  }
+  const parsed = Date.parse(value);
+  if (Number.isNaN(parsed)) {
+    return 0;
+  }
+  return parsed;
 }

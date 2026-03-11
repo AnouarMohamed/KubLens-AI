@@ -2,10 +2,13 @@ package httpapi
 
 import (
 	"errors"
+	"math"
 	"net/http"
 	"net/url"
 	"slices"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5/middleware"
@@ -25,9 +28,41 @@ type authRuntime struct {
 	cookieName         string
 }
 
+type AuthLoginProtectionConfig struct {
+	Enabled       bool
+	MaxFailures   int
+	FailureWindow time.Duration
+	Lockout       time.Duration
+	MaxEntries    int
+}
+
+type authLoginProtection struct {
+	enabled       bool
+	maxFailures   int
+	failureWindow time.Duration
+	lockout       time.Duration
+	maxEntries    int
+
+	mu       sync.Mutex
+	attempts map[string]authLoginAttempt
+}
+
+type authLoginAttempt struct {
+	failures    int
+	firstFailed time.Time
+	lastSeen    time.Time
+	lockUntil   time.Time
+}
+
 func WithAuth(config AuthConfig) Option {
 	return func(s *Server) {
 		s.auth.configure(config)
+	}
+}
+
+func WithAuthLoginProtection(config AuthLoginProtectionConfig) Option {
+	return func(s *Server) {
+		s.authLogin.configure(config)
 	}
 }
 
@@ -38,6 +73,163 @@ func (a *authRuntime) configure(config AuthConfig) {
 	if a.authenticator != nil {
 		a.cookieName = a.authenticator.CookieName()
 	}
+}
+
+func defaultAuthLoginProtectionConfig() AuthLoginProtectionConfig {
+	return AuthLoginProtectionConfig{
+		Enabled:       true,
+		MaxFailures:   5,
+		FailureWindow: 15 * time.Minute,
+		Lockout:       5 * time.Minute,
+		MaxEntries:    4096,
+	}
+}
+
+func newAuthLoginProtection(config AuthLoginProtectionConfig) authLoginProtection {
+	out := authLoginProtection{}
+	out.configure(config)
+	return out
+}
+
+func (p *authLoginProtection) configure(config AuthLoginProtectionConfig) {
+	maxFailures := config.MaxFailures
+	if maxFailures <= 0 {
+		maxFailures = 5
+	}
+	failureWindow := config.FailureWindow
+	if failureWindow <= 0 {
+		failureWindow = 15 * time.Minute
+	}
+	lockout := config.Lockout
+	if lockout <= 0 {
+		lockout = 5 * time.Minute
+	}
+	maxEntries := config.MaxEntries
+	if maxEntries <= 0 {
+		maxEntries = 4096
+	}
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.enabled = config.Enabled
+	p.maxFailures = maxFailures
+	p.failureWindow = failureWindow
+	p.lockout = lockout
+	p.maxEntries = maxEntries
+	if p.attempts == nil {
+		p.attempts = make(map[string]authLoginAttempt)
+	}
+}
+
+func (p *authLoginProtection) allow(now time.Time, clientIP string) (bool, time.Duration) {
+	if !p.enabled {
+		return true, 0
+	}
+
+	key := normalizeClientKey(clientIP)
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	entry, ok := p.attempts[key]
+	if !ok {
+		return true, 0
+	}
+
+	if !entry.lockUntil.IsZero() {
+		if now.Before(entry.lockUntil) {
+			return false, entry.lockUntil.Sub(now)
+		}
+		delete(p.attempts, key)
+		return true, 0
+	}
+
+	if !entry.firstFailed.IsZero() && now.Sub(entry.firstFailed) > p.failureWindow {
+		delete(p.attempts, key)
+	}
+
+	return true, 0
+}
+
+func (p *authLoginProtection) registerFailure(now time.Time, clientIP string) (bool, time.Duration) {
+	if !p.enabled {
+		return false, 0
+	}
+
+	key := normalizeClientKey(clientIP)
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	entry := p.attempts[key]
+	if !entry.firstFailed.IsZero() && now.Sub(entry.firstFailed) > p.failureWindow {
+		entry = authLoginAttempt{}
+	}
+
+	if entry.firstFailed.IsZero() {
+		entry.firstFailed = now
+		entry.failures = 1
+	} else {
+		entry.failures++
+	}
+	entry.lastSeen = now
+
+	if entry.failures >= p.maxFailures {
+		entry.failures = 0
+		entry.firstFailed = time.Time{}
+		entry.lockUntil = now.Add(p.lockout)
+		p.attempts[key] = entry
+		p.enforceCapLocked()
+		return true, p.lockout
+	}
+
+	p.attempts[key] = entry
+	p.enforceCapLocked()
+	return false, 0
+}
+
+func (p *authLoginProtection) registerSuccess(clientIP string) {
+	if !p.enabled {
+		return
+	}
+
+	key := normalizeClientKey(clientIP)
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	delete(p.attempts, key)
+}
+
+func (p *authLoginProtection) enforceCapLocked() {
+	if len(p.attempts) <= p.maxEntries {
+		return
+	}
+
+	for len(p.attempts) > p.maxEntries {
+		var (
+			oldestKey   string
+			oldestSeen  time.Time
+			initialized bool
+		)
+		for key, entry := range p.attempts {
+			if !initialized || entry.lastSeen.Before(oldestSeen) {
+				oldestKey = key
+				oldestSeen = entry.lastSeen
+				initialized = true
+			}
+		}
+		if !initialized {
+			return
+		}
+		delete(p.attempts, oldestKey)
+	}
+}
+
+func normalizeClientKey(clientIP string) string {
+	normalized := strings.TrimSpace(clientIP)
+	if normalized == "" || normalized == "-" {
+		return "unknown"
+	}
+	return normalized
 }
 
 func (s *Server) authMiddleware(next http.Handler) http.Handler {
@@ -127,6 +319,14 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	clientIP := sanitizeClientIP(r.RemoteAddr)
+	if allowed, retryAfter := s.authLogin.allow(s.now(), clientIP); !allowed {
+		s.recordAuthFailure(r, http.StatusTooManyRequests, "login_rate_limited")
+		setRetryAfterHeader(w, retryAfter)
+		writeError(w, http.StatusTooManyRequests, "too many failed login attempts; try again later")
+		return
+	}
+
 	var req authLoginRequest
 	if err := s.decodeJSONBody(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
@@ -145,11 +345,19 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	p, err := s.auth.authenticator.VerifyToken(r.Context(), token)
 	if err != nil {
+		locked, retryAfter := s.authLogin.registerFailure(s.now(), clientIP)
 		s.recordAuthFailure(r, http.StatusUnauthorized, "login_failed")
+		if locked {
+			s.recordAuthFailure(r, http.StatusTooManyRequests, "login_rate_limited")
+			setRetryAfterHeader(w, retryAfter)
+			writeError(w, http.StatusTooManyRequests, "too many failed login attempts; try again later")
+			return
+		}
 		writeError(w, http.StatusUnauthorized, "invalid bearer token")
 		return
 	}
 
+	s.authLogin.registerSuccess(clientIP)
 	s.writeAuthCookie(w, r, token)
 	writeJSON(w, http.StatusOK, model.AuthSession{
 		Enabled:       true,
@@ -176,6 +384,8 @@ func (s *Server) writeAuthCookie(w http.ResponseWriter, r *http.Request, token s
 		return
 	}
 
+	secureCookie := requestIsSecure(r)
+
 	http.SetCookie(w, &http.Cookie{
 		Name:     s.auth.cookieName,
 		Value:    token,
@@ -183,7 +393,7 @@ func (s *Server) writeAuthCookie(w http.ResponseWriter, r *http.Request, token s
 		MaxAge:   12 * 60 * 60,
 		HttpOnly: true,
 		SameSite: http.SameSiteStrictMode,
-		Secure:   r.TLS != nil,
+		Secure:   secureCookie,
 	})
 }
 
@@ -192,6 +402,8 @@ func (s *Server) clearAuthCookie(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	secureCookie := requestIsSecure(r)
+
 	http.SetCookie(w, &http.Cookie{
 		Name:     s.auth.cookieName,
 		Value:    "",
@@ -199,8 +411,33 @@ func (s *Server) clearAuthCookie(w http.ResponseWriter, r *http.Request) {
 		MaxAge:   -1,
 		HttpOnly: true,
 		SameSite: http.SameSiteStrictMode,
-		Secure:   r.TLS != nil,
+		Secure:   secureCookie,
 	})
+}
+
+func requestIsSecure(r *http.Request) bool {
+	if r != nil && r.TLS != nil {
+		return true
+	}
+	if r == nil {
+		return false
+	}
+
+	forwarded := strings.TrimSpace(strings.ToLower(r.Header.Get("X-Forwarded-Proto")))
+	return forwarded == "https"
+}
+
+func setRetryAfterHeader(w http.ResponseWriter, retryAfter time.Duration) {
+	if retryAfter <= 0 {
+		w.Header().Set("Retry-After", "1")
+		return
+	}
+
+	seconds := int(math.Ceil(retryAfter.Seconds()))
+	if seconds < 1 {
+		seconds = 1
+	}
+	w.Header().Set("Retry-After", strconv.Itoa(seconds))
 }
 
 func isMutatingMethod(method string) bool {

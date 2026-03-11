@@ -20,16 +20,20 @@ describe("useUserSettings", () => {
         autoRefreshSeconds: 45,
         panelWidth: "xwide",
         relativeTimestamps: false,
+        inactivityLogoutMinutes: 30,
         liveNotifications: false,
         notificationLimit: 42,
+        notificationBurstThreshold: 12,
         warningOnlyNotifications: true,
+        mutedNotificationKeywords: ["backoff", "probe"],
+        redactSensitiveNotifications: false,
         desktopNotifications: true,
       });
     });
 
     await waitFor(() => {
       expect(window.localStorage.getItem("k8s-ops.settings.v1")).toBe(
-        '{"denseMode":true,"autoRefreshSeconds":45,"panelWidth":"xwide","relativeTimestamps":false,"liveNotifications":false,"notificationLimit":42,"warningOnlyNotifications":true,"desktopNotifications":true}',
+        '{"denseMode":true,"autoRefreshSeconds":45,"panelWidth":"xwide","relativeTimestamps":false,"inactivityLogoutMinutes":30,"liveNotifications":false,"notificationLimit":42,"notificationBurstThreshold":12,"warningOnlyNotifications":true,"mutedNotificationKeywords":["backoff","probe"],"redactSensitiveNotifications":false,"desktopNotifications":true}',
       );
     });
   });
@@ -37,7 +41,7 @@ describe("useUserSettings", () => {
   it("normalizes malformed stored settings", () => {
     window.localStorage.setItem(
       "k8s-ops.settings.v1",
-      '{"denseMode":"yes","autoRefreshSeconds":1,"panelWidth":"huge","notificationLimit":999}',
+      '{"denseMode":"yes","autoRefreshSeconds":1,"panelWidth":"huge","notificationLimit":999,"notificationBurstThreshold":1,"mutedNotificationKeywords":[" BackOff ","",42,"backoff","xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"]}',
     );
 
     const { result } = renderHook(() => useUserSettings());
@@ -45,6 +49,8 @@ describe("useUserSettings", () => {
       ...DEFAULT_SETTINGS,
       autoRefreshSeconds: 10,
       notificationLimit: 60,
+      notificationBurstThreshold: 3,
+      mutedNotificationKeywords: ["backoff"],
     });
   });
 

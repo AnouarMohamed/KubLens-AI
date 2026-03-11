@@ -8,6 +8,10 @@ interface AuthSessionContextValue {
   session: AuthSession | null;
   isLoading: boolean;
   error: string | null;
+  lastRefreshAt: string | null;
+  lastLoginAt: string | null;
+  lastLogoutAt: string | null;
+  failedLoginCount: number;
   can: (permission: Permission) => boolean;
   login: (token: string) => Promise<AuthSession>;
   logout: () => Promise<void>;
@@ -20,6 +24,10 @@ export function AuthSessionProvider({ children }: { children: React.ReactNode })
   const [session, setSession] = useState<AuthSession | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [lastRefreshAt, setLastRefreshAt] = useState<string | null>(null);
+  const [lastLoginAt, setLastLoginAt] = useState<string | null>(null);
+  const [lastLogoutAt, setLastLogoutAt] = useState<string | null>(null);
+  const [failedLoginCount, setFailedLoginCount] = useState(0);
 
   const refresh = useCallback(async () => {
     setIsLoading(true);
@@ -27,6 +35,7 @@ export function AuthSessionProvider({ children }: { children: React.ReactNode })
       const response = await api.getAuthSession();
       setSession(response);
       setError(null);
+      setLastRefreshAt(new Date().toISOString());
       return response;
     } catch (err) {
       setSession(null);
@@ -47,9 +56,15 @@ export function AuthSessionProvider({ children }: { children: React.ReactNode })
       const response = await api.login(token);
       setSession(response);
       setError(null);
+      const now = new Date().toISOString();
+      setLastLoginAt(now);
+      setLastRefreshAt(now);
+      setFailedLoginCount(0);
       return response;
     } catch (err) {
       setSession(null);
+      setFailedLoginCount((value) => value + 1);
+      setError(err instanceof Error ? err.message : "Failed to login");
       throw err;
     } finally {
       setIsLoading(false);
@@ -62,6 +77,7 @@ export function AuthSessionProvider({ children }: { children: React.ReactNode })
       const response = await api.logout();
       setSession(response);
       setError(null);
+      setLastLogoutAt(new Date().toISOString());
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to logout");
       throw err;
@@ -91,12 +107,28 @@ export function AuthSessionProvider({ children }: { children: React.ReactNode })
       session,
       isLoading,
       error,
+      lastRefreshAt,
+      lastLoginAt,
+      lastLogoutAt,
+      failedLoginCount,
       can,
       login,
       logout,
       refresh,
     }),
-    [session, isLoading, error, can, login, logout, refresh],
+    [
+      session,
+      isLoading,
+      error,
+      lastRefreshAt,
+      lastLoginAt,
+      lastLogoutAt,
+      failedLoginCount,
+      can,
+      login,
+      logout,
+      refresh,
+    ],
   );
 
   return <AuthSessionContext.Provider value={value}>{children}</AuthSessionContext.Provider>;
