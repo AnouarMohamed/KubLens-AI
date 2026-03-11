@@ -1,110 +1,26 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { api } from "../../lib/api";
-import { useAuthSession } from "../../context/AuthSessionContext";
-import { useStreamRefresh } from "../../app/hooks/useStreamRefresh";
-import type { Node, NodeDetail } from "../../types";
 import NodeDetailModal from "../../components/nodes/NodeDetailModal";
 import { NodesSummary } from "./components/NodesSummary";
+import { NodesTable } from "./components/NodesTable";
+import { NodesToolbar } from "./components/NodesToolbar";
+import { useNodesData } from "./hooks/useNodesData";
 
 export default function Nodes() {
-  const { can, isLoading: authLoading } = useAuthSession();
-  const [nodes, setNodes] = useState<Node[]>([]);
-  const [selectedNode, setSelectedNode] = useState<NodeDetail | null>(null);
-  const [search, setSearch] = useState("");
-  const [isLoading, setIsLoading] = useState(true);
-  const [isBusy, setIsBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const canRead = can("read");
-  const canWrite = can("write");
-
-  const load = useCallback(async () => {
-    if (!canRead) {
-      setNodes([]);
-      setError("Authenticate to view node data.");
-      setIsLoading(false);
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      const response = await api.getNodes();
-      setNodes(response);
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load nodes");
-    } finally {
-      setIsLoading(false);
-    }
-  }, [canRead]);
-
-  useEffect(() => {
-    if (authLoading) {
-      return;
-    }
-    void load();
-  }, [authLoading, load]);
-
-  useStreamRefresh({
-    enabled: canRead,
-    eventTypes: ["node_update", "node_not_ready", "node_pressure", "node_deleted"],
-    onEvent: () => {
-      void load();
-    },
-  });
-
-  const filteredNodes = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    if (query === "") {
-      return nodes;
-    }
-
-    return nodes.filter((node) => `${node.name} ${node.roles} ${node.status}`.toLowerCase().includes(query));
-  }, [nodes, search]);
-
-  const openDetail = useCallback(
-    async (name: string) => {
-      if (!canRead) {
-        setError("Authenticate to view node details.");
-        return;
-      }
-
-      setIsBusy(true);
-      try {
-        const response = await api.getNodeDetail(name);
-        setSelectedNode(response);
-        setError(null);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load node details");
-      } finally {
-        setIsBusy(false);
-      }
-    },
-    [canRead],
-  );
-
-  const cordon = useCallback(
-    async (name: string) => {
-      if (!canWrite) {
-        setError("Your role does not allow node cordon actions.");
-        return;
-      }
-      if (!window.confirm(`Cordon node ${name}?`)) {
-        return;
-      }
-
-      setIsBusy(true);
-      try {
-        await api.cordonNode(name);
-        await load();
-        setError(null);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to cordon node");
-      } finally {
-        setIsBusy(false);
-      }
-    },
-    [canWrite, load],
-  );
+  const {
+    canRead,
+    canWrite,
+    nodes,
+    filteredNodes,
+    selectedNode,
+    search,
+    isLoading,
+    isBusy,
+    error,
+    setSearch,
+    load,
+    openDetail,
+    cordon,
+    clearSelectedNode,
+  } = useNodesData();
 
   return (
     <div className="space-y-5">
@@ -113,17 +29,13 @@ export default function Nodes() {
           <h2 className="text-2xl font-semibold text-zinc-100 tracking-tight">Nodes</h2>
           <p className="text-sm text-zinc-400 mt-1">Infrastructure status and scheduling controls.</p>
         </div>
-        <div className="flex gap-2">
-          <input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search nodes"
-            className="field w-72"
-          />
-          <button onClick={() => void load()} disabled={isLoading || isBusy || !canRead} className="btn">
-            {isLoading ? "Loading" : "Refresh"}
-          </button>
-        </div>
+        <NodesToolbar
+          search={search}
+          onSearchChange={setSearch}
+          onRefresh={() => void load()}
+          isRefreshDisabled={isLoading || isBusy || !canRead}
+          isLoading={isLoading}
+        />
       </header>
 
       {error && (
@@ -132,52 +44,16 @@ export default function Nodes() {
 
       <NodesSummary nodes={nodes} filteredCount={filteredNodes.length} />
 
-      <div className="table-shell">
-        <table className="min-w-full text-left text-sm">
-          <thead className="table-head table-head-sticky">
-            <tr>
-              <th className="px-4 py-3 font-semibold">Node</th>
-              <th className="px-4 py-3 font-semibold">Status</th>
-              <th className="px-4 py-3 font-semibold">Roles</th>
-              <th className="px-4 py-3 font-semibold">CPU Usage</th>
-              <th className="px-4 py-3 font-semibold">Memory Usage</th>
-              <th className="px-4 py-3 font-semibold">Version</th>
-              <th className="px-4 py-3 font-semibold">Age</th>
-              <th className="px-4 py-3 font-semibold">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-zinc-800 text-zinc-200">
-            {filteredNodes.map((node) => (
-              <tr key={node.name} className="table-row">
-                <td className="px-4 py-3 font-medium">{node.name}</td>
-                <td className="px-4 py-3">{node.status}</td>
-                <td className="px-4 py-3 text-zinc-400">{node.roles}</td>
-                <td className="px-4 py-3 text-zinc-400">{node.cpuUsage}</td>
-                <td className="px-4 py-3 text-zinc-400">{node.memUsage}</td>
-                <td className="px-4 py-3 text-zinc-400">{node.version}</td>
-                <td className="px-4 py-3 text-zinc-400">{node.age}</td>
-                <td className="px-4 py-3">
-                  <div className="flex gap-2">
-                    <button onClick={() => void cordon(node.name)} className="btn-sm" disabled={!canWrite}>
-                      Cordon
-                    </button>
-                    <button onClick={() => void openDetail(node.name)} className="btn-sm" disabled={!canRead}>
-                      Details
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <NodesTable
+        nodes={filteredNodes}
+        isLoading={isLoading}
+        canRead={canRead}
+        canWrite={canWrite}
+        onOpenDetail={openDetail}
+        onCordon={cordon}
+      />
 
-        {isLoading && <p className="px-4 py-8 text-center text-sm text-zinc-500">Loading nodes...</p>}
-        {!isLoading && filteredNodes.length === 0 && (
-          <p className="px-4 py-8 text-center text-sm text-zinc-500">No nodes found.</p>
-        )}
-      </div>
-
-      <NodeDetailModal selectedNode={selectedNode} onClose={() => setSelectedNode(null)} />
+      <NodeDetailModal selectedNode={selectedNode} onClose={clearSelectedNode} />
     </div>
   );
 }
