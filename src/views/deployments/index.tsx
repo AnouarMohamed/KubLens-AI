@@ -123,7 +123,32 @@ export default function Deployments() {
       const response = await api.applyResourceYAML("deployments", yamlEditor.target.namespace, yamlEditor.target.name, {
         yaml: yamlEditor.yaml,
       });
-      setMessage(response.message);
+      let finalMessage = response.message;
+      if ("requiresForce" in response && response.requiresForce) {
+        const force = window.confirm(
+          `${response.message}\n\nRisk score: ${response.report.score} (${response.report.level}).\nApply anyway with force=true?`,
+        );
+        if (!force) {
+          setMessage(`Apply canceled. Risk score ${response.report.score} requires explicit force override.`);
+          setError(null);
+          return;
+        }
+
+        const forced = await api.applyResourceYAMLWithForce(
+          "deployments",
+          yamlEditor.target.namespace,
+          yamlEditor.target.name,
+          { yaml: yamlEditor.yaml },
+          true,
+        );
+        if ("requiresForce" in forced && forced.requiresForce) {
+          setError("Risk guard still blocked the apply request.");
+          return;
+        }
+        finalMessage = forced.message;
+      }
+
+      setMessage(finalMessage);
       setYAMLEditor(null);
       await load();
       setError(null);

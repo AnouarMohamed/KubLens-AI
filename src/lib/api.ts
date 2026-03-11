@@ -1,7 +1,19 @@
 import type {
   ActionResult,
+  ApplyResourceYAMLResponse,
   AlertDispatchRequest,
   AlertDispatchResponse,
+  Incident,
+  IncidentStepStatusPatch,
+  MemoryFixCreateRequest,
+  MemoryFixPattern,
+  MemoryRunbook,
+  MemoryRunbookUpsertRequest,
+  Postmortem,
+  RemediationProposal,
+  RemediationRejectRequest,
+  RiskAnalyzeRequest,
+  RiskReport,
   AuditLogResponse,
   ApiMetricsSnapshot,
   AuthSession,
@@ -144,10 +156,24 @@ export const api = {
   getResourceYAML: (kind: string, namespace: string, name: string) =>
     requestJson<ResourceManifest>(apiPath("resources", kind, namespace, name, "yaml")),
   applyResourceYAML: (kind: string, namespace: string, name: string, payload: ResourceManifest) =>
-    requestJson<ActionResult>(apiPath("resources", kind, namespace, name, "yaml"), {
+    requestJson<ApplyResourceYAMLResponse>(apiPath("resources", kind, namespace, name, "yaml"), {
       method: "PUT",
       body: JSON.stringify(payload),
     }),
+  applyResourceYAMLWithForce: (
+    kind: string,
+    namespace: string,
+    name: string,
+    payload: ResourceManifest,
+    force: boolean,
+  ) =>
+    requestJson<ApplyResourceYAMLResponse>(
+      `${apiPath("resources", kind, namespace, name, "yaml")}${force ? "?force=true" : ""}`,
+      {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      },
+    ),
   scaleResource: (kind: string, namespace: string, name: string, payload: ScaleRequest) =>
     requestJson<ActionResult>(apiPath("resources", kind, namespace, name, "scale"), {
       method: "POST",
@@ -224,6 +250,79 @@ export const api = {
     requestJson<AssistantResponse>(apiPath("assistant"), {
       method: "POST",
       body: JSON.stringify({ message, namespace }),
+    }),
+  createIncident: () =>
+    requestJson<Incident>(apiPath("incidents"), {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+  listIncidents: () => requestJson<Incident[]>(apiPath("incidents")),
+  getIncident: (id: string) => requestJson<Incident>(apiPath("incidents", id)),
+  updateIncidentStep: (id: string, stepID: string, payload: IncidentStepStatusPatch) =>
+    requestJson<Incident>(apiPath("incidents", id, "steps", stepID), {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+  resolveIncident: (id: string) =>
+    requestJson<Incident>(apiPath("incidents", id, "resolve"), {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+  generatePostmortem: (incidentID: string) =>
+    requestJson<Postmortem>(apiPath("incidents", incidentID, "postmortem"), {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+  listPostmortems: () => requestJson<Postmortem[]>(apiPath("postmortems")),
+  getPostmortem: (id: string) => requestJson<Postmortem>(apiPath("postmortems", id)),
+  proposeRemediation: () =>
+    requestJson<RemediationProposal[]>(apiPath("remediation", "propose"), {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+  listRemediation: () => requestJson<RemediationProposal[]>(apiPath("remediation")),
+  approveRemediation: (id: string) =>
+    requestJson<RemediationProposal>(apiPath("remediation", id, "approve"), {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+  executeRemediation: (id: string) =>
+    requestJson<RemediationProposal>(apiPath("remediation", id, "execute"), {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+  rejectRemediation: (id: string, payload: RemediationRejectRequest) =>
+    requestJson<RemediationProposal>(apiPath("remediation", id, "reject"), {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  searchMemoryRunbooks: (query = "") => {
+    const suffix = query.trim() === "" ? "" : `?q=${encodeURIComponent(query.trim())}`;
+    return requestJson<MemoryRunbook[]>(`${apiPath("memory", "runbooks")}${suffix}`);
+  },
+  createMemoryRunbook: (payload: MemoryRunbookUpsertRequest) =>
+    requestJson<MemoryRunbook>(apiPath("memory", "runbooks"), {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  updateMemoryRunbook: (id: string, payload: MemoryRunbookUpsertRequest) =>
+    requestJson<MemoryRunbook>(apiPath("memory", "runbooks", id), {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }),
+  listMemoryFixes: (query = "") => {
+    const suffix = query.trim() === "" ? "" : `?q=${encodeURIComponent(query.trim())}`;
+    return requestJson<MemoryFixPattern[]>(`${apiPath("memory", "fixes")}${suffix}`);
+  },
+  recordMemoryFix: (payload: MemoryFixCreateRequest) =>
+    requestJson<MemoryFixPattern>(apiPath("memory", "fixes"), {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  analyzeRiskGuard: (payload: RiskAnalyzeRequest) =>
+    requestJson<RiskReport>(apiPath("risk-guard", "analyze"), {
+      method: "POST",
+      body: JSON.stringify(payload),
     }),
 };
 

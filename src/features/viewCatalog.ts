@@ -221,6 +221,36 @@ export const VIEW_SECTIONS: ViewSection[] = [
     label: "Ops",
     items: [
       {
+        id: "incidents",
+        label: "Incidents",
+        description: "Incident commander timeline and runbook execution.",
+        kubectlCommand: "kubectl get events -A --sort-by=.metadata.creationTimestamp",
+      },
+      {
+        id: "remediation",
+        label: "Remediation",
+        description: "Risk-scored remediation proposals with controlled execution.",
+        kubectlCommand: "kubectl rollout restart deployment/<name> -n <namespace>",
+      },
+      {
+        id: "memory",
+        label: "Cluster Memory",
+        description: "Team runbooks and fix patterns for institutional learning.",
+        kubectlCommand: "kubectl describe pod <name> -n <namespace>",
+      },
+      {
+        id: "riskguard",
+        label: "Risk Guard",
+        description: "Manifest risk checks before deployment.",
+        kubectlCommand: "kubectl apply --dry-run=server -f manifest.yaml",
+      },
+      {
+        id: "postmortems",
+        label: "Postmortems",
+        description: "Generated incident postmortems with deterministic timeline.",
+        kubectlCommand: "kubectl get events -A --sort-by=.metadata.creationTimestamp",
+      },
+      {
         id: "assistant",
         label: "Assistant",
         description: "Deterministic plus LLM-assisted troubleshooting.",

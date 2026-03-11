@@ -75,6 +75,10 @@ jobs:
       - name: Backend quality gates
         run: npm run ci:backend
 
+      - name: Backend feature package coverage
+        run: |
+          node scripts/go-task.mjs -C backend test ./internal/incident ./internal/remediation ./internal/memory ./internal/riskguard ./internal/postmortem ./internal/chatops
+
   predictor:
     runs-on: ubuntu-latest
     steps:

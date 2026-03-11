@@ -107,7 +107,32 @@ export default function ResourceCatalog({ view }: { view: View }) {
     setIsActing(true);
     try {
       const response = await api.applyResourceYAML(view, yamlTarget.namespace, yamlTarget.name, { yaml: yamlText });
-      setMessage(response.message);
+      let finalMessage = response.message;
+      if ("requiresForce" in response && response.requiresForce) {
+        const force = window.confirm(
+          `${response.message}\n\nRisk score: ${response.report.score} (${response.report.level}).\nApply anyway with force=true?`,
+        );
+        if (!force) {
+          setMessage(`Apply canceled. Risk score ${response.report.score} requires explicit force override.`);
+          setError(null);
+          return;
+        }
+
+        const forced = await api.applyResourceYAMLWithForce(
+          view,
+          yamlTarget.namespace,
+          yamlTarget.name,
+          { yaml: yamlText },
+          true,
+        );
+        if ("requiresForce" in forced && forced.requiresForce) {
+          setError("Risk guard still blocked the apply request.");
+          return;
+        }
+        finalMessage = forced.message;
+      }
+
+      setMessage(finalMessage);
       setYAMLTarget(null);
       setYAMLText("");
       setError(null);

@@ -44,24 +44,30 @@ type ClusterReader interface {
 }
 
 type Server struct {
-	cluster   ClusterReader
-	now       func() time.Time
-	logger    *slog.Logger
-	metrics   *requestMetrics
-	runtime   model.RuntimeStatus
-	auth      authRuntime
-	limiter   rateLimiter
-	writesOn  bool
-	anonPerms []string
-	audit     *auditLog
-	eventBus  *events.Bus
-	alerts    alertDispatcher
-	ai        ai.Provider
-	aiTTL     time.Duration
-	docs      docsRetriever
-	predictor predictionProvider
-	buildInfo model.BuildInfo
-	intel     *intelligence.Analyzer
+	cluster      ClusterReader
+	now          func() time.Time
+	logger       *slog.Logger
+	metrics      *requestMetrics
+	runtime      model.RuntimeStatus
+	auth         authRuntime
+	limiter      rateLimiter
+	writesOn     bool
+	anonPerms    []string
+	audit        *auditLog
+	eventBus     *events.Bus
+	alerts       alertDispatcher
+	ai           ai.Provider
+	aiTTL        time.Duration
+	docs         docsRetriever
+	memory       memoryStore
+	incidents    incidentStore
+	remediations remediationStore
+	riskGuard    riskAnalyzer
+	postmortems  postmortemStore
+	chatops      chatopsNotifier
+	predictor    predictionProvider
+	buildInfo    model.BuildInfo
+	intel        *intelligence.Analyzer
 
 	predictionsTTL   time.Duration
 	predictionsMu    sync.RWMutex
@@ -88,6 +94,52 @@ type docsRetriever interface {
 	Retrieve(ctx context.Context, query string, limit int) []model.DocumentationReference
 }
 
+type memoryStore interface {
+	Search(query string) []model.MemoryRunbook
+	IncrementUsage(id string) bool
+	CreateRunbook(req model.MemoryRunbookUpsertRequest) (model.MemoryRunbook, error)
+	UpdateRunbook(id string, req model.MemoryRunbookUpsertRequest) (model.MemoryRunbook, error)
+	ListFixes() []model.MemoryFixPattern
+	RecordFix(req model.MemoryFixCreateRequest, recordedBy string) (model.MemoryFixPattern, error)
+}
+
+type incidentStore interface {
+	Create(incident model.Incident) model.Incident
+	List() []model.Incident
+	Get(id string) (model.Incident, bool)
+	PatchStepStatus(id string, stepID string, target model.RunbookStepStatus) (model.Incident, error)
+	Resolve(id string) (model.Incident, error)
+	AssociateRemediation(incidentID string, proposalID string) error
+}
+
+type remediationStore interface {
+	SaveProposals(proposals []model.RemediationProposal) []model.RemediationProposal
+	List() []model.RemediationProposal
+	Get(id string) (model.RemediationProposal, bool)
+	Approve(id string, user string) (model.RemediationProposal, error)
+	Reject(id string, user string, reason string) (model.RemediationProposal, error)
+	MarkExecuted(id string, user string, result string) (model.RemediationProposal, error)
+}
+
+type riskAnalyzer interface {
+	Analyze(manifest string, pods []model.PodSummary, nodes []model.NodeSummary) model.RiskReport
+}
+
+type postmortemStore interface {
+	Create(postmortem model.Postmortem) (model.Postmortem, error)
+	List() []model.Postmortem
+	Get(id string) (model.Postmortem, bool)
+	GetByIncidentID(incidentID string) (model.Postmortem, bool)
+}
+
+type chatopsNotifier interface {
+	Enabled() bool
+	NotifyIncident(ctx context.Context, incident model.Incident)
+	NotifyRemediation(ctx context.Context, proposal model.RemediationProposal)
+	NotifyPostmortem(ctx context.Context, postmortem model.Postmortem)
+	NotifyAssistantFinding(ctx context.Context, finding string, resources []string)
+}
+
 type alertDispatcher interface {
 	Dispatch(ctx context.Context, req model.AlertDispatchRequest) model.AlertDispatchResponse
 	Enabled() bool
@@ -112,6 +164,42 @@ func WithAITimeout(timeout time.Duration) Option {
 func WithDocsRetriever(retriever docsRetriever) Option {
 	return func(s *Server) {
 		s.docs = retriever
+	}
+}
+
+func WithMemoryStore(store memoryStore) Option {
+	return func(s *Server) {
+		s.memory = store
+	}
+}
+
+func WithIncidentStore(store incidentStore) Option {
+	return func(s *Server) {
+		s.incidents = store
+	}
+}
+
+func WithRemediationStore(store remediationStore) Option {
+	return func(s *Server) {
+		s.remediations = store
+	}
+}
+
+func WithRiskAnalyzer(analyzer riskAnalyzer) Option {
+	return func(s *Server) {
+		s.riskGuard = analyzer
+	}
+}
+
+func WithPostmortemStore(store postmortemStore) Option {
+	return func(s *Server) {
+		s.postmortems = store
+	}
+}
+
+func WithChatOpsNotifier(notifier chatopsNotifier) Option {
+	return func(s *Server) {
+		s.chatops = notifier
 	}
 }
 
@@ -297,6 +385,25 @@ func (s *Server) Router(distDir string) http.Handler {
 		api.Get("/predictions", s.handlePredictions)
 		api.Get("/predictive-incidents", s.handlePredictions) // Backward-compatible alias for older frontend builds.
 		api.Post("/assistant", s.handleAssistant)
+		api.Post("/incidents", s.handleCreateIncident)
+		api.Get("/incidents", s.handleListIncidents)
+		api.Get("/incidents/{id}", s.handleGetIncident)
+		api.Patch("/incidents/{id}/steps/{step}", s.handlePatchIncidentStep)
+		api.Post("/incidents/{id}/resolve", s.handleResolveIncident)
+		api.Post("/incidents/{id}/postmortem", s.handleGeneratePostmortem)
+		api.Get("/postmortems", s.handleListPostmortems)
+		api.Get("/postmortems/{id}", s.handleGetPostmortem)
+		api.Post("/remediation/propose", s.handleProposeRemediation)
+		api.Get("/remediation", s.handleListRemediation)
+		api.Post("/remediation/{id}/approve", s.handleApproveRemediation)
+		api.Post("/remediation/{id}/execute", s.handleExecuteRemediation)
+		api.Post("/remediation/{id}/reject", s.handleRejectRemediation)
+		api.Get("/memory/runbooks", s.handleMemoryRunbooks)
+		api.Post("/memory/runbooks", s.handleCreateMemoryRunbook)
+		api.Put("/memory/runbooks/{id}", s.handleUpdateMemoryRunbook)
+		api.Get("/memory/fixes", s.handleListMemoryFixes)
+		api.Post("/memory/fixes", s.handleRecordMemoryFix)
+		api.Post("/risk-guard/analyze", s.handleAnalyzeRiskGuard)
 	})
 
 	attachStatic(r, distDir)

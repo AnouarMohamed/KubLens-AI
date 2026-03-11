@@ -2,6 +2,25 @@
 
 All notable changes to this project are documented here.
 
+## v0.4.0
+
+### Added
+
+- Incident Commander with in-memory incident store, timeline/runbook generation, strict step-transition rules, resolve flow, and audited mutating actions.
+- Safe Auto-Remediation with proposal generation, approval/reject/execute workflow, production four-eyes enforcement, and audited execution paths.
+- Cluster Memory with atomic file-backed runbook/fix persistence, assistant team-runbook context injection, and usage-based retrieval.
+- Change Risk Guard with 10 manifest checks, score/level reporting, dedicated analysis endpoint, and pre-apply force gate integration for risky YAML updates.
+- Postmortem Generator with deterministic incident summaries, optional AI root-cause/prevention enrichment, conflict-safe one-postmortem-per-incident handling, and list/detail APIs.
+- ChatOps Slack integration using Block Kit notifications, 5-minute dedupe rate limiting, async non-blocking dispatch, and configurable notification toggles.
+- New frontend operational views for incidents, remediation, memory, risk guard, and postmortems, fully wired to typed API contracts.
+
+### Changed
+
+- Assistant context now includes top team runbooks from memory search on every query and increments usage counters for surfaced entries.
+- Resource YAML apply now supports risk-guard `202 Accepted` responses requiring explicit `force=true` override for high-risk manifests.
+- Backend HTTP contract/OpenAPI expanded to document all new operational APIs and schemas.
+- Release metadata bumped to `v0.4.0` across package, Docker, Compose, Helm, and Kubernetes manifests.
+
 ## v0.3.0
 
 ### Added

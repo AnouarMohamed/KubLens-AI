@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: KubeLens API
-  version: v0.3.0
+  version: v0.4.0
   description: Core API contract for KubeLens dashboard and automation clients.
 servers:
   - url: /api
@@ -525,6 +525,12 @@ paths:
           required: true
           schema:
             type: string
+        - in: query
+          name: force
+          required: false
+          schema:
+            type: boolean
+          description: Override risk guard when risk score is 50 or higher.
       requestBody:
         required: true
         content:
@@ -538,6 +544,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ActionResult"
+        "202":
+          description: Apply blocked by risk guard pending force override.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResourceApplyRiskResponse"
   /resources/{kind}/{namespace}/{name}/scale:
     post:
       operationId: postResourceScale
@@ -701,6 +713,343 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AssistantResponse"
+  /incidents:
+    post:
+      operationId: postIncidentCreate
+      summary: Build incident from current cluster state
+      responses:
+        "201":
+          description: Incident created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Incident"
+    get:
+      operationId: getIncidentList
+      summary: List incidents (newest first)
+      responses:
+        "200":
+          description: Incident list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Incident"
+  /incidents/{id}:
+    get:
+      operationId: getIncident
+      summary: Get incident detail
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Incident detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Incident"
+  /incidents/{id}/steps/{step}:
+    patch:
+      operationId: patchIncidentStep
+      summary: Update incident runbook step status
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: step
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IncidentStepStatusPatch"
+      responses:
+        "200":
+          description: Incident with updated runbook
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Incident"
+        "400":
+          description: Invalid step transition
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /incidents/{id}/resolve:
+    post:
+      operationId: postIncidentResolve
+      summary: Resolve incident
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Resolved incident
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Incident"
+  /incidents/{id}/postmortem:
+    post:
+      operationId: postIncidentGeneratePostmortem
+      summary: Generate postmortem for resolved incident
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "201":
+          description: Postmortem generated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Postmortem"
+        "409":
+          description: Postmortem already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /postmortems:
+    get:
+      operationId: getPostmortemList
+      summary: List generated postmortems
+      responses:
+        "200":
+          description: Postmortem list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Postmortem"
+  /postmortems/{id}:
+    get:
+      operationId: getPostmortem
+      summary: Get a single postmortem
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Postmortem detail
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Postmortem"
+  /remediation/propose:
+    post:
+      operationId: postRemediationPropose
+      summary: Generate remediation proposals from diagnostics
+      responses:
+        "200":
+          description: Remediation proposals
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RemediationProposal"
+  /remediation:
+    get:
+      operationId: getRemediationList
+      summary: List remediation proposals
+      responses:
+        "200":
+          description: Remediation proposal list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RemediationProposal"
+  /remediation/{id}/approve:
+    post:
+      operationId: postRemediationApprove
+      summary: Approve remediation proposal
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Approved proposal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RemediationProposal"
+  /remediation/{id}/execute:
+    post:
+      operationId: postRemediationExecute
+      summary: Execute approved remediation proposal
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Executed proposal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RemediationProposal"
+        "403":
+          description: Four-eyes enforcement violation in prod mode
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /remediation/{id}/reject:
+    post:
+      operationId: postRemediationReject
+      summary: Reject remediation proposal
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RemediationRejectRequest"
+      responses:
+        "200":
+          description: Rejected proposal
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RemediationProposal"
+  /memory/runbooks:
+    get:
+      operationId: getMemoryRunbooks
+      summary: Search memory runbooks
+      parameters:
+        - in: query
+          name: q
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Runbook search results
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MemoryRunbook"
+    post:
+      operationId: postMemoryRunbookCreate
+      summary: Create memory runbook
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MemoryRunbookUpsertRequest"
+      responses:
+        "201":
+          description: Runbook created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MemoryRunbook"
+  /memory/runbooks/{id}:
+    put:
+      operationId: putMemoryRunbookUpdate
+      summary: Update memory runbook
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MemoryRunbookUpsertRequest"
+      responses:
+        "200":
+          description: Runbook updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MemoryRunbook"
+  /memory/fixes:
+    get:
+      operationId: getMemoryFixes
+      summary: List recorded fix patterns
+      responses:
+        "200":
+          description: Fix pattern list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MemoryFixPattern"
+    post:
+      operationId: postMemoryFixCreate
+      summary: Record fix pattern
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MemoryFixCreateRequest"
+      responses:
+        "201":
+          description: Fix pattern recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MemoryFixPattern"
+  /risk-guard/analyze:
+    post:
+      operationId: postRiskGuardAnalyze
+      summary: Analyze manifest deployment risk
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RiskAnalyzeRequest"
+      responses:
+        "200":
+          description: Risk report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RiskReport"
   /audit:
     get:
       operationId: getAuditLog
@@ -1201,6 +1550,348 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/IncidentPrediction"
+    TimelineEntry:
+      type: object
+      required: [timestamp, kind, source, summary, resource, severity]
+      properties:
+        timestamp:
+          type: string
+        kind:
+          type: string
+          enum: [diagnostic, event, prediction, action]
+        source:
+          type: string
+        summary:
+          type: string
+        resource:
+          type: string
+        severity:
+          type: string
+    RunbookStep:
+      type: object
+      required: [id, title, description, command, status, mandatory]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        command:
+          type: string
+        status:
+          type: string
+          enum: [pending, in_progress, done, skipped]
+        mandatory:
+          type: boolean
+    Incident:
+      type: object
+      required:
+        [
+          id,
+          title,
+          severity,
+          status,
+          summary,
+          openedAt,
+          resolvedAt,
+          timeline,
+          runbook,
+          affectedResources,
+          associatedRemediationIds,
+        ]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        severity:
+          type: string
+        status:
+          type: string
+          enum: [open, resolved]
+        summary:
+          type: string
+        openedAt:
+          type: string
+        resolvedAt:
+          type: string
+        timeline:
+          type: array
+          items:
+            $ref: "#/components/schemas/TimelineEntry"
+        runbook:
+          type: array
+          items:
+            $ref: "#/components/schemas/RunbookStep"
+        affectedResources:
+          type: array
+          items:
+            type: string
+        associatedRemediationIds:
+          type: array
+          items:
+            type: string
+    IncidentStepStatusPatch:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [pending, in_progress, done, skipped]
+    RemediationProposal:
+      type: object
+      required:
+        [
+          id,
+          kind,
+          status,
+          incidentId,
+          resource,
+          namespace,
+          reason,
+          riskLevel,
+          dryRunResult,
+          executionResult,
+          createdAt,
+          updatedAt,
+          approvedBy,
+          approvedAt,
+          rejectedBy,
+          rejectedAt,
+          rejectedReason,
+          executedBy,
+          executedAt,
+        ]
+      properties:
+        id:
+          type: string
+        kind:
+          type: string
+          enum: [restart_pod, cordon_node, rollback_deployment]
+        status:
+          type: string
+        incidentId:
+          type: string
+        resource:
+          type: string
+        namespace:
+          type: string
+        reason:
+          type: string
+        riskLevel:
+          type: string
+        dryRunResult:
+          type: string
+        executionResult:
+          type: string
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+        approvedBy:
+          type: string
+        approvedAt:
+          type: string
+        rejectedBy:
+          type: string
+        rejectedAt:
+          type: string
+        rejectedReason:
+          type: string
+        executedBy:
+          type: string
+        executedAt:
+          type: string
+    RemediationRejectRequest:
+      type: object
+      required: [reason]
+      properties:
+        reason:
+          type: string
+    MemoryRunbook:
+      type: object
+      required: [id, title, tags, description, steps, usageCount, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        description:
+          type: string
+        steps:
+          type: array
+          items:
+            type: string
+        usageCount:
+          type: integer
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+    MemoryRunbookUpsertRequest:
+      type: object
+      required: [title, tags, description, steps]
+      properties:
+        title:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        description:
+          type: string
+        steps:
+          type: array
+          items:
+            type: string
+    MemoryFixPattern:
+      type: object
+      required: [id, incidentId, proposalId, title, description, resource, kind, recordedBy, recordedAt]
+      properties:
+        id:
+          type: string
+        incidentId:
+          type: string
+        proposalId:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        resource:
+          type: string
+        kind:
+          type: string
+          enum: [restart_pod, cordon_node, rollback_deployment]
+        recordedBy:
+          type: string
+        recordedAt:
+          type: string
+    MemoryFixCreateRequest:
+      type: object
+      required: [incidentId, proposalId, title, description, resource, kind]
+      properties:
+        incidentId:
+          type: string
+        proposalId:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        resource:
+          type: string
+        kind:
+          type: string
+          enum: [restart_pod, cordon_node, rollback_deployment]
+    RiskCheck:
+      type: object
+      required: [name, passed, detail, suggestion, score]
+      properties:
+        name:
+          type: string
+        passed:
+          type: boolean
+        detail:
+          type: string
+        suggestion:
+          type: string
+        score:
+          type: integer
+    RiskReport:
+      type: object
+      required: [score, level, summary, checks]
+      properties:
+        score:
+          type: integer
+        level:
+          type: string
+        summary:
+          type: string
+        checks:
+          type: array
+          items:
+            $ref: "#/components/schemas/RiskCheck"
+    RiskAnalyzeRequest:
+      type: object
+      required: [manifest]
+      properties:
+        manifest:
+          type: string
+    ResourceApplyRiskResponse:
+      type: object
+      required: [message, requiresForce, report]
+      properties:
+        message:
+          type: string
+        requiresForce:
+          type: boolean
+        report:
+          $ref: "#/components/schemas/RiskReport"
+    Postmortem:
+      type: object
+      required:
+        [
+          id,
+          incidentId,
+          incidentTitle,
+          severity,
+          openedAt,
+          resolvedAt,
+          duration,
+          generatedAt,
+          method,
+          rootCause,
+          impact,
+          prevention,
+          timelineMarkdown,
+          runbookMarkdown,
+          timeline,
+          runbook,
+        ]
+      properties:
+        id:
+          type: string
+        incidentId:
+          type: string
+        incidentTitle:
+          type: string
+        severity:
+          type: string
+        openedAt:
+          type: string
+        resolvedAt:
+          type: string
+        duration:
+          type: string
+        generatedAt:
+          type: string
+        method:
+          type: string
+          enum: [template, ai]
+        rootCause:
+          type: string
+        impact:
+          type: string
+        prevention:
+          type: string
+        timelineMarkdown:
+          type: string
+        runbookMarkdown:
+          type: string
+        timeline:
+          type: array
+          items:
+            $ref: "#/components/schemas/TimelineEntry"
+        runbook:
+          type: array
+          items:
+            $ref: "#/components/schemas/RunbookStep"
     ResourceRecord:
       type: object
       required: [id, name, status, age]

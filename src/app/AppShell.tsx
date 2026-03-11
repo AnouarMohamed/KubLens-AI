@@ -27,6 +27,11 @@ const RBAC = lazy(() => import("../views/rbac"));
 const Diagnostics = lazy(() => import("../views/diagnostics"));
 const Predictions = lazy(() => import("../views/predictions"));
 const OpsAssistant = lazy(() => import("../views/opsassistant"));
+const IncidentCommander = lazy(() => import("../views/incident"));
+const Remediation = lazy(() => import("../views/remediation"));
+const ClusterMemory = lazy(() => import("../views/memory"));
+const RiskGuard = lazy(() => import("../views/riskguard"));
+const Postmortems = lazy(() => import("../views/postmortem"));
 const ResourceCatalog = lazy(() => import("../views/resourcecatalog"));
 
 type Panel = "none" | "notifications" | "settings" | "profile";
@@ -228,6 +233,36 @@ function renderView(view: View): ReactElement {
       return (
         <Suspense fallback={<ViewLoadingState label="Loading assistant..." />}>
           <OpsAssistant />
+        </Suspense>
+      );
+    case "incidents":
+      return (
+        <Suspense fallback={<ViewLoadingState label="Loading incidents..." />}>
+          <IncidentCommander />
+        </Suspense>
+      );
+    case "remediation":
+      return (
+        <Suspense fallback={<ViewLoadingState label="Loading remediation..." />}>
+          <Remediation />
+        </Suspense>
+      );
+    case "memory":
+      return (
+        <Suspense fallback={<ViewLoadingState label="Loading cluster memory..." />}>
+          <ClusterMemory />
+        </Suspense>
+      );
+    case "riskguard":
+      return (
+        <Suspense fallback={<ViewLoadingState label="Loading risk guard..." />}>
+          <RiskGuard />
+        </Suspense>
+      );
+    case "postmortems":
+      return (
+        <Suspense fallback={<ViewLoadingState label="Loading postmortems..." />}>
+          <Postmortems />
         </Suspense>
       );
     default:

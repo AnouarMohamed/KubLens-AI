@@ -37,6 +37,8 @@ type Config struct {
 
 	Assistant AssistantConfig
 	Predictor PredictorConfig
+	Memory    MemoryConfig
+	ChatOps   ChatOpsConfig
 	Auth      AuthConfig
 	RateLimit RateLimitConfig
 	Audit     AuditConfig
@@ -71,6 +73,19 @@ type PredictorConfig struct {
 	BaseURL      string
 	Timeout      time.Duration
 	SharedSecret string
+}
+
+type MemoryConfig struct {
+	FilePath string
+}
+
+type ChatOpsConfig struct {
+	SlackWebhookURL      string
+	BaseURL              string
+	NotifyIncidents      bool
+	NotifyRemediations   bool
+	NotifyPostmortems    bool
+	NotifyAssistantFinds bool
 }
 
 type AuthConfig struct {
@@ -177,6 +192,25 @@ func Load() (Config, error) {
 		BaseURL:      strings.TrimSpace(os.Getenv("PREDICTOR_BASE_URL")),
 		Timeout:      parseSecondsAsDuration(os.Getenv("PREDICTOR_TIMEOUT_SECONDS"), 4*time.Second),
 		SharedSecret: strings.TrimSpace(os.Getenv("PREDICTOR_SHARED_SECRET")),
+	}
+
+	cfg.Memory = MemoryConfig{
+		FilePath: strings.TrimSpace(firstNonEmpty(
+			os.Getenv("MEMORY_FILE_PATH"),
+			"data/memory-runbooks.json",
+		)),
+	}
+
+	cfg.ChatOps = ChatOpsConfig{
+		SlackWebhookURL: strings.TrimSpace(os.Getenv("CHATOPS_SLACK_WEBHOOK_URL")),
+		BaseURL: strings.TrimSpace(defaultIfEmpty(
+			os.Getenv("CHATOPS_BASE_URL"),
+			"http://localhost:5173",
+		)),
+		NotifyIncidents:      parseBoolDefault(os.Getenv("CHATOPS_NOTIFY_INCIDENTS"), true),
+		NotifyRemediations:   parseBoolDefault(os.Getenv("CHATOPS_NOTIFY_REMEDIATIONS"), true),
+		NotifyPostmortems:    parseBoolDefault(os.Getenv("CHATOPS_NOTIFY_POSTMORTEMS"), true),
+		NotifyAssistantFinds: parseBoolDefault(os.Getenv("CHATOPS_NOTIFY_ASSISTANT_FINDINGS"), false),
 	}
 
 	authEnabled := parseBoolDefault(os.Getenv("AUTH_ENABLED"), p.authEnabled)

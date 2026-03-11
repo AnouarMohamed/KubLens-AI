@@ -101,7 +101,7 @@ func (s *Server) authMiddleware(next http.Handler) http.Handler {
 			writeError(w, http.StatusForbidden, "insufficient role for this action")
 			return
 		}
-		if required >= auth.RoleOperator && !s.writesOn {
+		if required >= auth.RoleOperator && !s.writesOn && auth.RequiresWriteGate(r.Method, r.URL.Path) {
 			writeError(w, http.StatusForbidden, "mutating operations are disabled for this environment")
 			return
 		}

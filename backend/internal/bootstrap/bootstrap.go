@@ -12,13 +12,19 @@ import (
 	"kubelens-backend/internal/ai"
 	"kubelens-backend/internal/alerts"
 	"kubelens-backend/internal/auth"
+	"kubelens-backend/internal/chatops"
 	"kubelens-backend/internal/cluster"
 	"kubelens-backend/internal/config"
 	"kubelens-backend/internal/events"
 	"kubelens-backend/internal/httpapi"
+	"kubelens-backend/internal/incident"
 	"kubelens-backend/internal/intelligence"
+	"kubelens-backend/internal/memory"
 	"kubelens-backend/internal/observability"
+	"kubelens-backend/internal/postmortem"
 	"kubelens-backend/internal/rag"
+	"kubelens-backend/internal/remediation"
+	"kubelens-backend/internal/riskguard"
 	"kubelens-backend/plugins"
 	"kubelens-backend/plugins/crashloop_analyzer"
 	"kubelens-backend/plugins/image_pull_analyzer"
@@ -104,6 +110,19 @@ func Build(cfg config.Config) (Result, error) {
 		Enabled:         cfg.Assistant.RAGEnabled,
 		EmbeddingClient: embeddingClient,
 	})
+	memoryStore := memory.New(cfg.Memory.FilePath, nil)
+	incidentStore := incident.NewStore(incident.DefaultStoreLimit, nil)
+	remediationStore := remediation.NewStore(remediation.DefaultStoreLimit, nil)
+	postmortemStore := postmortem.NewStore(postmortem.DefaultStoreLimit, nil)
+	riskAnalyzer := riskguard.NewAnalyzer()
+	chatopsNotifier := chatops.NewSlackNotifier(chatops.Config{
+		SlackWebhookURL:      cfg.ChatOps.SlackWebhookURL,
+		BaseURL:              cfg.ChatOps.BaseURL,
+		NotifyIncidents:      cfg.ChatOps.NotifyIncidents,
+		NotifyRemediations:   cfg.ChatOps.NotifyRemediations,
+		NotifyPostmortems:    cfg.ChatOps.NotifyPostmortems,
+		NotifyAssistantFinds: cfg.ChatOps.NotifyAssistantFinds,
+	}, nil, nil)
 	alertDispatcher := alerts.New(alerts.Config{
 		AlertmanagerURL:     cfg.Alerts.AlertmanagerURL,
 		SlackWebhookURL:     cfg.Alerts.SlackWebhookURL,
@@ -120,6 +139,12 @@ func Build(cfg config.Config) (Result, error) {
 		httpapi.WithAIProvider(aiProvider),
 		httpapi.WithAITimeout(cfg.Assistant.Timeout),
 		httpapi.WithDocsRetriever(ragger),
+		httpapi.WithMemoryStore(memoryStore),
+		httpapi.WithIncidentStore(incidentStore),
+		httpapi.WithRemediationStore(remediationStore),
+		httpapi.WithRiskAnalyzer(riskAnalyzer),
+		httpapi.WithPostmortemStore(postmortemStore),
+		httpapi.WithChatOpsNotifier(chatopsNotifier),
 		httpapi.WithPredictor(cfg.Predictor.BaseURL, cfg.Predictor.Timeout, cfg.Predictor.SharedSecret),
 		httpapi.WithAuth(toHTTPAuth(cfg.Auth)),
 		httpapi.WithRateLimit(httpapi.RateLimitConfig{

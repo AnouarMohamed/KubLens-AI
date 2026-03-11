@@ -293,6 +293,30 @@ func loadAuditEntries(path string, maxItems int) ([]model.AuditEntry, uint64, er
 func actionForRequest(method, path string) string {
 	m := strings.ToUpper(strings.TrimSpace(method))
 	switch {
+	case m == http.MethodPost && path == apiMountPrefix+"/incidents":
+		return "incident.create"
+	case m == http.MethodPatch && strings.HasPrefix(path, apiMountPrefix+"/incidents/") && strings.Contains(path, "/steps/"):
+		return "incident.step.update"
+	case m == http.MethodPost && strings.HasPrefix(path, apiMountPrefix+"/incidents/") && strings.HasSuffix(path, "/resolve"):
+		return "incident.resolve"
+	case m == http.MethodPost && strings.HasPrefix(path, apiMountPrefix+"/incidents/") && strings.HasSuffix(path, "/postmortem"):
+		return "postmortem.generate"
+	case m == http.MethodPost && path == apiMountPrefix+"/remediation/propose":
+		return "remediation.propose"
+	case m == http.MethodPost && strings.HasPrefix(path, apiMountPrefix+"/remediation/") && strings.HasSuffix(path, "/approve"):
+		return "remediation.approve"
+	case m == http.MethodPost && strings.HasPrefix(path, apiMountPrefix+"/remediation/") && strings.HasSuffix(path, "/execute"):
+		return "remediation.execute"
+	case m == http.MethodPost && strings.HasPrefix(path, apiMountPrefix+"/remediation/") && strings.HasSuffix(path, "/reject"):
+		return "remediation.reject"
+	case m == http.MethodPost && path == apiMountPrefix+"/memory/runbooks":
+		return "memory.runbook.create"
+	case m == http.MethodPut && strings.HasPrefix(path, apiMountPrefix+"/memory/runbooks/"):
+		return "memory.runbook.update"
+	case m == http.MethodPost && path == apiMountPrefix+"/memory/fixes":
+		return "memory.fix.record"
+	case m == http.MethodPost && path == apiMountPrefix+"/risk-guard/analyze":
+		return "riskguard.analyze"
 	case m == http.MethodPost && path == apiMountPrefix+"/pods":
 		return "pod.create"
 	case m == http.MethodPost && strings.HasSuffix(path, "/restart") && strings.Contains(path, apiMountPrefix+"/pods/"):

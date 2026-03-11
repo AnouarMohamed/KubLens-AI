@@ -46,12 +46,21 @@ func PermissionsForRole(role Role) []string {
 
 func RequiredRole(method, path string) Role {
 	cleanMethod := strings.ToUpper(strings.TrimSpace(method))
+	cleanPath := strings.TrimSpace(path)
 
 	switch {
 	// Intentionally viewer-level: these endpoints do not mutate cluster state.
-	case cleanMethod == http.MethodPost && path == "/api/assistant":
+	case cleanMethod == http.MethodPost && cleanPath == "/api/assistant":
 		return RoleViewer
-	case cleanMethod == http.MethodPost && path == "/api/clusters/select":
+	case cleanMethod == http.MethodPost && cleanPath == "/api/clusters/select":
+		return RoleViewer
+	case cleanMethod == http.MethodPost && cleanPath == "/api/incidents":
+		return RoleViewer
+	case cleanMethod == http.MethodPost && cleanPath == "/api/remediation/propose":
+		return RoleViewer
+	case cleanMethod == http.MethodPost && cleanPath == "/api/risk-guard/analyze":
+		return RoleViewer
+	case cleanMethod == http.MethodPost && strings.HasPrefix(cleanPath, "/api/remediation/") && strings.HasSuffix(cleanPath, "/reject"):
 		return RoleViewer
 	case cleanMethod == http.MethodGet || cleanMethod == http.MethodHead:
 		return RoleViewer
@@ -59,5 +68,36 @@ func RequiredRole(method, path string) Role {
 		return RoleOperator
 	default:
 		return RoleViewer
+	}
+}
+
+func RequiresWriteGate(method, path string) bool {
+	cleanMethod := strings.ToUpper(strings.TrimSpace(method))
+	if cleanMethod != http.MethodPost && cleanMethod != http.MethodPut && cleanMethod != http.MethodPatch && cleanMethod != http.MethodDelete {
+		return false
+	}
+
+	cleanPath := strings.TrimSpace(path)
+	switch {
+	case cleanMethod == http.MethodPost && cleanPath == "/api/pods":
+		return true
+	case cleanMethod == http.MethodDelete && strings.HasPrefix(cleanPath, "/api/pods/"):
+		return true
+	case cleanMethod == http.MethodPost && strings.HasPrefix(cleanPath, "/api/pods/") && strings.HasSuffix(cleanPath, "/restart"):
+		return true
+	case cleanMethod == http.MethodPost && strings.HasPrefix(cleanPath, "/api/nodes/") && strings.HasSuffix(cleanPath, "/cordon"):
+		return true
+	case cleanMethod == http.MethodPut && strings.HasPrefix(cleanPath, "/api/resources/") && strings.HasSuffix(cleanPath, "/yaml"):
+		return true
+	case cleanMethod == http.MethodPost && strings.HasPrefix(cleanPath, "/api/resources/") && strings.HasSuffix(cleanPath, "/scale"):
+		return true
+	case cleanMethod == http.MethodPost && strings.HasPrefix(cleanPath, "/api/resources/") && strings.HasSuffix(cleanPath, "/restart"):
+		return true
+	case cleanMethod == http.MethodPost && strings.HasPrefix(cleanPath, "/api/resources/") && strings.HasSuffix(cleanPath, "/rollback"):
+		return true
+	case cleanMethod == http.MethodPost && strings.HasPrefix(cleanPath, "/api/remediation/") && strings.HasSuffix(cleanPath, "/execute"):
+		return true
+	default:
+		return false
 	}
 }

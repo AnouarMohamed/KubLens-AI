@@ -62,6 +62,11 @@ const VIEW_ICON: Record<View, LucideIcon> = {
   audit: ClipboardList,
   predictions: Activity,
   diagnostics: ClipboardList,
+  incidents: Activity,
+  remediation: Rocket,
+  memory: Archive,
+  riskguard: Shield,
+  postmortems: FileText,
   assistant: Bot,
 };
 
