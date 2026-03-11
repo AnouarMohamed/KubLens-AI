@@ -139,12 +139,7 @@ export function AppShell() {
     }
 
     const timeoutMinutes = settings.inactivityLogoutMinutes;
-    if (
-      authLoading ||
-      timeoutMinutes <= 0 ||
-      !authSession?.enabled ||
-      !authSession.authenticated
-    ) {
+    if (authLoading || timeoutMinutes <= 0 || !authSession?.enabled || !authSession.authenticated) {
       return;
     }
 
@@ -173,12 +168,7 @@ export function AppShell() {
       inactivityTimerRef.current = window.setTimeout(onTimeout, timeoutMs);
     };
 
-    const activityEvents: Array<keyof WindowEventMap> = [
-      "mousedown",
-      "keydown",
-      "touchstart",
-      "scroll",
-    ];
+    const activityEvents: Array<keyof WindowEventMap> = ["mousedown", "keydown", "touchstart", "scroll"];
     for (const eventName of activityEvents) {
       window.addEventListener(eventName, resetTimer, { passive: true });
     }

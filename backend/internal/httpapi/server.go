@@ -50,7 +50,7 @@ type Server struct {
 	metrics      *requestMetrics
 	runtime      model.RuntimeStatus
 	auth         authRuntime
-	authLogin    authLoginProtection
+	authLogin    *authLoginProtection
 	limiter      rateLimiter
 	writesOn     bool
 	anonPerms    []string

@@ -447,4 +447,3 @@ Full details: [SECURITY.md](docs/SECURITY.md) | [THREAT_MODEL.md](docs/THREAT_MO
 ## Changelog
 
 [CHANGELOG.md](CHANGELOG.md)
-

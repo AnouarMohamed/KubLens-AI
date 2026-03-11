@@ -62,6 +62,9 @@ func WithAuth(config AuthConfig) Option {
 
 func WithAuthLoginProtection(config AuthLoginProtectionConfig) Option {
 	return func(s *Server) {
+		if s.authLogin == nil {
+			s.authLogin = newAuthLoginProtection(defaultAuthLoginProtectionConfig())
+		}
 		s.authLogin.configure(config)
 	}
 }
@@ -85,8 +88,8 @@ func defaultAuthLoginProtectionConfig() AuthLoginProtectionConfig {
 	}
 }
 
-func newAuthLoginProtection(config AuthLoginProtectionConfig) authLoginProtection {
-	out := authLoginProtection{}
+func newAuthLoginProtection(config AuthLoginProtectionConfig) *authLoginProtection {
+	out := &authLoginProtection{}
 	out.configure(config)
 	return out
 }
@@ -320,11 +323,13 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	clientIP := sanitizeClientIP(r.RemoteAddr)
-	if allowed, retryAfter := s.authLogin.allow(s.now(), clientIP); !allowed {
-		s.recordAuthFailure(r, http.StatusTooManyRequests, "login_rate_limited")
-		setRetryAfterHeader(w, retryAfter)
-		writeError(w, http.StatusTooManyRequests, "too many failed login attempts; try again later")
-		return
+	if s.authLogin != nil {
+		if allowed, retryAfter := s.authLogin.allow(s.now(), clientIP); !allowed {
+			s.recordAuthFailure(r, http.StatusTooManyRequests, "login_rate_limited")
+			setRetryAfterHeader(w, retryAfter)
+			writeError(w, http.StatusTooManyRequests, "too many failed login attempts; try again later")
+			return
+		}
 	}
 
 	var req authLoginRequest
@@ -345,7 +350,11 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	p, err := s.auth.authenticator.VerifyToken(r.Context(), token)
 	if err != nil {
-		locked, retryAfter := s.authLogin.registerFailure(s.now(), clientIP)
+		locked := false
+		var retryAfter time.Duration
+		if s.authLogin != nil {
+			locked, retryAfter = s.authLogin.registerFailure(s.now(), clientIP)
+		}
 		s.recordAuthFailure(r, http.StatusUnauthorized, "login_failed")
 		if locked {
 			s.recordAuthFailure(r, http.StatusTooManyRequests, "login_rate_limited")
@@ -357,7 +366,9 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.authLogin.registerSuccess(clientIP)
+	if s.authLogin != nil {
+		s.authLogin.registerSuccess(clientIP)
+	}
 	s.writeAuthCookie(w, r, token)
 	writeJSON(w, http.StatusOK, model.AuthSession{
 		Enabled:       true,
