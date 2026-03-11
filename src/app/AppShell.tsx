@@ -46,7 +46,7 @@ export function AppShell() {
     refresh: refreshSession,
   } = useAuthSession();
   const { currentView, setCurrentView } = useCurrentView();
-  const { settings, setSettings } = useUserSettings();
+  const { settings, setSettings, resetSettings } = useUserSettings();
   const [panel, setPanel] = useState<Panel>("none");
   const [authToken, setAuthToken] = useState("");
   const [authMessage, setAuthMessage] = useState<string | null>(null);
@@ -55,11 +55,23 @@ export function AppShell() {
   const canRead = can("read");
   const runtime = useRuntimeStatus({ authLoading, canRead });
   const { clusterContexts, setClusterContexts } = useClusterContexts({ authLoading, canRead });
-  const { notifications, notificationError } = useNotifications({
+  const {
+    notifications,
+    notificationError,
+    notificationStatus,
+    notificationLastUpdatedAt,
+    notificationUnreadCount,
+    markNotificationsRead,
+    clearNotifications,
+  } = useNotifications({
     panel,
     authLoading,
     canRead,
     canStream: can("stream"),
+    autoRefreshSeconds: settings.autoRefreshSeconds,
+    notificationLimit: settings.notificationLimit,
+    liveNotificationsEnabled: settings.liveNotifications,
+    desktopNotificationsEnabled: settings.desktopNotifications,
   });
 
   const { message: transientMessage, showMessage } = useTransientMessage();
@@ -129,6 +141,8 @@ export function AppShell() {
             onToggleNotifications={() => setPanel((value) => (value === "notifications" ? "none" : "notifications"))}
             onToggleSettings={() => setPanel((value) => (value === "settings" ? "none" : "settings"))}
             onToggleProfile={() => setPanel((value) => (value === "profile" ? "none" : "profile"))}
+            notificationStatus={notificationStatus}
+            notificationUnreadCount={notificationUnreadCount}
             searchRef={searchRef}
           />
 
@@ -148,6 +162,8 @@ export function AppShell() {
             notificationError={notificationError}
             settings={settings}
             setSettings={setSettings}
+            resetSettings={resetSettings}
+            runtime={runtime}
             authSession={authSession}
             authLoading={authLoading}
             authToken={authToken}
@@ -158,6 +174,15 @@ export function AppShell() {
             logout={logout}
             refreshSession={refreshSession}
             currentCommand={currentViewMeta.kubectlCommand}
+            notificationStatus={notificationStatus}
+            notificationLastUpdatedAt={notificationLastUpdatedAt}
+            notificationUnreadCount={notificationUnreadCount}
+            markNotificationsRead={markNotificationsRead}
+            clearNotifications={clearNotifications}
+            openEventsView={() => {
+              setCurrentView("events");
+              setPanel("none");
+            }}
           />
         </div>
       </main>

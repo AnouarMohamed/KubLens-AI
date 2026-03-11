@@ -2,6 +2,7 @@ import { ArrowRight, Bell, Settings, User } from "lucide-react";
 import type { RefObject } from "react";
 import type { ClusterContextList, RuntimeStatus } from "../../types";
 import type { ViewItem } from "../../features/viewCatalog";
+import type { NotificationStatus } from "../hooks/useNotifications";
 
 interface HeaderBarProps {
   currentViewMeta: ViewItem;
@@ -15,6 +16,8 @@ interface HeaderBarProps {
   onToggleNotifications: () => void;
   onToggleSettings: () => void;
   onToggleProfile: () => void;
+  notificationStatus: NotificationStatus;
+  notificationUnreadCount: number;
   searchRef: RefObject<HTMLInputElement | null>;
 }
 
@@ -30,9 +33,12 @@ export function HeaderBar({
   onToggleNotifications,
   onToggleSettings,
   onToggleProfile,
+  notificationStatus,
+  notificationUnreadCount,
   searchRef,
 }: HeaderBarProps) {
   const modePrompt = runtime ? `[${runtime.mode}:${runtime.isRealCluster ? "real" : "mock"}]` : null;
+  const unreadLabel = notificationUnreadCount > 99 ? "99+" : String(notificationUnreadCount);
 
   return (
     <header className="h-16 border-b border-zinc-700 flex items-center justify-between px-6 bg-zinc-900">
@@ -86,8 +92,18 @@ export function HeaderBar({
         <button onClick={onSearchSubmit} className="icon-btn" aria-label="Execute search">
           <ArrowRight size={16} />
         </button>
-        <button onClick={onToggleNotifications} className="icon-btn" aria-label="Notifications">
+        <button onClick={onToggleNotifications} className="icon-btn relative" aria-label="Notifications">
           <Bell size={16} />
+          {notificationUnreadCount > 0 && (
+            <span className="absolute -right-1 -top-1 min-w-4 rounded-full border border-zinc-700 bg-zinc-800 px-1 text-[10px] leading-4 text-zinc-100">
+              {unreadLabel}
+            </span>
+          )}
+          {notificationStatus !== "idle" && (
+            <span
+              className={`absolute bottom-0 right-0 h-1.5 w-1.5 rounded-full ${notificationDotClass(notificationStatus)}`}
+            />
+          )}
         </button>
         <button onClick={onToggleSettings} className="icon-btn" aria-label="Settings">
           <Settings size={16} />
@@ -98,4 +114,19 @@ export function HeaderBar({
       </div>
     </header>
   );
+}
+
+function notificationDotClass(status: NotificationStatus): string {
+  switch (status) {
+    case "live":
+      return "bg-[var(--green)]";
+    case "reconnecting":
+      return "bg-[var(--amber)]";
+    case "blocked":
+      return "bg-[var(--red)]";
+    case "snapshot":
+      return "bg-[var(--blue)]";
+    default:
+      return "bg-zinc-500";
+  }
 }
