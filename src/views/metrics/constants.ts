@@ -1,0 +1,9 @@
+export const DOCKER_BLUE = "#00d4a8";
+export const CHART_BLUE = "#3b82f6";
+export const CHART_GREEN = "#34c759";
+export const CHART_AMBER = "#eab308";
+export const CHART_MAGENTA = "#ff4444";
+export const CHART_SLATE = "#a9b4cc";
+export const CHART_COLORS = [CHART_BLUE, CHART_GREEN, CHART_AMBER, CHART_MAGENTA, CHART_SLATE, DOCKER_BLUE];
+export const TOOLTIP_STYLE = { background: "#ffffff", border: "1px solid #d8dde6", color: "#1f2937" };
+export const GRID_STROKE = "#d8dde6";
