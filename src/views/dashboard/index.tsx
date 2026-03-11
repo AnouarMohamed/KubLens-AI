@@ -521,7 +521,7 @@ function PodLifecycleMix({ data }: { data: Array<{ name: string; value: number; 
   const dominant = [...rows].sort((a, b) => b.value - a.value)[0];
 
   return (
-    <div className="h-[320px] flex flex-col py-1">
+    <div className="h-[346px] flex flex-col py-1">
       <div className="rounded-md border border-zinc-700 bg-zinc-900/60 px-3 py-2">
         <div className="flex items-center justify-between gap-3">
           <p className="text-[10px] font-mono uppercase tracking-[0.15em] text-[#555555]">Live Distribution</p>

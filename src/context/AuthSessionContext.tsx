@@ -9,9 +9,9 @@ interface AuthSessionContextValue {
   isLoading: boolean;
   error: string | null;
   can: (permission: Permission) => boolean;
-  login: (token: string) => Promise<void>;
+  login: (token: string) => Promise<AuthSession>;
   logout: () => Promise<void>;
-  refresh: () => Promise<void>;
+  refresh: () => Promise<AuthSession | null>;
 }
 
 const AuthSessionContext = createContext<AuthSessionContextValue | null>(null);
@@ -27,9 +27,11 @@ export function AuthSessionProvider({ children }: { children: React.ReactNode })
       const response = await api.getAuthSession();
       setSession(response);
       setError(null);
+      return response;
     } catch (err) {
       setSession(null);
       setError(err instanceof Error ? err.message : "Failed to read auth session");
+      return null;
     } finally {
       setIsLoading(false);
     }
@@ -45,6 +47,7 @@ export function AuthSessionProvider({ children }: { children: React.ReactNode })
       const response = await api.login(token);
       setSession(response);
       setError(null);
+      return response;
     } catch (err) {
       setSession(null);
       throw err;

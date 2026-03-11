@@ -4,9 +4,14 @@ import { useAssistantChat } from "./hooks/useAssistantChat";
 import type { AssistantMessage as Message } from "./types";
 import { api } from "../../lib/api";
 
+type AssistantIntent = "triage" | "remediate" | "verify";
+
+const ASSISTANT_DRAFT_KEY = "k8s-ops.assistant.draft.v1";
+
 export default function OpsAssistant() {
-  const { messages, isLoading, lastAssistant, suggestionPool, send, clear } = useAssistantChat();
+  const { messages, isLoading, lastAssistant, suggestionPool, diagnosticPrompts, send, clear } = useAssistantChat();
   const [input, setInput] = useState("");
+  const [intentMode, setIntentMode] = useState<AssistantIntent>("triage");
   const [copiedMessageID, setCopiedMessageID] = useState<string | null>(null);
   const [referenceFeedback, setReferenceFeedback] = useState<Record<string, "helpful" | "not_helpful" | "pending">>({});
   const [namespaces, setNamespaces] = useState<string[]>([]);
@@ -18,6 +23,18 @@ export default function OpsAssistant() {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages, isLoading]);
+
+  useEffect(() => {
+    const saved = window.localStorage.getItem(ASSISTANT_DRAFT_KEY);
+    if (!saved) {
+      return;
+    }
+    setInput(saved);
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem(ASSISTANT_DRAFT_KEY, input);
+  }, [input]);
 
   useEffect(() => {
     let cancelled = false;
@@ -45,16 +62,33 @@ export default function OpsAssistant() {
         prompt: buildFollowUpPrompt("Explain this in simpler terms", lastAssistant?.content),
       },
       {
-        label: "Step-by-Step Runbook",
+        label: "Step-by-step runbook",
         prompt: buildFollowUpPrompt("Give me a step-by-step runbook", lastAssistant?.content),
       },
       {
-        label: "kubectl Commands",
+        label: "kubectl only",
         prompt: buildFollowUpPrompt("Give only kubectl commands to verify and fix", lastAssistant?.content),
+      },
+      {
+        label: "Rollback and blast radius",
+        prompt: buildFollowUpPrompt("Include rollback steps and blast radius assessment", lastAssistant?.content),
       },
     ],
     [lastAssistant?.content],
   );
+
+  const decisionPrompts = useMemo(() => {
+    const prompts: string[] = [];
+    if ((lastAssistant?.resources?.length ?? 0) > 0) {
+      prompts.push(`Create an operator checklist for ${lastAssistant?.resources?.[0]}`);
+    }
+    if ((lastAssistant?.references?.length ?? 0) > 0) {
+      prompts.push("Summarize evidence quality from referenced docs before acting");
+    }
+    prompts.push("Which action gives the highest risk reduction in the next 10 minutes?");
+    prompts.push("What should I monitor right after applying the fix?");
+    return prompts.slice(0, 4);
+  }, [lastAssistant?.references?.length, lastAssistant?.resources]);
 
   const submit = async (promptOverride?: string) => {
     const content = (promptOverride ?? input).trim();
@@ -62,7 +96,8 @@ export default function OpsAssistant() {
       return;
     }
     setInput("");
-    await send(content, selectedNamespace === "All" ? undefined : selectedNamespace);
+    const preparedPrompt = applyIntentToPrompt(content, intentMode);
+    await send(preparedPrompt, selectedNamespace === "All" ? undefined : selectedNamespace);
   };
 
   const copyMessage = async (message: Message) => {
@@ -100,19 +135,21 @@ export default function OpsAssistant() {
     }
   };
 
+  const assistantReplies = messages.filter((m) => m.role === "assistant").length;
+
   return (
-    <div className="h-[calc(100vh-140px)] app-shell overflow-hidden grid grid-cols-1 xl:grid-cols-[1fr_320px]">
+    <div className="h-[calc(100vh-140px)] app-shell overflow-hidden grid grid-cols-1 xl:grid-cols-[1fr_340px]">
       <section className="flex flex-col overflow-hidden border-r border-zinc-700">
         <header className="border-b border-zinc-700 px-5 py-4 bg-zinc-900/95">
           <div className="flex items-center justify-between gap-4">
             <div>
               <h3 className="text-base font-semibold text-zinc-100">Ops Assistant</h3>
               <p className="text-xs text-zinc-500 mt-0.5">
-                Interactive debug assistant with diagnostics + documentation grounding
+                Intent-guided assistant for triage, safe remediation, and post-fix verification.
               </p>
             </div>
             <div className="flex items-center gap-2">
-              <StatusPill label="Mode" value="Interactive" />
+              <StatusPill label="Mode" value={intentMode} />
               <StatusPill label="Messages" value={String(messages.length)} />
               <select
                 value={selectedNamespace}
@@ -130,6 +167,7 @@ export default function OpsAssistant() {
               <button
                 onClick={() => {
                   clear();
+                  setInput("");
                   setReferenceFeedback({});
                 }}
                 className="btn-sm"
@@ -141,6 +179,21 @@ export default function OpsAssistant() {
         </header>
 
         <section className="border-b border-zinc-700 px-5 py-3 bg-zinc-900/80">
+          <p className="text-[11px] uppercase tracking-wide text-zinc-500 font-semibold">Operator intent</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {intentOptions.map((option) => (
+              <button
+                key={option.value}
+                onClick={() => setIntentMode(option.value)}
+                className={`btn-sm ${intentMode === option.value ? "border-[var(--accent)] bg-[var(--accent-dim)] text-zinc-100" : ""}`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </section>
+
+        <section className="border-b border-zinc-700 px-5 py-3 bg-zinc-900/80">
           <p className="text-[11px] uppercase tracking-wide text-zinc-500 font-semibold">Quick prompts</p>
           <div className="mt-2 flex flex-wrap gap-2">
             {suggestionPool.map((suggestion) => (
@@ -148,6 +201,17 @@ export default function OpsAssistant() {
                 {suggestion}
               </button>
             ))}
+          </div>
+          <p className="mt-3 text-[11px] uppercase tracking-wide text-zinc-500 font-semibold">High-signal prompts</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {diagnosticPrompts.map((prompt) => (
+              <button key={prompt} onClick={() => void submit(prompt)} className="btn-sm bg-zinc-800/60">
+                {prompt}
+              </button>
+            ))}
+            {diagnosticPrompts.length === 0 && (
+              <span className="text-xs text-zinc-500">No diagnostic prompt pack yet.</span>
+            )}
           </div>
         </section>
 
@@ -179,7 +243,7 @@ export default function OpsAssistant() {
               value={input}
               onChange={(event) => setInput(event.target.value)}
               onKeyDown={(event) => {
-                if (event.key === "Enter" && !event.shiftKey) {
+                if ((event.key === "Enter" && !event.shiftKey) || (event.key === "Enter" && event.ctrlKey)) {
                   event.preventDefault();
                   void submit();
                 }
@@ -191,7 +255,9 @@ export default function OpsAssistant() {
               Send
             </button>
           </div>
-          <p className="mt-2 text-[11px] text-zinc-500">Press Enter to send, Shift+Enter for newline.</p>
+          <p className="mt-2 text-[11px] text-zinc-500">
+            Enter to send. Shift+Enter for newline. Current mode: {intentMode}.
+          </p>
         </footer>
       </section>
 
@@ -213,11 +279,28 @@ export default function OpsAssistant() {
         </div>
 
         <div className="px-4 py-4 border-b border-zinc-700">
+          <p className="text-xs uppercase tracking-wide text-zinc-500 font-semibold">Decision support</p>
+          <div className="mt-3 space-y-2">
+            {decisionPrompts.map((prompt) => (
+              <button
+                key={prompt}
+                onClick={() => void submit(prompt)}
+                disabled={isLoading}
+                className="w-full rounded-md border border-zinc-700 bg-zinc-800/60 px-2 py-1.5 text-left text-xs text-zinc-300 hover:bg-zinc-800 disabled:opacity-50"
+              >
+                {prompt}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="px-4 py-4 border-b border-zinc-700">
           <p className="text-xs uppercase tracking-wide text-zinc-500 font-semibold">Session</p>
           <div className="mt-3 space-y-2 text-xs text-zinc-300">
-            <InfoRow label="Assistant replies" value={String(messages.filter((m) => m.role === "assistant").length)} />
+            <InfoRow label="Assistant replies" value={String(assistantReplies)} />
             <InfoRow label="Pending" value={isLoading ? "Yes" : "No"} />
             <InfoRow label="References" value={String(lastAssistant?.references?.length ?? 0)} />
+            <InfoRow label="Namespace" value={selectedNamespace} />
           </div>
         </div>
 
@@ -243,6 +326,21 @@ export default function OpsAssistant() {
   );
 }
 
+function applyIntentToPrompt(prompt: string, intent: AssistantIntent): string {
+  const trimmed = prompt.trim();
+  if (trimmed === "") {
+    return trimmed;
+  }
+
+  if (intent === "triage") {
+    return `Triage mode: prioritize probable root causes, confidence level, and immediate next checks.\n\n${trimmed}`;
+  }
+  if (intent === "remediate") {
+    return `Remediation mode: provide safest fix path first, include rollback plan and risk notes.\n\n${trimmed}`;
+  }
+  return `Verification mode: provide post-change validation checks, expected signals, and watchouts.\n\n${trimmed}`;
+}
+
 function buildFollowUpPrompt(prefix: string, answer?: string): string {
   const trimmed = (answer ?? "").trim();
   if (trimmed === "") {
@@ -261,6 +359,12 @@ function toDiagnosePrompt(resource: string): string {
   const podName = trimmed.includes("/") ? (trimmed.split("/").pop() ?? trimmed) : trimmed;
   return `Diagnose ${podName}`;
 }
+
+const intentOptions: Array<{ value: AssistantIntent; label: string }> = [
+  { value: "triage", label: "Triage" },
+  { value: "remediate", label: "Remediate" },
+  { value: "verify", label: "Verify" },
+];
 
 function StatusPill({ label, value }: { label: string; value: string }) {
   return (

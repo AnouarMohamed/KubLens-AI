@@ -20,6 +20,7 @@ const initialAssistantMessageTemplate: Omit<AssistantMessage, "id" | "timestamp"
 export function useAssistantChat() {
   const [messages, setMessages] = useState<AssistantMessage[]>([createAssistantIntroMessage()]);
   const [isLoading, setIsLoading] = useState(false);
+  const [diagnosticPrompts, setDiagnosticPrompts] = useState<string[]>([]);
   const diagnosticsLoaded = useRef(false);
 
   useEffect(() => {
@@ -40,6 +41,7 @@ export function useAssistantChat() {
           return;
         }
         setMessages((state) => [...state, intro]);
+        setDiagnosticPrompts(buildDiagnosticPrompts(diagnostics));
       } catch {
         // Ignore diagnostics preload failures.
       }
@@ -116,6 +118,7 @@ export function useAssistantChat() {
     isLoading,
     lastAssistant,
     suggestionPool,
+    diagnosticPrompts,
     send,
     clear,
   };
@@ -171,6 +174,20 @@ function formatIssueLine(issue: DiagnosticIssue): string {
   const resource = issue.resource ? ` (${issue.resource})` : "";
   const evidence = (issue.evidence ?? []).join(" | ");
   return `- ${issue.message}${resource}: ${evidence || "no evidence captured yet"}`;
+}
+
+function buildDiagnosticPrompts(diagnostics: DiagnosticsResult): string[] {
+  const issuePrompts: string[] = [];
+  for (const issue of diagnostics.issues.slice(0, 5)) {
+    const resourcePrompt = issue.resource?.trim()
+      ? `Diagnose ${issue.resource}`
+      : `Investigate issue: ${issue.message}`;
+    issuePrompts.push(resourcePrompt);
+    issuePrompts.push(`How do I safely fix: ${issue.message}`);
+  }
+  issuePrompts.push("What is the safest next change?");
+  issuePrompts.push("Give me a rollback-first runbook.");
+  return dedupeStrings(issuePrompts).slice(0, 8);
 }
 
 function dedupeStrings(values: readonly string[]): string[] {

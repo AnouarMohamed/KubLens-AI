@@ -27,9 +27,9 @@ interface WorkspacePanelsProps {
   setAuthToken: (value: string) => void;
   authMessage: string | null;
   onAuthMessage: (value: string | null) => void;
-  login: (token: string) => Promise<void>;
+  login: (token: string) => Promise<AuthSession>;
   logout: () => Promise<void>;
-  refreshSession: () => Promise<void>;
+  refreshSession: () => Promise<AuthSession | null>;
   currentCommand: string;
 }
 
@@ -435,16 +435,39 @@ export function WorkspacePanels({
                   {authTokenVisible ? "Hide" : "Show"}
                 </button>
               </div>
+              <p className="mt-2 text-[11px] text-zinc-500">
+                Paste the raw token value. If you paste <code>Bearer &lt;token&gt;</code>, it will be normalized.
+              </p>
             </label>
 
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <button
                 onClick={async () => {
+                  if (!authSession?.enabled) {
+                    onAuthMessage("Auth is disabled in this environment. Sign-in is not required.");
+                    return;
+                  }
+                  const sanitizedToken = sanitizeAuthTokenInput(authToken);
+                  if (sanitizedToken === "") {
+                    onAuthMessage("Token is required.");
+                    return;
+                  }
                   try {
-                    await login(authToken);
-                    await refreshSession();
+                    const loginSession = await login(sanitizedToken);
+                    const refreshed = await refreshSession();
+                    const finalSession = refreshed ?? loginSession;
                     setAuthToken("");
-                    onAuthMessage("Session authenticated.");
+                    if (finalSession.enabled && !finalSession.authenticated) {
+                      onAuthMessage(
+                        "Token was accepted but session is still unauthenticated. Check cookie policy and ensure UI/API share the same origin.",
+                      );
+                      return;
+                    }
+                    onAuthMessage(
+                      finalSession.user?.name
+                        ? `Session authenticated as ${finalSession.user.name}.`
+                        : "Session authenticated.",
+                    );
                   } catch (err) {
                     onAuthMessage(err instanceof Error ? err.message : "Failed to authenticate");
                   }
@@ -782,4 +805,13 @@ async function copyText(value: string): Promise<void> {
     return Promise.reject(new Error("clipboard unavailable"));
   }
   await navigator.clipboard.writeText(value);
+}
+
+function sanitizeAuthTokenInput(raw: string): string {
+  const trimmed = raw.trim();
+  const bearerPrefixPattern = /^bearer\s+/i;
+  if (bearerPrefixPattern.test(trimmed)) {
+    return trimmed.replace(bearerPrefixPattern, "").trim();
+  }
+  return trimmed;
 }
