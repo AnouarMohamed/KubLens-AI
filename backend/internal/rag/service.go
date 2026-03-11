@@ -12,6 +12,7 @@ import (
 	"math"
 	"net/http"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -32,6 +33,7 @@ const (
 	defaultChunkOverlap    = 140
 	defaultOllamaBaseURL   = "http://localhost:11434"
 	defaultEmbeddingModel  = "nomic-embed-text"
+	minNormalizedLineLen   = 12
 )
 
 var (
@@ -46,6 +48,21 @@ var (
 		"are": {}, "was": {}, "were": {}, "have": {}, "has": {}, "had": {}, "not": {}, "you": {}, "but": {},
 		"can": {}, "will": {}, "all": {}, "its": {}, "into": {}, "out": {}, "how": {}, "why": {}, "what": {},
 		"when": {}, "where": {}, "show": {}, "help": {}, "use": {}, "using": {}, "about": {}, "then": {},
+		"kubernetes": {}, "cluster": {}, "issue": {}, "issues": {}, "please": {}, "need": {}, "check": {},
+	}
+	queryExpansions = map[string][]string{
+		"oom":              {"oomkilled", "memory", "limit"},
+		"oomkilled":        {"oom", "memory", "limit"},
+		"crashloop":        {"crashloopbackoff", "restart", "probe"},
+		"crashloopbackoff": {"crashloop", "restart", "probe"},
+		"imagepullbackoff": {"image", "pull", "registry", "secret", "tag"},
+		"imagepull":        {"imagepullbackoff", "registry", "secret"},
+		"pending":          {"scheduling", "unschedulable", "quota", "taint", "affinity"},
+		"unschedulable":    {"pending", "scheduling", "taint", "affinity"},
+		"notready":         {"node", "pressure", "kubelet"},
+		"evicted":          {"pressure", "node", "eviction"},
+		"probe":            {"liveness", "readiness", "startup"},
+		"forbidden":        {"rbac", "permission", "serviceaccount"},
 	}
 )
 
@@ -93,6 +110,12 @@ type chunk struct {
 	text      string
 	textLower string
 	tokenSet  map[string]struct{}
+}
+
+type retrievalQuery struct {
+	rawLower      string
+	terms         []string
+	expandedTerms []string
 }
 
 func NewService(cfg Config) *Service {
@@ -162,13 +185,12 @@ func (s *Service) Retrieve(ctx context.Context, query string, limit int) []model
 	}
 	s.warnIfStaleIndex(expiresAt, indexedAt)
 
-	if refs, ok := s.retrieveWithEmbeddings(ctx, query, chunks, embeddings, limit); ok {
-		return refs
+	parsed := buildRetrievalQuery(query)
+	if len(parsed.expandedTerms) == 0 {
+		return nil
 	}
 
-	queryTerms := tokenize(query)
-	queryLower := strings.ToLower(query)
-	candidates := candidateIndexes(queryTerms, tokenIdx, len(chunks))
+	candidates := candidateIndexes(parsed.expandedTerms, tokenIdx, len(chunks))
 	if len(candidates) == 0 {
 		candidates = make([]int, len(chunks))
 		for i := range chunks {
@@ -176,26 +198,90 @@ func (s *Service) Retrieve(ctx context.Context, query string, limit int) []model
 		}
 	}
 
-	type scored struct {
-		chunk chunk
-		score float64
-	}
-
-	ranked := make([]scored, 0, len(candidates))
+	lexicalScores := make(map[int]float64, len(candidates))
+	maxLexical := 0.0
 	for _, index := range candidates {
-		item := chunks[index]
-		score := matchScore(item, queryLower, queryTerms)
+		score := matchScore(chunks[index], parsed.rawLower, parsed.terms, parsed.expandedTerms)
 		if score <= 0 {
 			continue
 		}
-		ranked = append(ranked, scored{chunk: item, score: score})
+		lexicalScores[index] = score
+		if score > maxLexical {
+			maxLexical = score
+		}
+	}
+
+	semanticScores, hasSemantic := s.semanticScores(ctx, query, candidates, embeddings)
+
+	combinedIndexes := make(map[int]struct{}, len(lexicalScores)+len(semanticScores))
+	for index := range lexicalScores {
+		combinedIndexes[index] = struct{}{}
+	}
+	for index := range semanticScores {
+		combinedIndexes[index] = struct{}{}
+	}
+	if len(combinedIndexes) == 0 {
+		return nil
+	}
+
+	type scored struct {
+		index         int
+		total         float64
+		lexicalNorm   float64
+		semanticNorm  float64
+		queryCoverage float64
+	}
+
+	ranked := make([]scored, 0, len(combinedIndexes))
+	for index := range combinedIndexes {
+		lexical := lexicalScores[index]
+		lexicalNorm := 0.0
+		if maxLexical > 0 {
+			lexicalNorm = lexical / maxLexical
+		}
+
+		semanticNorm := 0.0
+		if hasSemantic {
+			semanticNorm = normalizeSemanticScore(semanticScores[index])
+		}
+
+		coverage := queryCoverage(chunks[index], parsed.terms)
+		total := lexicalNorm*0.68 + semanticNorm*0.27 + coverage*0.05
+
+		if len(parsed.terms) > 0 && lexical <= 0 {
+			if !hasSemantic || semanticNorm < 0.62 {
+				continue
+			}
+			total *= 0.9
+		}
+		if total <= 0 {
+			continue
+		}
+		ranked = append(ranked, scored{
+			index:         index,
+			total:         total,
+			lexicalNorm:   lexicalNorm,
+			semanticNorm:  semanticNorm,
+			queryCoverage: coverage,
+		})
+	}
+	if len(ranked) == 0 {
+		return nil
 	}
 
 	sort.SliceStable(ranked, func(i, j int) bool {
-		if ranked[i].score == ranked[j].score {
-			return ranked[i].chunk.title < ranked[j].chunk.title
+		if ranked[i].total == ranked[j].total {
+			if ranked[i].lexicalNorm == ranked[j].lexicalNorm {
+				if ranked[i].semanticNorm == ranked[j].semanticNorm {
+					left := chunks[ranked[i].index]
+					right := chunks[ranked[j].index]
+					return left.title < right.title
+				}
+				return ranked[i].semanticNorm > ranked[j].semanticNorm
+			}
+			return ranked[i].lexicalNorm > ranked[j].lexicalNorm
 		}
-		return ranked[i].score > ranked[j].score
+		return ranked[i].total > ranked[j].total
 	})
 
 	refs := make([]model.DocumentationReference, 0, limit)
@@ -204,15 +290,20 @@ func (s *Service) Retrieve(ctx context.Context, query string, limit int) []model
 		if len(refs) >= limit {
 			break
 		}
-		if _, exists := seenURL[item.chunk.url]; exists {
+		chunk := chunks[item.index]
+		if _, exists := seenURL[chunk.url]; exists {
 			continue
 		}
-		seenURL[item.chunk.url] = struct{}{}
+		seenURL[chunk.url] = struct{}{}
+		snippetTerms := parsed.terms
+		if len(snippetTerms) == 0 {
+			snippetTerms = parsed.expandedTerms
+		}
 		refs = append(refs, model.DocumentationReference{
-			Title:   item.chunk.title,
-			URL:     item.chunk.url,
-			Source:  item.chunk.source,
-			Snippet: bestSnippet(item.chunk.text, queryTerms, 260),
+			Title:   chunk.title,
+			URL:     chunk.url,
+			Source:  chunk.source,
+			Snippet: bestSnippet(chunk.text, snippetTerms, 260),
 		})
 	}
 
@@ -385,14 +476,13 @@ func (s *Service) buildEmbeddings(ctx context.Context, chunks []chunk) [][]float
 	return embeddings
 }
 
-func (s *Service) retrieveWithEmbeddings(
+func (s *Service) semanticScores(
 	ctx context.Context,
 	query string,
-	chunks []chunk,
+	candidates []int,
 	embeddings [][]float32,
-	limit int,
-) ([]model.DocumentationReference, bool) {
-	if s.embeddingClient == nil || len(chunks) == 0 || len(embeddings) == 0 {
+) (map[int]float64, bool) {
+	if s.embeddingClient == nil || len(candidates) == 0 || len(embeddings) == 0 {
 		return nil, false
 	}
 
@@ -407,54 +497,22 @@ func (s *Service) retrieveWithEmbeddings(
 		return nil, false
 	}
 
-	type scored struct {
-		chunk chunk
-		score float32
-	}
-
-	ranked := make([]scored, 0, len(chunks))
-	for i, item := range chunks {
-		if i >= len(embeddings) {
-			break
+	scores := make(map[int]float64, len(candidates))
+	for _, index := range candidates {
+		if index < 0 || index >= len(embeddings) {
+			continue
 		}
-		vector := embeddings[i]
+		vector := embeddings[index]
 		if len(vector) == 0 || len(vector) != len(queryEmbedding) {
 			continue
 		}
 		score := cosineSimilarity(queryEmbedding, vector)
-		ranked = append(ranked, scored{chunk: item, score: score})
+		scores[index] = float64(score)
 	}
-
-	if len(ranked) == 0 {
+	if len(scores) == 0 {
 		return nil, false
 	}
-
-	sort.SliceStable(ranked, func(i, j int) bool {
-		if ranked[i].score == ranked[j].score {
-			return ranked[i].chunk.title < ranked[j].chunk.title
-		}
-		return ranked[i].score > ranked[j].score
-	})
-
-	refs := make([]model.DocumentationReference, 0, limit)
-	seenURL := map[string]struct{}{}
-	for _, item := range ranked {
-		if len(refs) >= limit {
-			break
-		}
-		if _, exists := seenURL[item.chunk.url]; exists {
-			continue
-		}
-		seenURL[item.chunk.url] = struct{}{}
-		refs = append(refs, model.DocumentationReference{
-			Title:   item.chunk.title,
-			URL:     item.chunk.url,
-			Source:  item.chunk.source,
-			Snippet: bestSnippet(item.chunk.text, tokenize(query), 260),
-		})
-	}
-
-	return refs, true
+	return scores, true
 }
 
 func (s *Service) fetchSourceText(ctx context.Context, source SourceDoc) (string, error) {
@@ -471,7 +529,7 @@ func (s *Service) fetchSourceText(ctx context.Context, source SourceDoc) (string
 	defer resp.Body.Close()
 
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		return "", io.ErrUnexpectedEOF
+		return "", fmt.Errorf("unexpected status code %d", resp.StatusCode)
 	}
 
 	body, err := io.ReadAll(io.LimitReader(resp.Body, s.maxBodyBytes))
@@ -501,7 +559,7 @@ func normalizeText(raw string) string {
 	normalized := make([]string, 0, len(parts))
 	for _, part := range parts {
 		line := strings.TrimSpace(spacePattern.ReplaceAllString(part, " "))
-		if len(line) < 20 {
+		if len(line) < minNormalizedLineLen {
 			continue
 		}
 		normalized = append(normalized, line)
@@ -575,30 +633,126 @@ func tokenize(input string) []string {
 	return tokens
 }
 
-func matchScore(item chunk, queryLower string, queryTerms []string) float64 {
-	if len(queryTerms) == 0 {
+func buildRetrievalQuery(query string) retrievalQuery {
+	rawLower := strings.ToLower(strings.TrimSpace(query))
+	terms := tokenize(rawLower)
+	return retrievalQuery{
+		rawLower:      rawLower,
+		terms:         terms,
+		expandedTerms: expandQueryTerms(terms),
+	}
+}
+
+func expandQueryTerms(terms []string) []string {
+	if len(terms) == 0 {
+		return nil
+	}
+
+	seen := make(map[string]struct{}, len(terms)*3)
+	out := make([]string, 0, len(terms)*2)
+	add := func(term string) {
+		normalized := strings.TrimSpace(strings.ToLower(term))
+		if len(normalized) <= 2 {
+			return
+		}
+		if _, excluded := stopWords[normalized]; excluded {
+			return
+		}
+		if _, exists := seen[normalized]; exists {
+			return
+		}
+		seen[normalized] = struct{}{}
+		out = append(out, normalized)
+	}
+
+	for _, term := range terms {
+		add(term)
+		if related, ok := queryExpansions[term]; ok {
+			for _, expanded := range related {
+				add(expanded)
+			}
+		}
+		for _, separator := range []string{"-", "/", "_", "."} {
+			if !strings.Contains(term, separator) {
+				continue
+			}
+			for _, part := range strings.Split(term, separator) {
+				add(part)
+			}
+		}
+	}
+
+	return out
+}
+
+func matchScore(item chunk, queryLower string, queryTerms, expandedTerms []string) float64 {
+	if len(expandedTerms) == 0 {
 		return 0
 	}
 
 	score := 0.0
-	titleLower := strings.ToLower(item.title)
+	coverageHits := 0
+	titleLower := strings.ToLower(strings.TrimSpace(item.title))
 	for _, term := range queryTerms {
-		if _, ok := item.tokenSet[term]; ok {
-			score += 3.0
+		if term == "" {
+			continue
+		}
+		if _, matched := item.tokenSet[term]; matched {
+			score += 4.0
+			coverageHits++
 		}
 		if strings.Contains(titleLower, term) {
-			score += 2.0
+			score += 2.5
 		}
 		if strings.Contains(item.textLower, term) {
-			score += 0.35
+			score += 0.8
+		}
+	}
+
+	for _, term := range expandedTerms {
+		if slices.Contains(queryTerms, term) {
+			continue
+		}
+		if _, matched := item.tokenSet[term]; matched {
+			score += 1.5
+		}
+		if strings.Contains(titleLower, term) {
+			score += 0.9
 		}
 	}
 
 	if strings.Contains(item.textLower, queryLower) {
-		score += 5.0
+		score += 6.0
+	}
+	if len(queryTerms) > 0 && coverageHits > 0 {
+		score += (float64(coverageHits) / float64(len(queryTerms))) * 4.0
 	}
 
 	return score
+}
+
+func queryCoverage(item chunk, queryTerms []string) float64 {
+	if len(queryTerms) == 0 {
+		return 0
+	}
+	hits := 0
+	for _, term := range queryTerms {
+		if _, ok := item.tokenSet[term]; ok {
+			hits++
+		}
+	}
+	return float64(hits) / float64(len(queryTerms))
+}
+
+func normalizeSemanticScore(score float64) float64 {
+	normalized := (score + 1) / 2
+	if normalized < 0 {
+		return 0
+	}
+	if normalized > 1 {
+		return 1
+	}
+	return normalized
 }
 
 func buildTokenIndex(chunks []chunk) map[string][]int {
@@ -651,31 +805,88 @@ func bestSnippet(text string, queryTerms []string, maxLen int) string {
 	}
 
 	lower := strings.ToLower(text)
-	start := -1
-	for _, term := range queryTerms {
-		idx := strings.Index(lower, term)
-		if idx >= 0 && (start == -1 || idx < start) {
-			start = idx
+	windowSize := maxLen
+	if windowSize < 120 {
+		windowSize = 120
+	}
+	step := windowSize / 2
+	if step < 60 {
+		step = 60
+	}
+
+	bestStart := 0
+	bestHits := -1
+	for start := 0; start < len(text); start += step {
+		end := start + windowSize
+		if end > len(text) {
+			end = len(text)
+		}
+		segment := lower[start:end]
+		hits := 0
+		for _, term := range queryTerms {
+			if term == "" {
+				continue
+			}
+			if strings.Contains(segment, term) {
+				hits++
+			}
+		}
+		if hits > bestHits {
+			bestHits = hits
+			bestStart = start
+		}
+		if end == len(text) {
+			break
 		}
 	}
 
-	if start == -1 {
-		return strings.TrimSpace(text[:maxLen]) + "..."
+	anchor := -1
+	for _, term := range queryTerms {
+		idx := strings.Index(lower, term)
+		if idx >= 0 && (anchor == -1 || idx < anchor) {
+			anchor = idx
+		}
 	}
 
-	windowStart := int(math.Max(0, float64(start-maxLen/3)))
-	windowEnd := windowStart + maxLen
-	if windowEnd > len(text) {
-		windowEnd = len(text)
+	if bestHits <= 0 && anchor == -1 {
+		return strings.TrimSpace(text[:maxLen]) + "..."
 	}
-	snippet := strings.TrimSpace(text[windowStart:windowEnd])
-	if windowStart > 0 {
+	if anchor >= 0 {
+		start := int(math.Max(0, float64(anchor-maxLen/3)))
+		if bestHits <= 0 || absInt(start-bestStart) > maxLen {
+			bestStart = start
+		}
+	}
+
+	return trimSnippet(text, bestStart, maxLen)
+}
+
+func trimSnippet(text string, start, maxLen int) string {
+	if start < 0 {
+		start = 0
+	}
+	if start > len(text) {
+		start = len(text)
+	}
+	end := start + maxLen
+	if end > len(text) {
+		end = len(text)
+	}
+	snippet := strings.TrimSpace(text[start:end])
+	if start > 0 {
 		snippet = "..." + snippet
 	}
-	if windowEnd < len(text) {
+	if end < len(text) {
 		snippet += "..."
 	}
 	return snippet
+}
+
+func absInt(value int) int {
+	if value < 0 {
+		return -value
+	}
+	return value
 }
 
 func defaultSources() []SourceDoc {

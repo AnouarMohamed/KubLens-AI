@@ -60,6 +60,39 @@ func TestBuildTeamRunbookContextIncludesRunbooksAndFixPatterns(t *testing.T) {
 	}
 }
 
+func TestBuildDocsQueriesPrioritizesMessageAndDiagnosticsKeywords(t *testing.T) {
+	queries := buildDocsQueries(
+		"payment-gateway crashloopbackoff after deploy",
+		"critical issue: payment-gateway pods show OOMKilled and liveness probe failures",
+	)
+	if len(queries) == 0 {
+		t.Fatal("expected non-empty query plan")
+	}
+	if !strings.Contains(strings.ToLower(queries[0]), "payment-gateway") {
+		t.Fatalf("expected first query to preserve message context, got %q", queries[0])
+	}
+	joined := strings.ToLower(strings.Join(queries, " "))
+	for _, term := range []string{"crashloopbackoff", "oomkilled", "liveness"} {
+		if !strings.Contains(joined, term) {
+			t.Fatalf("expected combined queries to include %q, got %q", term, joined)
+		}
+	}
+}
+
+func TestExtractDocKeywordsFiltersNoiseAndDedupes(t *testing.T) {
+	keywords := extractDocKeywords(
+		"Please show kubernetes cluster issue issue for Payment-Gateway OOMKilled memory memory",
+		8,
+	)
+	joined := strings.ToLower(strings.Join(keywords, " "))
+	if strings.Contains(joined, "kubernetes") || strings.Contains(joined, "cluster") {
+		t.Fatalf("expected noisy generic terms filtered out, got %q", joined)
+	}
+	if !strings.Contains(joined, "payment-gateway") || !strings.Contains(joined, "oomkilled") {
+		t.Fatalf("expected specific terms retained, got %q", joined)
+	}
+}
+
 type testAssistantMemoryStore struct {
 	runbooks       []model.MemoryRunbook
 	fixes          []model.MemoryFixPattern
