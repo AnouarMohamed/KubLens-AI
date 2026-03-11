@@ -15,10 +15,12 @@ import (
 
 const maxAssistantRequestBody = 1 << 20 // 1 MiB
 
+// decodeJSONBody decodes and validates a JSON payload against the destination struct.
 func decodeJSONBody(r *http.Request, dst any) error {
 	return decodeJSONBodyWithDebug(r, dst, false)
 }
 
+// decodeJSONBodyWithDebug decodes strict JSON and optionally returns detailed decode errors.
 func decodeJSONBodyWithDebug(r *http.Request, dst any, debug bool) error {
 	limited := io.LimitReader(r.Body, maxAssistantRequestBody)
 	decoder := json.NewDecoder(limited)
@@ -34,6 +36,7 @@ func decodeJSONBodyWithDebug(r *http.Request, dst any, debug bool) error {
 	return nil
 }
 
+// invalidJSONError normalizes decode failures for public API responses.
 func invalidJSONError(err error, debug bool) error {
 	if !debug {
 		return errors.New("invalid JSON body")
@@ -41,10 +44,12 @@ func invalidJSONError(err error, debug bool) error {
 	return fmt.Errorf("invalid JSON body: %w", err)
 }
 
+// decodeJSONBody decodes JSON using verbosity based on the current runtime mode.
 func (s *Server) decodeJSONBody(r *http.Request, dst any) error {
 	return decodeJSONBodyWithDebug(r, dst, s.runtime.Mode != "prod")
 }
 
+// writeJSON writes a JSON response with a stable content type.
 func writeJSON(w http.ResponseWriter, status int, payload any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
@@ -53,6 +58,7 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 	_ = encoder.Encode(payload)
 }
 
+// writeError writes API errors using the canonical {"error": "..."} shape.
 func writeError(w http.ResponseWriter, status int, message string) {
 	writeJSON(w, status, map[string]string{"error": message})
 }

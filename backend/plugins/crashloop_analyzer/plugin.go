@@ -1,3 +1,4 @@
+// Package crashloop_analyzer flags pod restart loops and OOM crashes.
 package crashloop_analyzer
 
 import (
@@ -10,10 +11,13 @@ import (
 
 type Plugin struct{}
 
+// New returns a crash-loop analyzer plugin instance.
 func New() Plugin { return Plugin{} }
 
+// Name returns the stable plugin identifier.
 func (Plugin) Name() string { return "crashloop_analyzer" }
 
+// Analyze emits diagnostics for OOMKilled and crash-looping pods.
 func (Plugin) Analyze(snapshot state.ClusterState) []intelligence.Diagnostic {
 	diagnostics := make([]intelligence.Diagnostic, 0)
 
@@ -45,6 +49,7 @@ func (Plugin) Analyze(snapshot state.ClusterState) []intelligence.Diagnostic {
 	return diagnostics
 }
 
+// buildPodEvidence composes human-readable evidence fields for crash diagnostics.
 func buildPodEvidence(pod state.PodInfo, extra string) []string {
 	evidence := []string{
 		fmt.Sprintf("Restart count: %d", pod.Restarts),

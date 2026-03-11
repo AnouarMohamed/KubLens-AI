@@ -1,3 +1,4 @@
+// Package auth provides request authentication primitives and RBAC helpers.
 package auth
 
 import (
@@ -8,11 +9,15 @@ import (
 )
 
 type Token struct {
+	// Token is the shared secret value accepted by the authenticator.
 	Token string
-	User  string
-	Role  string
+	// User is the principal name associated with the token.
+	User string
+	// Role is the RBAC role label mapped to Role values.
+	Role string
 }
 
+// Config configures the request authenticator.
 type Config struct {
 	Enabled            bool
 	AllowHeaderToken   bool
@@ -25,18 +30,24 @@ type Config struct {
 type Channel int
 
 const (
+	// ChannelUnknown indicates no supported auth channel was found.
 	ChannelUnknown Channel = iota
+	// ChannelBearer indicates Authorization Bearer token authentication.
 	ChannelBearer
+	// ChannelHeader indicates X-Auth-Token header authentication.
 	ChannelHeader
+	// ChannelCookie indicates cookie-based session authentication.
 	ChannelCookie
 )
 
+// Authenticator validates bearer/header/cookie credentials.
 type Authenticator struct {
 	config Config
 	tokens map[string]Principal
 	oidc   *oidcVerifier
 }
 
+// NewAuthenticator creates an Authenticator from static token and OIDC settings.
 func NewAuthenticator(cfg Config) *Authenticator {
 	if strings.TrimSpace(cfg.CookieName) == "" {
 		cfg.CookieName = "kubelens_auth"
@@ -70,6 +81,7 @@ func NewAuthenticator(cfg Config) *Authenticator {
 	}
 }
 
+// CookieName returns the configured authentication cookie name.
 func (a *Authenticator) CookieName() string {
 	if a == nil {
 		return ""
@@ -77,6 +89,7 @@ func (a *Authenticator) CookieName() string {
 	return a.config.CookieName
 }
 
+// AuthenticateRequest extracts credentials and authenticates the request principal.
 func (a *Authenticator) AuthenticateRequest(r *http.Request) (Principal, Channel, error) {
 	if a == nil {
 		return Principal{}, ChannelUnknown, errors.New("authenticator not configured")
@@ -109,6 +122,7 @@ func (a *Authenticator) AuthenticateRequest(r *http.Request) (Principal, Channel
 	return principal, channel, nil
 }
 
+// VerifyToken validates a token using static mappings and optional OIDC verification.
 func (a *Authenticator) VerifyToken(ctx context.Context, token string) (Principal, error) {
 	if a == nil {
 		return Principal{}, errors.New("authenticator not configured")

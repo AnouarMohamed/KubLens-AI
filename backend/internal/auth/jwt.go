@@ -10,12 +10,18 @@ import (
 )
 
 type OIDCConfig struct {
-	Enabled       bool
-	Provider      string
-	IssuerURL     string
-	ClientID      string
+	// Enabled toggles OIDC token verification.
+	Enabled bool
+	// Provider is a named provider hint (google, keycloak, oidc, github).
+	Provider string
+	// IssuerURL overrides provider-derived issuer discovery.
+	IssuerURL string
+	// ClientID configures audience checks when provided.
+	ClientID string
+	// UsernameClaim overrides default username claim selection.
 	UsernameClaim string
-	RoleClaim     string
+	// RoleClaim overrides default role claim selection.
+	RoleClaim string
 }
 
 type oidcVerifier struct {

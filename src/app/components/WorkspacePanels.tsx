@@ -1,3 +1,6 @@
+/**
+ * Utility side panels for notifications, settings, and user profile actions.
+ */
 import { useEffect, useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import type { AuthSession, K8sEvent, RuntimeStatus } from "../../types";
 import type { NotificationSignal, NotificationStatus } from "../hooks/useNotifications";
@@ -39,6 +42,12 @@ interface WorkspacePanelsProps {
   currentCommand: string;
 }
 
+/**
+ * Renders the active right-side utility panel.
+ *
+ * @param props - Panel state, notifications, auth session, and setting controls.
+ * @returns Active panel element or `null`.
+ */
 export function WorkspacePanels({
   panel,
   notifications,

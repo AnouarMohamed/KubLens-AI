@@ -1,9 +1,15 @@
+/**
+ * Persistent user settings hook for workspace and notification preferences.
+ */
 import { useEffect, useState } from "react";
 
 const SETTINGS_KEY = "k8s-ops.settings.v1";
 
 export type PanelWidth = "standard" | "wide" | "xwide";
 
+/**
+ * User-configurable workspace and notification options.
+ */
 export interface UserSettings {
   denseMode: boolean;
   autoRefreshSeconds: number;
@@ -19,6 +25,9 @@ export interface UserSettings {
   desktopNotifications: boolean;
 }
 
+/**
+ * Default settings applied when no persisted state exists.
+ */
 export const DEFAULT_SETTINGS: UserSettings = {
   denseMode: false,
   autoRefreshSeconds: 30,
@@ -34,6 +43,12 @@ export const DEFAULT_SETTINGS: UserSettings = {
   desktopNotifications: false,
 };
 
+/**
+ * Normalizes unknown settings payloads into a valid {@link UserSettings}.
+ *
+ * @param input - Unknown persisted value.
+ * @returns Sanitized settings with bounded numeric values.
+ */
 export function normalizeUserSettings(input: unknown): UserSettings {
   if (!input || typeof input !== "object") {
     return { ...DEFAULT_SETTINGS };
@@ -82,6 +97,11 @@ function loadSettings(): UserSettings {
   }
 }
 
+/**
+ * useUserSettings reads and persists user settings in local storage.
+ *
+ * @returns Settings state, setter, and reset helper.
+ */
 export function useUserSettings() {
   const [settings, setSettings] = useState<UserSettings>(loadSettings);
 

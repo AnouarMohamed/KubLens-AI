@@ -1,3 +1,9 @@
+/**
+ * Shared frontend TypeScript contracts aligned with backend JSON payloads.
+ *
+ * These interfaces intentionally mirror `backend/internal/model/types.go`.
+ * Keep this file in sync with backend response/request shape changes.
+ */
 export type PodStatus = "Running" | "Pending" | "Failed" | "Succeeded" | "Terminating" | "Unknown";
 export type NodeStatus = "Ready" | "NotReady" | "Unknown";
 export type DiagnosticSeverity = "critical" | "warning" | "info";

@@ -1,3 +1,4 @@
+// Package scheduling_analyzer detects pods pending because scheduling failed.
 package scheduling_analyzer
 
 import (
@@ -9,10 +10,13 @@ import (
 
 type Plugin struct{}
 
+// New returns a scheduling analyzer plugin instance.
 func New() Plugin { return Plugin{} }
 
+// Name returns the stable plugin identifier.
 func (Plugin) Name() string { return "scheduling_analyzer" }
 
+// Analyze emits diagnostics for pods blocked by FailedScheduling events.
 func (Plugin) Analyze(snapshot state.ClusterState) []intelligence.Diagnostic {
 	diagnostics := make([]intelligence.Diagnostic, 0)
 

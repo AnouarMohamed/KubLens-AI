@@ -1,3 +1,4 @@
+// Package image_pull_analyzer detects pod image pull failures.
 package image_pull_analyzer
 
 import (
@@ -8,10 +9,13 @@ import (
 
 type Plugin struct{}
 
+// New returns an image pull analyzer plugin instance.
 func New() Plugin { return Plugin{} }
 
+// Name returns the stable plugin identifier.
 func (Plugin) Name() string { return "image_pull_analyzer" }
 
+// Analyze emits diagnostics for pods blocked by image pull errors.
 func (Plugin) Analyze(snapshot state.ClusterState) []intelligence.Diagnostic {
 	diagnostics := make([]intelligence.Diagnostic, 0)
 

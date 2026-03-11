@@ -1,5 +1,13 @@
+/**
+ * Ephemeral message hook for short-lived UI notifications.
+ */
 import { useCallback, useEffect, useRef, useState } from "react";
 
+/**
+ * Stores a transient message and exposes a helper to display it for a duration.
+ *
+ * @returns Current message and a display helper.
+ */
 export function useTransientMessage() {
   const [message, setMessage] = useState<string | null>(null);
   const timeoutRef = useRef<number | null>(null);

@@ -1,3 +1,9 @@
+/**
+ * Maintains the currently selected application view with local persistence.
+ *
+ * The hook resolves an initial view from the URL path first, then falls back
+ * to `localStorage` when no explicit deep-link path is provided.
+ */
 import { useEffect, useState } from "react";
 import type { View } from "../../types";
 
@@ -55,6 +61,11 @@ function loadLastView(): View {
   return "overview";
 }
 
+/**
+ * useCurrentView exposes the active view and setter used by the main shell.
+ *
+ * @returns Current view state and setter.
+ */
 export function useCurrentView() {
   const [currentView, setCurrentView] = useState<View>(loadLastView);
 
@@ -65,6 +76,12 @@ export function useCurrentView() {
   return { currentView, setCurrentView };
 }
 
+/**
+ * Maps deep-link URL paths to view identifiers.
+ *
+ * @param pathname - Browser pathname in lowercase.
+ * @returns Matching view or `null` when no mapping exists.
+ */
 function mapPathToView(pathname: string): View | null {
   const mapping: Array<{ prefix: string; view: View }> = [
     { prefix: "/incidents", view: "incidents" },

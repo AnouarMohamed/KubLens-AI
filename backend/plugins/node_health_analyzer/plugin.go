@@ -1,3 +1,4 @@
+// Package node_health_analyzer reports node readiness and pressure issues.
 package node_health_analyzer
 
 import (
@@ -10,10 +11,13 @@ import (
 
 type Plugin struct{}
 
+// New returns a node health analyzer plugin instance.
 func New() Plugin { return Plugin{} }
 
+// Name returns the stable plugin identifier.
 func (Plugin) Name() string { return "node_health_analyzer" }
 
+// Analyze emits diagnostics for NotReady nodes and pressure conditions.
 func (Plugin) Analyze(snapshot state.ClusterState) []intelligence.Diagnostic {
 	diagnostics := make([]intelligence.Diagnostic, 0)
 

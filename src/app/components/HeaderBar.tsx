@@ -1,3 +1,6 @@
+/**
+ * Top command/header bar for view metadata, search, and global utility actions.
+ */
 import { ArrowRight, Bell, Settings, User } from "lucide-react";
 import type { RefObject } from "react";
 import type { ClusterContextList, RuntimeStatus } from "../../types";
@@ -21,6 +24,12 @@ interface HeaderBarProps {
   searchRef: RefObject<HTMLInputElement | null>;
 }
 
+/**
+ * Renders the top application header controls.
+ *
+ * @param props - Header state and event callbacks.
+ * @returns Header component.
+ */
 export function HeaderBar({
   currentViewMeta,
   clusterContexts,

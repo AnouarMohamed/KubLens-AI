@@ -8,11 +8,15 @@ import (
 type Role int
 
 const (
+	// RoleViewer grants read, stream, and assistant access.
 	RoleViewer Role = iota + 1
+	// RoleOperator adds mutation capabilities guarded by the write gate.
 	RoleOperator
+	// RoleAdmin represents administrative access level.
 	RoleAdmin
 )
 
+// ParseRole converts a role label into a Role value.
 func ParseRole(raw string) Role {
 	switch strings.ToLower(strings.TrimSpace(raw)) {
 	case "admin":
@@ -24,6 +28,7 @@ func ParseRole(raw string) Role {
 	}
 }
 
+// RoleLabel returns the canonical role label for a Role value.
 func RoleLabel(role Role) string {
 	switch role {
 	case RoleAdmin:
@@ -35,6 +40,7 @@ func RoleLabel(role Role) string {
 	}
 }
 
+// PermissionsForRole expands a role into UI-facing capability strings.
 func PermissionsForRole(role Role) []string {
 	switch role {
 	case RoleAdmin, RoleOperator:
@@ -44,6 +50,7 @@ func PermissionsForRole(role Role) []string {
 	}
 }
 
+// RequiredRole returns the minimum role required to access an API route.
 func RequiredRole(method, path string) Role {
 	cleanMethod := strings.ToUpper(strings.TrimSpace(method))
 	cleanPath := strings.TrimSpace(path)
@@ -73,6 +80,7 @@ func RequiredRole(method, path string) Role {
 	}
 }
 
+// RequiresWriteGate reports whether the route is blocked when write actions are disabled.
 func RequiresWriteGate(method, path string) bool {
 	cleanMethod := strings.ToUpper(strings.TrimSpace(method))
 	if cleanMethod != http.MethodPost && cleanMethod != http.MethodPut && cleanMethod != http.MethodPatch && cleanMethod != http.MethodDelete {

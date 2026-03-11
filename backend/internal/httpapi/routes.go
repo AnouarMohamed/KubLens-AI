@@ -1,3 +1,4 @@
+// Package httpapi exposes the HTTP transport for KubeLens backend services.
 package httpapi
 
 import "strings"
@@ -15,6 +16,7 @@ const (
 	apiStreamPrefix = apiMountPrefix + "/stream"
 )
 
+// isAPIPath reports whether a request path targets the API mount.
 func isAPIPath(path string) bool {
 	trimmed := strings.TrimSpace(path)
 	return trimmed == apiMountPrefix || strings.HasPrefix(trimmed, apiMountPrefix+"/")

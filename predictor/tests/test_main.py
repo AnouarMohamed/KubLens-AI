@@ -1,3 +1,5 @@
+"""Predictor API and scoring unit tests."""
+
 from fastapi.testclient import TestClient
 from predictor.app.main import (
     K8sEvent,
@@ -12,12 +14,16 @@ client = TestClient(api)
 
 
 def test_healthz_ok() -> None:
+    """The health endpoint returns a static success payload."""
+
     response = client.get("/healthz")
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
 
 
 def test_predict_returns_risk_items() -> None:
+    """A failing pod with warning signals produces at least one prediction."""
+
     payload = {
         "pods": [
             {
@@ -45,6 +51,8 @@ def test_predict_returns_risk_items() -> None:
 
 
 def test_predict_handles_invalid_usage_values() -> None:
+    """Invalid usage strings are tolerated and still return a valid response."""
+
     payload = {
         "pods": [
             {
@@ -78,6 +86,8 @@ def test_predict_handles_invalid_usage_values() -> None:
 
 
 def test_predict_scores_not_ready_node_with_hot_metrics() -> None:
+    """NotReady nodes with saturated metrics are scored as elevated risk."""
+
     payload = {
         "pods": [],
         "nodes": [
@@ -108,11 +118,15 @@ def test_predict_scores_not_ready_node_with_hot_metrics() -> None:
 
 
 def test_predict_rejects_invalid_contract() -> None:
+    """Malformed payloads are rejected by FastAPI validation."""
+
     response = client.post("/predict", json={"pods": "bad"})
     assert response.status_code == 422
 
 
 def test_predict_requires_shared_secret_when_configured(monkeypatch) -> None:
+    """Secret-protected mode requires the matching predictor header."""
+
     monkeypatch.setenv("PREDICTOR_SHARED_SECRET", "secret-123")
     payload = {"pods": [], "nodes": [], "events": []}
 
@@ -125,6 +139,8 @@ def test_predict_requires_shared_secret_when_configured(monkeypatch) -> None:
 
 
 def test_confidence_from_evidence_rewards_richer_signals() -> None:
+    """Confidence increases when evidence quantity and strength improve."""
+
     sparse = confidence_from_evidence(
         strong_status=False,
         signal_count=1,
@@ -146,6 +162,8 @@ def test_confidence_from_evidence_rewards_richer_signals() -> None:
 
 
 def test_count_resource_warning_events_matches_message_and_count() -> None:
+    """Warning correlation counts event matches and honors event count fields."""
+
     events = [
         K8sEvent(
             type="Warning",
@@ -170,12 +188,16 @@ def test_count_resource_warning_events_matches_message_and_count() -> None:
 
 
 def test_parse_memory_mi_supports_gi_suffix() -> None:
+    """Gi memory suffix is converted to Mi units."""
+
     value, known = parse_memory_mi("1Gi")
     assert known is True
     assert value == 1024
 
 
 def test_parse_cpu_milli_supports_whole_cpu_units() -> None:
+    """Whole CPU units are converted to milli-CPU."""
+
     value, known = parse_cpu_milli("2")
     assert known is True
     assert value == 2000

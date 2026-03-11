@@ -1,3 +1,6 @@
+/**
+ * Main application shell that composes navigation, view routing, and utility panels.
+ */
 import { Suspense, lazy, useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import Sidebar from "../components/Sidebar";
 import { getViewItem } from "../features/viewCatalog";

@@ -1,5 +1,14 @@
+/**
+ * Mode banner component that surfaces runtime warnings and posture hints.
+ */
 import type { RuntimeStatus } from "../../types";
 
+/**
+ * Displays runtime warnings for security-sensitive or degraded modes.
+ *
+ * @param props - Runtime status payload.
+ * @returns Banner element or `null` when no warning should be shown.
+ */
 export function ModeBanner({ runtime }: { runtime: RuntimeStatus | null }) {
   if (!runtime) {
     return null;

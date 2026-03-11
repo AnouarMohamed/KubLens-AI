@@ -1,5 +1,11 @@
+/**
+ * View metadata catalog used by navigation, keyboard search, and access policy checks.
+ */
 import type { View } from "../types";
 
+/**
+ * Describes one navigable UI view.
+ */
 export interface ViewItem {
   id: View;
   label: string;
@@ -7,16 +13,25 @@ export interface ViewItem {
   kubectlCommand: string;
 }
 
+/**
+ * Groups related views under a sidebar section.
+ */
 export interface ViewSection {
   id: string;
   label: string;
   items: ViewItem[];
 }
 
+/**
+ * Feature gates that affect view visibility.
+ */
 export interface ViewAccessPolicy {
   assistantEnabled: boolean;
 }
 
+/**
+ * Static sidebar/view catalog for the application shell.
+ */
 export const VIEW_SECTIONS: ViewSection[] = [
   {
     id: "overview",
@@ -268,10 +283,23 @@ export const VIEW_MAP: Record<View, ViewItem> = VIEW_SECTIONS.flatMap((section) 
   {} as Record<View, ViewItem>,
 );
 
+/**
+ * Returns catalog metadata for a specific view identifier.
+ *
+ * @param view - View identifier.
+ * @returns Matching view metadata.
+ */
 export function getViewItem(view: View): ViewItem {
   return VIEW_MAP[view];
 }
 
+/**
+ * Evaluates whether a view is visible under the provided access policy.
+ *
+ * @param view - Candidate view.
+ * @param policy - Access policy.
+ * @returns `true` when the view should be shown.
+ */
 export function isViewVisible(view: View, policy: ViewAccessPolicy): boolean {
   if (view === "assistant") {
     return policy.assistantEnabled;
@@ -279,6 +307,13 @@ export function isViewVisible(view: View, policy: ViewAccessPolicy): boolean {
   return true;
 }
 
+/**
+ * Filters sidebar sections by visibility policy.
+ *
+ * @param sections - Full section list.
+ * @param policy - Access policy.
+ * @returns Sections with hidden views removed.
+ */
 export function filterSectionsByPolicy(sections: ViewSection[], policy: ViewAccessPolicy): ViewSection[] {
   return sections
     .map((section) => ({
@@ -288,10 +323,23 @@ export function filterSectionsByPolicy(sections: ViewSection[], policy: ViewAcce
     .filter((section) => section.items.length > 0);
 }
 
+/**
+ * Flattens sectioned views into a single searchable list.
+ *
+ * @param sections - View sections.
+ * @returns Flat view metadata list.
+ */
 export function flattenViewItems(sections: ViewSection[]): ViewItem[] {
   return sections.flatMap((section) => section.items);
 }
 
+/**
+ * Finds a view by free-text label or identifier match.
+ *
+ * @param query - User-entered query.
+ * @param items - Optional candidate list.
+ * @returns First matching view or `null`.
+ */
 export function findViewByQuery(query: string, items: ViewItem[] = Object.values(VIEW_MAP)): ViewItem | null {
   const normalized = query.trim().toLowerCase();
   if (normalized === "") {

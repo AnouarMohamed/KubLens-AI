@@ -1,3 +1,4 @@
+// Package resource_analyzer evaluates pod resource requests, limits, and usage.
 package resource_analyzer
 
 import (
@@ -9,10 +10,13 @@ import (
 
 type Plugin struct{}
 
+// New returns a resource analyzer plugin instance.
 func New() Plugin { return Plugin{} }
 
+// Name returns the stable plugin identifier.
 func (Plugin) Name() string { return "resource_analyzer" }
 
+// Analyze emits diagnostics for missing resource controls and usage overruns.
 func (Plugin) Analyze(snapshot state.ClusterState) []intelligence.Diagnostic {
 	diagnostics := make([]intelligence.Diagnostic, 0)
 

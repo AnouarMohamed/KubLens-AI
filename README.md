@@ -379,6 +379,31 @@ CI runs all of the above plus:
 
 ---
 
+## Directory structure
+
+```text
+backend/            Go backend API, cluster integrations, analyzers
+predictor/          Python FastAPI risk predictor service
+src/                React + TypeScript frontend
+docs/               Architecture, security, operations, and API docs
+k8s/                Kustomize base and overlays
+helm/kubelens/      Helm chart packaging
+scripts/            CI and local verification scripts
+e2e/                Playwright end-to-end tests
+```
+
+---
+
+## Documentation index
+
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) - system topology, boundaries, and data flow
+- [docs/api.md](docs/api.md) - endpoint groups, auth model, and request examples
+- [docs/SECURITY.md](docs/SECURITY.md) - controls and trust boundaries
+- [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md) - threat model details
+- [docs/OPERATIONS_VERIFICATION.md](docs/OPERATIONS_VERIFICATION.md) - production verification checklist
+
+---
+
 ## Troubleshooting
 
 **Metrics show `N/A`** -> Metrics Server is not installed or not healthy. Verify with `kubectl top nodes`.
@@ -402,7 +427,7 @@ CI runs all of the above plus:
 - Rate limiting on all `/api/*` routes
 - CSRF same-origin enforcement on mutating cookie-authenticated requests
 
-Full details: [SECURITY.md](docs/SECURITY.md) � [THREAT_MODEL.md](docs/THREAT_MODEL.md) � [OPERATIONS_VERIFICATION.md](docs/OPERATIONS_VERIFICATION.md)
+Full details: [SECURITY.md](docs/SECURITY.md) | [THREAT_MODEL.md](docs/THREAT_MODEL.md) | [OPERATIONS_VERIFICATION.md](docs/OPERATIONS_VERIFICATION.md)
 
 ---
 
@@ -422,3 +447,4 @@ Full details: [SECURITY.md](docs/SECURITY.md) � [THREAT_MODEL.md](docs/THREAT_
 ## Changelog
 
 [CHANGELOG.md](CHANGELOG.md)
+

@@ -1,3 +1,9 @@
+/**
+ * Notification ingestion hook for event snapshots and live stream updates.
+ *
+ * The hook merges stream and snapshot events, deduplicates entries, tracks
+ * unread counts, and derives higher-level operational signal metrics.
+ */
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
 import { api } from "../../lib/api";
 import type { K8sEvent } from "../../types";
@@ -5,6 +11,10 @@ import type { K8sEvent } from "../../types";
 type Panel = "none" | "notifications" | "settings" | "profile";
 
 export type NotificationStatus = "idle" | "live" | "snapshot" | "reconnecting" | "blocked";
+
+/**
+ * Aggregated event-velocity indicators used by the notifications panel.
+ */
 export interface NotificationSignal {
   totalLast5Minutes: number;
   warningLast10Minutes: number;
@@ -25,6 +35,12 @@ interface UseNotificationsInput {
   redactSensitiveNotifications: boolean;
 }
 
+/**
+ * useNotifications manages notification lifecycle, stream fallback, and signal derivation.
+ *
+ * @param input - Notification behavior flags and capability gates.
+ * @returns Notification state, status, counters, and control actions.
+ */
 export function useNotifications({
   panel,
   authLoading,

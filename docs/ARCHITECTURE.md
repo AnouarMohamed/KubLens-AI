@@ -1,110 +1,101 @@
 # Architecture
 
-## System overview
+This document describes KubeLens runtime components, their boundaries, and data flow across the system.
+
+## High-level architecture
 
 ```mermaid
 flowchart TD
-    Browser["Browser\nReact + Vite"] -->|HTTP / WebSocket| MW
+    Browser["Browser UI\nReact + Vite"] -->|HTTP / WebSocket| API
 
-    subgraph API ["Go API Server"]
-        MW["Auth � Rate Limit � Audit"] --> Handlers["Route Handlers"]
-        Handlers --> Cache["Cluster State Cache"]
-        Cache --> Intel["Intelligence Engine"]
-        Intel --> Plugins["Diagnostic Plugins"]
-        Handlers --> Pred["Predictor Client"]
-        Handlers --> Asst["Assistant"]
-        Handlers --> RAG["Docs RAG"]
-        Cache --> Bus["Event Bus"]
-        Bus --> Stream["WebSocket/SSE"]
+    subgraph API_RUNTIME ["Go API Server"]
+      API["HTTP API + Middleware"] --> Cache["Cluster State Cache"]
+      API --> Assistant["Assistant Service"]
+      API --> PredictorClient["Predictor Client"]
+      API --> RAG["RAG Retrieval"]
+      Cache --> Intelligence["Intelligence Analyzer"]
+      Intelligence --> Plugins["Diagnostic Plugins"]
+      Cache --> Bus["Event Bus"]
+      Bus --> Stream["SSE + WebSocket Stream"]
     end
 
-    Cache -->|kubectl API| K8S["Kubernetes API"]
-    Cache -->|metrics.k8s.io| Metrics["Metrics Server"]
-    Pred -->|POST /predict| FastAPI["FastAPI Predictor"]
-    Asst -->|OpenAI-compatible| LLM["AI Provider\n(optional)"]
-    RAG -->|fetch| Docs["K8s / Docker Docs"]
+    Cache -->|watch/list| K8S["Kubernetes API"]
+    Cache -->|metrics.k8s.io| MetricsServer["Metrics Server"]
+    PredictorClient -->|POST /predict| Predictor["FastAPI Predictor"]
+    Assistant -->|optional| LLM["OpenAI-compatible Provider"]
+    RAG -->|indexed docs| Docs["Kubernetes/Docker Docs"]
 ```
 
-## Auth and write gate
+## Service interactions
 
-```mermaid
-flowchart LR
-    Req["Request"] --> AuthCheck{"Auth\nenabled?"}
-    AuthCheck -->|No| Anon["Anonymous\npermissions"]
-    AuthCheck -->|Yes| Token{"Valid\ntoken?"}
-    Token -->|No| E401["401"]
-    Token -->|Yes| Role["Assign role\nviewer � operator � admin"]
-    Anon --> MutCheck{"Mutating\nrequest?"}
-    Role --> MutCheck
-    MutCheck -->|No| Handle["Handle"]
-    MutCheck -->|Yes| Gate{"WRITE_ACTIONS\n_ENABLED?"}
-    Gate -->|No| E403["403"]
-    Gate -->|Yes| RoleCheck{"Role\nallows writes?"}
-    RoleCheck -->|No| E403
-    RoleCheck -->|Yes| Audit["Audit log"] --> Handle
-```
+1. The UI calls `/api/*` for data reads, mutations, assistant requests, and operational workflows.
+2. Middleware enforces auth, RBAC, rate limiting, CSRF checks (cookie-auth mutations), and audit logging.
+3. Handlers read from cached cluster state and delegate to analyzers/predictor/assistant as needed.
+4. Mutating routes call cluster writer operations only when write-gate and RBAC checks pass.
+5. Result payloads are returned as typed JSON contracts consumed by the React frontend.
 
-## Kubernetes deployment topology
+## Data flow
 
-```mermaid
-flowchart TD
-    subgraph NS ["namespace: kubelens"]
-        Ingress["Ingress / TLS"] --> SVC["Service :3000"]
-        SVC --> POD["Dashboard Pod\nGo API + React dist"]
-        SVC2["Service :8001"] --> PRED["Predictor Pod\nFastAPI"]
-        POD -->|internal| PRED
+### Read path
 
-        HPA["HPA"] -.->|scales| POD
-        PDB["PDB"] -.->|protects| POD
-        NP["NetworkPolicy\ndefault-deny"] -.->|governs| POD
-        NP -.->|governs| PRED
-    end
+1. Informer/watchers populate `internal/state` from Kubernetes resources.
+2. `internal/cluster` maps raw Kubernetes objects to model summaries.
+3. `internal/httpapi` handlers serve model data to frontend views.
 
-    POD -->|"ClusterRole: get list watch"| K8S["Kubernetes API"]
-    POD -->|Secret ref| SEC["Auth tokens � Kubeconfig"]
-```
+### Diagnostics path
 
-## Components
+1. Snapshot data enters `internal/intelligence`.
+2. Plugin analyzers (`backend/plugins/*`) emit deterministic diagnostics.
+3. Diagnostics are formatted and returned via `/api/diagnostics`.
 
-- `src/` - React frontend, feature-oriented view folders
-- `backend/` - Go API + Kubernetes integrations
-- `predictor/` - FastAPI risk scoring service
-- `k8s/` - Kustomize base + overlays (dev/demo/prod/tracing/observability)
-- `helm/` - Helm chart for deployment
+### Prediction path
 
-## Backend boundaries
+1. API composes a prediction request from current pod/node/event state.
+2. Request is sent to FastAPI predictor (`/predict`) when configured.
+3. On failure, backend falls back to local deterministic prediction behavior.
 
-- `internal/auth` - JWT/OIDC validation, roles, and request principals
-- `internal/cluster` - Kubernetes data reads and operational commands
-- `internal/state` - informer-backed cluster cache
-- `internal/intelligence` - deterministic diagnostics + scoring
-- `internal/diagnostics` - health scoring + narrative formatting
-- `internal/events` - in-process event bus
-- `internal/httpapi` - transport layer, auth/audit/rate-limit middleware, route handlers
-- `internal/rag` - Kubernetes + Docker docs retrieval for assistant grounding
-- `internal/config` - runtime config parsing + validation
-- `internal/bootstrap` - dependency assembly and server construction
+### Assistant path
 
-## Request flow
+1. Assistant receives user query (`/api/assistant`).
+2. Cluster context + diagnostics + optional memory/RAG references are assembled.
+3. Optional LLM provider enriches the response; deterministic fallback remains available.
 
-1. UI calls `/api/*`
-2. Middleware enforces auth, rate limit, audit, and policy gates
-3. Handlers read cached cluster state, run diagnostics/plugins, or call predictor
-4. Results return as typed JSON to feature views
+### Streaming path
 
-## Event streaming flow
+1. Cache updates publish events to the in-process bus.
+2. `/api/stream` and `/api/stream/ws` push updates to connected clients.
+3. Frontend hooks reconcile stream events with local snapshots.
 
-1. Informers update the cluster cache
-2. Cache emits events to the in-process bus
-3. WebSocket/SSE stream publishes updates
-4. UI refreshes views in near-real time
+## Security and policy boundaries
+
+- `internal/auth`: identity extraction and role evaluation.
+- `auth.RequiredRole`: minimum route-level role.
+- `auth.RequiresWriteGate`: global write-action gate for mutating routes.
+- `internal/httpapi/audit`: per-request and mutating-action audit records.
+
+## Storage model
+
+- Primary runtime state is in-memory.
+- Incident/remediation/postmortem stores are bounded in-memory collections.
+- Cluster memory runbook store is persisted atomically to disk.
+
+## Key packages
+
+- `backend/internal/httpapi`: API transport, middleware, route handlers
+- `backend/internal/cluster`: Kubernetes read/write integration layer
+- `backend/internal/state`: cache and watcher-driven state updates
+- `backend/internal/intelligence`: deterministic analysis engine
+- `backend/internal/rag`: documentation retrieval and ranking
+- `backend/internal/memory`: runbook/fix memory store
+- `backend/internal/incident`: incident builder/runbook/store
+- `backend/internal/remediation`: remediation proposal and execution flow
+- `predictor/app`: FastAPI deterministic risk scoring service
+- `src/`: frontend shell, hooks, views, and typed API client
 
 ## Operational endpoints
 
-| Endpoint                  | Description                                     |
-| ------------------------- | ----------------------------------------------- |
-| `/api/healthz`            | Liveness signal                                 |
-| `/api/readyz`             | Readiness + dependency checks - 503 if degraded |
-| `/api/metrics`            | JSON request telemetry                          |
-| `/api/metrics/prometheus` | Prometheus exposition format                    |
-| `/api/openapi.yaml`       | Published API contract                          |
+- `GET /api/healthz`: liveness probe
+- `GET /api/readyz`: readiness and dependency checks
+- `GET /api/metrics`: JSON API metrics
+- `GET /api/metrics/prometheus`: Prometheus exposition format
+- `GET /api/openapi.yaml`: canonical OpenAPI contract

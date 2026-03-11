@@ -1,3 +1,4 @@
+// Package plugins provides helper functions used by multiple analyzer plugins.
 package plugins
 
 import (
@@ -6,6 +7,7 @@ import (
 	"kubelens-backend/internal/state"
 )
 
+// PodEvents returns events bound to a specific pod identity.
 func PodEvents(snapshot state.ClusterState, namespace, name string) []state.EventInfo {
 	out := make([]state.EventInfo, 0, 8)
 	for _, event := range snapshot.Events {
@@ -16,6 +18,7 @@ func PodEvents(snapshot state.ClusterState, namespace, name string) []state.Even
 	return out
 }
 
+// HasEventReason reports whether any event reason or message contains the fragment.
 func HasEventReason(events []state.EventInfo, reasonFragment string) bool {
 	if reasonFragment == "" {
 		return false

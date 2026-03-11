@@ -1,3 +1,12 @@
+/**
+ * Frontend API client for KubeLens backend endpoints.
+ *
+ * The client centralizes:
+ * - stable URL construction
+ * - JSON/text request handling
+ * - auth cookie propagation via `credentials: "same-origin"`
+ * - normalized error mapping through {@link ApiError}
+ */
 import type {
   ActionResult,
   AssistantReferenceFeedbackRequest,
@@ -42,6 +51,9 @@ import type {
 
 const API_PREFIX = "/api";
 
+/**
+ * Represents a failed API request with an attached HTTP status code.
+ */
 class ApiError extends Error {
   status: number;
 
@@ -52,6 +64,12 @@ class ApiError extends Error {
   }
 }
 
+/**
+ * Builds a URL under the `/api` prefix from raw path fragments.
+ *
+ * @param segments - Unencoded path segments.
+ * @returns API-relative path.
+ */
 function apiPath(...segments: string[]): string {
   if (segments.length === 0) {
     return API_PREFIX;
@@ -60,6 +78,12 @@ function apiPath(...segments: string[]): string {
   return `${API_PREFIX}/${segments.map(encodeURIComponent).join("/")}`;
 }
 
+/**
+ * Attempts to parse a response body as JSON.
+ *
+ * @param response - Fetch response object.
+ * @returns Parsed JSON value or `null` when parsing fails.
+ */
 async function parseJsonSafely(response: Response): Promise<unknown> {
   try {
     return await response.json();
@@ -68,6 +92,15 @@ async function parseJsonSafely(response: Response): Promise<unknown> {
   }
 }
 
+/**
+ * Performs a JSON request and parses a JSON response.
+ *
+ * @typeParam T - Expected JSON payload type.
+ * @param url - Request URL.
+ * @param init - Optional fetch init.
+ * @returns Parsed response payload.
+ * @throws {ApiError} When the response status is non-2xx.
+ */
 async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, {
     credentials: "same-origin",
@@ -91,6 +124,13 @@ async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T;
 }
 
+/**
+ * Performs a request and returns the response body as plain text.
+ *
+ * @param url - Request URL.
+ * @returns Response body.
+ * @throws {ApiError} When the response status is non-2xx.
+ */
 async function requestText(url: string): Promise<string> {
   const response = await fetch(url, {
     credentials: "same-origin",
@@ -103,6 +143,12 @@ async function requestText(url: string): Promise<string> {
   return response.text();
 }
 
+/**
+ * Loads predictions with backward-compatible fallback to legacy endpoint names.
+ *
+ * @param force - Whether to bypass server-side prediction caches.
+ * @returns Prediction payload.
+ */
 async function requestPredictions(force = false): Promise<PredictionsResult> {
   const suffix = force ? "?force=1" : "";
   try {
@@ -116,6 +162,12 @@ async function requestPredictions(force = false): Promise<PredictionsResult> {
   }
 }
 
+/**
+ * Typed API facade used by all frontend views and hooks.
+ *
+ * Each method maps 1:1 to a backend endpoint and returns strongly typed
+ * payloads from `src/types.ts`.
+ */
 export const api = {
   login: (token: string) =>
     requestJson<AuthSession>(apiPath("auth", "login"), {
@@ -337,10 +389,16 @@ export const api = {
 
 export { ApiError };
 
+/**
+ * Returns the SSE endpoint URL used for cluster event streams.
+ */
 function buildStreamURL(): string {
   return apiPath("stream");
 }
 
+/**
+ * Returns the WebSocket endpoint URL used for cluster event streams.
+ */
 function buildStreamWSURL(): string {
   if (typeof window === "undefined") {
     return apiPath("stream", "ws");

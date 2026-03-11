@@ -1,3 +1,22 @@
+"""Predictor service entrypoint and deterministic risk scoring logic.
+
+This module hosts the FastAPI application used by KubeLens to score pod and
+node operational risk. Scoring is intentionally deterministic and based on
+current cluster snapshots and recent warning events, so UI behavior remains
+stable and explainable.
+
+Environment variables:
+    OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: OTLP traces endpoint.
+    OTEL_EXPORTER_OTLP_ENDPOINT: Fallback OTLP endpoint.
+    OTEL_EXPORTER_OTLP_TRACES_PROTOCOL: "grpc" or "http/protobuf".
+    OTEL_EXPORTER_OTLP_PROTOCOL: Fallback OTLP protocol.
+    OTEL_EXPORTER_OTLP_TRACES_INSECURE: Whether OTLP exporter is insecure.
+    OTEL_EXPORTER_OTLP_INSECURE: Fallback insecure toggle.
+    OTEL_SERVICE_NAME: Service name for trace resource attributes.
+    OTEL_TRACES_SAMPLE_RATIO: Trace sampling ratio in [0.0, 1.0].
+    PREDICTOR_SHARED_SECRET: Optional shared secret for /predict requests.
+"""
+
 from __future__ import annotations
 
 import logging
@@ -20,6 +39,15 @@ logger = logging.getLogger("predictor.telemetry")
 
 
 def configure_telemetry(app: FastAPI) -> None:
+    """Configure OpenTelemetry tracing for the FastAPI application.
+
+    The function is defensive by design: when telemetry setup fails, startup
+    continues and the predictor remains available without tracing.
+
+    Args:
+        app: FastAPI application instance to instrument.
+    """
+
     endpoint = os.getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT") or os.getenv(
         "OTEL_EXPORTER_OTLP_ENDPOINT", ""
     )
@@ -70,6 +98,8 @@ configure_telemetry(api)
 
 
 class PodSummary(BaseModel):
+    """Input model describing a pod snapshot used by the scorer."""
+
     id: str
     name: str
     namespace: str
@@ -81,11 +111,15 @@ class PodSummary(BaseModel):
 
 
 class CPUPoint(BaseModel):
+    """Single CPU usage sample used to compute short trend signals."""
+
     time: str
     value: int
 
 
 class NodeSummary(BaseModel):
+    """Input model describing a node snapshot used by the scorer."""
+
     name: str
     status: str
     roles: str
@@ -97,6 +131,8 @@ class NodeSummary(BaseModel):
 
 
 class K8sEvent(BaseModel):
+    """Cluster event model used for warning correlation and weighting."""
+
     type: str = ""
     reason: str = ""
     age: str = ""
@@ -106,11 +142,15 @@ class K8sEvent(BaseModel):
 
 
 class PredictionSignal(BaseModel):
+    """Structured explanation signal attached to a prediction result."""
+
     key: str
     value: str
 
 
 class IncidentPrediction(BaseModel):
+    """Predictive incident item returned to the KubeLens backend."""
+
     id: str
     resourceKind: str
     resource: str
@@ -123,6 +163,8 @@ class IncidentPrediction(BaseModel):
 
 
 class PredictionRequest(BaseModel):
+    """Prediction request payload accepted by ``POST /predict``."""
+
     pods: list[PodSummary] = Field(default_factory=list)
     nodes: list[NodeSummary] = Field(default_factory=list)
     events: list[K8sEvent] = Field(default_factory=list)
@@ -130,6 +172,8 @@ class PredictionRequest(BaseModel):
 
 
 class PredictionResponse(BaseModel):
+    """Prediction response payload returned by ``POST /predict``."""
+
     source: str
     generatedAt: str
     items: list[IncidentPrediction]
@@ -137,12 +181,30 @@ class PredictionResponse(BaseModel):
 
 @api.get("/healthz")
 def healthz() -> dict:
+    """Return predictor liveness status.
+
+    Returns:
+        dict: A static health payload with ``{"status": "ok"}``.
+    """
+
     return {"status": "ok"}
 
 
 def require_predictor_secret(
     x_predictor_secret: str | None = Header(default=None, alias="X-Predictor-Secret"),
 ) -> None:
+    """Validate optional shared-secret authentication for predictor requests.
+
+    If ``PREDICTOR_SHARED_SECRET`` is not configured, all requests are allowed.
+    Otherwise callers must provide ``X-Predictor-Secret`` with the exact value.
+
+    Args:
+        x_predictor_secret: Header value supplied by the caller.
+
+    Raises:
+        HTTPException: If the shared secret is configured but does not match.
+    """
+
     expected = os.getenv("PREDICTOR_SHARED_SECRET", "").strip()
     if expected == "":
         return
@@ -153,6 +215,20 @@ def require_predictor_secret(
 @api.post("/predict", response_model=PredictionResponse)
 # Intentionally sync: prediction is CPU-bound in-memory scoring with no blocking I/O.
 def predict(request: PredictionRequest, _: None = Depends(require_predictor_secret)) -> PredictionResponse:
+    """Score pod and node risk from a cluster snapshot.
+
+    The scorer combines status, restart counts, resource usage, warning-event
+    correlation, and simple node CPU trend heuristics. Results are sorted by
+    risk and confidence and capped to the top 10 items.
+
+    Args:
+        request: Cluster snapshot containing pods, nodes, and events.
+        _: Dependency placeholder enforcing optional shared-secret checks.
+
+    Returns:
+        PredictionResponse: Ranked prediction items with evidence signals.
+    """
+
     items: list[IncidentPrediction] = []
 
     for pod in request.pods:
@@ -287,6 +363,17 @@ def predict(request: PredictionRequest, _: None = Depends(require_predictor_secr
 
 
 def count_resource_warning_events(events: list[K8sEvent], resource: str, namespace: str | None) -> int:
+    """Count warning-like events that reference a resource.
+
+    Args:
+        events: Cluster events from the request payload.
+        resource: Resource name to match in event reason/message/source fields.
+        namespace: Optional namespace hint used for matching.
+
+    Returns:
+        int: Weighted count of matching warning events.
+    """
+
     resource_name = resource.strip().lower()
     namespace_name = (namespace or "").strip().lower()
     total = 0
@@ -307,6 +394,15 @@ def count_resource_warning_events(events: list[K8sEvent], resource: str, namespa
 
 
 def compute_trend(history: list[CPUPoint]) -> int:
+    """Compute non-negative delta between first and last CPU history points.
+
+    Args:
+        history: Ordered CPU history points.
+
+    Returns:
+        int: Positive increase between the first and last sample, else 0.
+    """
+
     if len(history) < 2:
         return 0
     start = history[0].value
@@ -323,6 +419,20 @@ def confidence_from_evidence(
     warning_matches: int,
     restart_signal: bool,
 ) -> int:
+    """Estimate prediction confidence from available evidence signals.
+
+    Args:
+        strong_status: Whether a high-confidence status signal exists.
+        signal_count: Number of emitted signals for the candidate.
+        metric_known: Number of known metric dimensions.
+        metric_signal_count: Number of metrics crossing signal thresholds.
+        warning_matches: Count of correlated warning events.
+        restart_signal: Whether restart behavior contributes evidence.
+
+    Returns:
+        int: Confidence score clamped to [35, 96].
+    """
+
     confidence = 35
     if strong_status:
         confidence += 18
@@ -346,6 +456,15 @@ def confidence_from_evidence(
 
 
 def parse_cpu_milli(value: str) -> tuple[int, bool]:
+    """Parse CPU usage to milli-CPU units.
+
+    Args:
+        value: Raw CPU value such as ``450m`` or ``0.5``.
+
+    Returns:
+        tuple[int, bool]: Parsed milli-CPU value and whether parsing succeeded.
+    """
+
     raw = value.strip().lower()
     if not raw or raw == "n/a":
         return 0, False
@@ -358,6 +477,17 @@ def parse_cpu_milli(value: str) -> tuple[int, bool]:
 
 
 def parse_memory_mi(value: str) -> tuple[int, bool]:
+    """Parse memory usage to mebibytes.
+
+    Supported suffixes are ``Ki``, ``Mi``, ``Gi``, and ``B``.
+
+    Args:
+        value: Raw memory value.
+
+    Returns:
+        tuple[int, bool]: Parsed Mi value and whether parsing succeeded.
+    """
+
     raw = value.strip().lower()
     if not raw or raw == "n/a":
         return 0, False
@@ -377,6 +507,15 @@ def parse_memory_mi(value: str) -> tuple[int, bool]:
 
 
 def parse_percent(value: str) -> tuple[float, bool]:
+    """Parse percentage values and clamp to ``[0.0, 100.0]``.
+
+    Args:
+        value: Raw percent value, optionally including ``%``.
+
+    Returns:
+        tuple[float, bool]: Parsed percentage and success flag.
+    """
+
     raw = value.strip().lower().replace("%", "")
     if not raw or raw == "n/a":
         return 0.0, False
@@ -388,6 +527,17 @@ def parse_percent(value: str) -> tuple[float, bool]:
 
 
 def clamp(value: int, low: int, high: int) -> int:
+    """Clamp an integer to an inclusive range.
+
+    Args:
+        value: Input integer.
+        low: Inclusive lower bound.
+        high: Inclusive upper bound.
+
+    Returns:
+        int: Clamped value.
+    """
+
     if value < low:
         return low
     if value > high:

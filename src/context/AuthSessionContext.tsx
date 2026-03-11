@@ -1,3 +1,6 @@
+/**
+ * Authentication session context for UI permission checks and session controls.
+ */
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { api } from "../lib/api";
 import type { AuthSession } from "../types";
@@ -20,6 +23,12 @@ interface AuthSessionContextValue {
 
 const AuthSessionContext = createContext<AuthSessionContextValue | null>(null);
 
+/**
+ * AuthSessionProvider fetches and maintains the current auth session state.
+ *
+ * @param props - React children to render within the session context.
+ * @returns Context provider component.
+ */
 export function AuthSessionProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<AuthSession | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -134,6 +143,12 @@ export function AuthSessionProvider({ children }: { children: React.ReactNode })
   return <AuthSessionContext.Provider value={value}>{children}</AuthSessionContext.Provider>;
 }
 
+/**
+ * useAuthSession returns the current auth session context value.
+ *
+ * @returns Auth session context object.
+ * @throws {Error} If called outside {@link AuthSessionProvider}.
+ */
 export function useAuthSession() {
   const context = useContext(AuthSessionContext);
   if (!context) {
