@@ -1,0 +1,415 @@
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useAuthSession } from "../../../context/AuthSessionContext";
+import { api } from "../../../lib/api";
+import type {
+  Incident,
+  MemoryFixCreateRequest,
+  RemediationProposal,
+  RunbookStep,
+  RunbookStepStatus,
+  TimelineEntry,
+} from "../../../types";
+import { deriveNextRunbookAction, formatKind, type TimelineFilter } from "../utils";
+
+type IncidentStatusFilter = "all" | Incident["status"];
+type IncidentSeverityFilter = "all" | "critical" | "warning";
+
+interface RunbookStats {
+  total: number;
+  done: number;
+  skipped: number;
+  inProgress: number;
+  pending: number;
+  completionPercent: number;
+}
+
+interface IncidentStats {
+  total: number;
+  open: number;
+  criticalOpen: number;
+  resolved: number;
+}
+
+/**
+ * State and actions for the incident commander view.
+ */
+interface UseIncidentDataResult {
+  canRead: boolean;
+  canWrite: boolean;
+  incidents: Incident[];
+  selected: Incident | null;
+  remediations: RemediationProposal[];
+  isLoading: boolean;
+  isActing: boolean;
+  error: string | null;
+  message: string | null;
+  fixPromptDismissed: boolean;
+  fixForm: MemoryFixCreateRequest | null;
+  statusFilter: IncidentStatusFilter;
+  severityFilter: IncidentSeverityFilter;
+  searchQuery: string;
+  timelineFilter: TimelineFilter;
+  associatedExecutedRemediations: RemediationProposal[];
+  incidentStats: IncidentStats;
+  filteredIncidents: Incident[];
+  runbookStats: RunbookStats | null;
+  nextRunbookAction: { step: RunbookStep; target: RunbookStepStatus; label: string } | null;
+  timelineEntries: TimelineEntry[];
+  canResolve: boolean;
+  setStatusFilter: (value: IncidentStatusFilter) => void;
+  setSeverityFilter: (value: IncidentSeverityFilter) => void;
+  setSearchQuery: (value: string) => void;
+  setTimelineFilter: (value: TimelineFilter) => void;
+  clearSelected: () => void;
+  updateFixFormField: (field: keyof MemoryFixCreateRequest, value: string) => void;
+  dismissFixPrompt: () => void;
+  refreshIncidents: () => Promise<void>;
+  loadIncidentDetail: (id: string) => Promise<void>;
+  triggerIncident: () => Promise<void>;
+  applyStepStatus: (step: RunbookStep, target: RunbookStepStatus) => Promise<void>;
+  resolveIncident: () => Promise<void>;
+  generatePostmortem: () => Promise<void>;
+  saveFix: () => Promise<void>;
+}
+
+/**
+ * Manages incident list/detail state, runbook actions, and fix-recording workflow.
+ *
+ * @returns Incident view state and command handlers.
+ */
+export function useIncidentData(): UseIncidentDataResult {
+  const { can } = useAuthSession();
+  const canRead = can("read");
+  const canWrite = can("write");
+
+  const [incidents, setIncidents] = useState<Incident[]>([]);
+  const [selected, setSelected] = useState<Incident | null>(null);
+  const [remediations, setRemediations] = useState<RemediationProposal[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isActing, setIsActing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const [fixPromptDismissed, setFixPromptDismissed] = useState(false);
+  const [fixForm, setFixForm] = useState<MemoryFixCreateRequest | null>(null);
+  const [statusFilter, setStatusFilterState] = useState<IncidentStatusFilter>("all");
+  const [severityFilter, setSeverityFilterState] = useState<IncidentSeverityFilter>("all");
+  const [searchQuery, setSearchQueryState] = useState("");
+  const [timelineFilter, setTimelineFilterState] = useState<TimelineFilter>("all");
+
+  const setStatusFilter = useCallback((value: IncidentStatusFilter) => {
+    setStatusFilterState(value);
+  }, []);
+
+  const setSeverityFilter = useCallback((value: IncidentSeverityFilter) => {
+    setSeverityFilterState(value);
+  }, []);
+
+  const setSearchQuery = useCallback((value: string) => {
+    setSearchQueryState(value);
+  }, []);
+
+  const setTimelineFilter = useCallback((value: TimelineFilter) => {
+    setTimelineFilterState(value);
+  }, []);
+
+  const clearSelected = useCallback(() => {
+    setSelected(null);
+  }, []);
+
+  const updateFixFormField = useCallback((field: keyof MemoryFixCreateRequest, value: string) => {
+    setFixForm((current) => (current ? { ...current, [field]: value } : null));
+  }, []);
+
+  const dismissFixPrompt = useCallback(() => {
+    setFixForm(null);
+    setFixPromptDismissed(true);
+  }, []);
+
+  const refreshIncidents = useCallback(async () => {
+    if (!canRead) {
+      setError("Authenticate to view incidents.");
+      setIncidents([]);
+      setSelected(null);
+      setIsLoading(false);
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const data = await api.listIncidents();
+      setIncidents(data);
+      if (selected?.id) {
+        const fresh = data.find((item) => item.id === selected.id);
+        if (fresh) {
+          setSelected(fresh);
+        }
+      }
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load incidents");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [canRead, selected?.id]);
+
+  const loadIncidentDetail = useCallback(async (id: string) => {
+    setIsActing(true);
+    try {
+      const data = await api.getIncident(id);
+      setSelected(data);
+      setFixPromptDismissed(false);
+      setTimelineFilterState("all");
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load incident detail");
+    } finally {
+      setIsActing(false);
+    }
+  }, []);
+
+  const refreshRemediations = useCallback(async () => {
+    try {
+      const data = await api.listRemediation();
+      setRemediations(data);
+    } catch {
+      setRemediations([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    void refreshIncidents();
+  }, [refreshIncidents]);
+
+  useEffect(() => {
+    if (!selected || selected.status !== "resolved") {
+      setFixForm(null);
+      return;
+    }
+    void refreshRemediations();
+  }, [selected, refreshRemediations]);
+
+  const associatedExecutedRemediations = useMemo(() => {
+    if (!selected) {
+      return [];
+    }
+    const ids = new Set(selected.associatedRemediationIds);
+    return remediations.filter((proposal) => ids.has(proposal.id) && proposal.status === "executed");
+  }, [selected, remediations]);
+
+  useEffect(() => {
+    if (
+      !selected ||
+      selected.status !== "resolved" ||
+      associatedExecutedRemediations.length === 0 ||
+      fixPromptDismissed
+    ) {
+      return;
+    }
+    const first = associatedExecutedRemediations[0];
+    setFixForm({
+      incidentId: selected.id,
+      proposalId: first.id,
+      title: `${formatKind(first.kind)} fix for ${first.resource}`,
+      description: first.executionResult || first.reason,
+      resource: first.namespace ? `${first.namespace}/${first.resource}` : first.resource,
+      kind: first.kind,
+    });
+  }, [associatedExecutedRemediations, fixPromptDismissed, selected]);
+
+  const triggerIncident = useCallback(async () => {
+    if (!canRead) {
+      return;
+    }
+    setIsActing(true);
+    try {
+      const created = await api.createIncident();
+      setMessage(`Incident ${created.id} created.`);
+      await refreshIncidents();
+      await loadIncidentDetail(created.id);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to trigger incident");
+    } finally {
+      setIsActing(false);
+    }
+  }, [canRead, loadIncidentDetail, refreshIncidents]);
+
+  const applyStepStatus = useCallback(
+    async (step: RunbookStep, target: RunbookStepStatus) => {
+      if (!selected || !canWrite) {
+        return;
+      }
+      setIsActing(true);
+      try {
+        const updated = await api.updateIncidentStep(selected.id, step.id, { status: target });
+        setSelected(updated);
+        setMessage(`Step ${step.id} updated to ${target}.`);
+        await refreshIncidents();
+        setError(null);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to update step");
+      } finally {
+        setIsActing(false);
+      }
+    },
+    [canWrite, refreshIncidents, selected],
+  );
+
+  const resolveIncident = useCallback(async () => {
+    if (!selected || !canWrite) {
+      return;
+    }
+    setIsActing(true);
+    try {
+      const updated = await api.resolveIncident(selected.id);
+      setSelected(updated);
+      setMessage(`Incident ${updated.id} resolved.`);
+      await refreshIncidents();
+      await refreshRemediations();
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to resolve incident");
+    } finally {
+      setIsActing(false);
+    }
+  }, [canWrite, refreshIncidents, refreshRemediations, selected]);
+
+  const generatePostmortem = useCallback(async () => {
+    if (!selected || !canWrite) {
+      return;
+    }
+    setIsActing(true);
+    try {
+      const created = await api.generatePostmortem(selected.id);
+      setMessage(`Postmortem ${created.id} generated (${created.method.toUpperCase()}).`);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to generate postmortem");
+    } finally {
+      setIsActing(false);
+    }
+  }, [canWrite, selected]);
+
+  const saveFix = useCallback(async () => {
+    if (!fixForm || !canWrite) {
+      return;
+    }
+    setIsActing(true);
+    try {
+      await api.recordMemoryFix(fixForm);
+      setMessage("Fix pattern recorded in cluster memory.");
+      setFixForm(null);
+      setFixPromptDismissed(true);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to record fix");
+    } finally {
+      setIsActing(false);
+    }
+  }, [canWrite, fixForm]);
+
+  const incidentStats = useMemo(() => {
+    const open = incidents.filter((item) => item.status === "open");
+    const criticalOpen = open.filter((item) => item.severity === "critical");
+    return {
+      total: incidents.length,
+      open: open.length,
+      criticalOpen: criticalOpen.length,
+      resolved: incidents.length - open.length,
+    };
+  }, [incidents]);
+
+  const filteredIncidents = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    return incidents.filter((incident) => {
+      if (statusFilter !== "all" && incident.status !== statusFilter) {
+        return false;
+      }
+      if (severityFilter !== "all" && incident.severity !== severityFilter) {
+        return false;
+      }
+      if (query === "") {
+        return true;
+      }
+      return `${incident.id} ${incident.title} ${incident.summary} ${incident.affectedResources.join(" ")}`
+        .toLowerCase()
+        .includes(query);
+    });
+  }, [incidents, searchQuery, severityFilter, statusFilter]);
+
+  const runbookStats = useMemo(() => {
+    if (!selected) {
+      return null;
+    }
+    const total = selected.runbook.length;
+    const done = selected.runbook.filter((step) => step.status === "done").length;
+    const skipped = selected.runbook.filter((step) => step.status === "skipped").length;
+    const inProgress = selected.runbook.filter((step) => step.status === "in_progress").length;
+    const pending = selected.runbook.filter((step) => step.status === "pending").length;
+    const completionPercent = total > 0 ? Math.round(((done + skipped) / total) * 100) : 0;
+    return { total, done, skipped, inProgress, pending, completionPercent };
+  }, [selected]);
+
+  const nextRunbookAction = useMemo(() => {
+    if (!selected) {
+      return null;
+    }
+    return deriveNextRunbookAction(selected.runbook);
+  }, [selected]);
+
+  const timelineEntries = useMemo(() => {
+    if (!selected) {
+      return [];
+    }
+    if (timelineFilter === "all") {
+      return selected.timeline;
+    }
+    return selected.timeline.filter((entry) => entry.kind === timelineFilter);
+  }, [selected, timelineFilter]);
+
+  const canResolve = useMemo(() => {
+    if (!selected || selected.status !== "open") {
+      return false;
+    }
+    return selected.runbook.every((step) => step.status === "done" || step.status === "skipped");
+  }, [selected]);
+
+  return {
+    canRead,
+    canWrite,
+    incidents,
+    selected,
+    remediations,
+    isLoading,
+    isActing,
+    error,
+    message,
+    fixPromptDismissed,
+    fixForm,
+    statusFilter,
+    severityFilter,
+    searchQuery,
+    timelineFilter,
+    associatedExecutedRemediations,
+    incidentStats,
+    filteredIncidents,
+    runbookStats,
+    nextRunbookAction,
+    timelineEntries,
+    canResolve,
+    setStatusFilter,
+    setSeverityFilter,
+    setSearchQuery,
+    setTimelineFilter,
+    clearSelected,
+    updateFixFormField,
+    dismissFixPrompt,
+    refreshIncidents,
+    loadIncidentDetail,
+    triggerIncident,
+    applyStepStatus,
+    resolveIncident,
+    generatePostmortem,
+    saveFix,
+  };
+}
