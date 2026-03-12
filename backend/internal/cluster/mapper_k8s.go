@@ -62,6 +62,7 @@ func mapPodSummary(pod corev1.Pod) model.PodSummary {
 		ID:        id,
 		Name:      pod.Name,
 		Namespace: pod.Namespace,
+		NodeName:  pod.Spec.NodeName,
 		Status:    mapPodStatus(pod.Status.Phase),
 		CPU:       "N/A",
 		Memory:    "N/A",

@@ -11,6 +11,8 @@ export default function Nodes() {
     nodes,
     filteredNodes,
     selectedNode,
+    selectedNodePods,
+    selectedNodeEvents,
     search,
     isLoading,
     isBusy,
@@ -59,7 +61,12 @@ export default function Nodes() {
         onDrain={drain}
       />
 
-      <NodeDetailModal selectedNode={selectedNode} onClose={clearSelectedNode} />
+      <NodeDetailModal
+        selectedNode={selectedNode}
+        nodePods={selectedNodePods}
+        nodeEvents={selectedNodeEvents}
+        onClose={clearSelectedNode}
+      />
     </div>
   );
 }

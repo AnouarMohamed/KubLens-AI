@@ -1355,6 +1355,8 @@ components:
           type: string
         namespace:
           type: string
+        nodeName:
+          type: string
         status:
           type: string
         cpu:
@@ -1567,6 +1569,12 @@ components:
         from:
           type: string
         message:
+          type: string
+        namespace:
+          type: string
+        resource:
+          type: string
+        resourceKind:
           type: string
         count:
           type: integer

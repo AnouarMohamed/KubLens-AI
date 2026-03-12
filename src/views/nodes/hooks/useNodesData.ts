@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useStreamRefresh } from "../../../app/hooks/useStreamRefresh";
 import { useAuthSession } from "../../../context/AuthSessionContext";
 import { api } from "../../../lib/api";
-import type { Node, NodeDetail, NodeDrainPreview } from "../../../types";
+import type { K8sEvent, Node, NodeDetail, NodeDrainPreview, Pod } from "../../../types";
 
 /**
  * UI state and actions for the nodes view.
@@ -13,6 +13,8 @@ interface UseNodesDataResult {
   nodes: Node[];
   filteredNodes: Node[];
   selectedNode: NodeDetail | null;
+  selectedNodePods: Pod[];
+  selectedNodeEvents: K8sEvent[];
   lastDrainPreview: NodeDrainPreview | null;
   search: string;
   isLoading: boolean;
@@ -37,6 +39,8 @@ export function useNodesData(): UseNodesDataResult {
   const { can, isLoading: authLoading } = useAuthSession();
   const [nodes, setNodes] = useState<Node[]>([]);
   const [selectedNode, setSelectedNode] = useState<NodeDetail | null>(null);
+  const [selectedNodePods, setSelectedNodePods] = useState<Pod[]>([]);
+  const [selectedNodeEvents, setSelectedNodeEvents] = useState<K8sEvent[]>([]);
   const [lastDrainPreview, setLastDrainPreview] = useState<NodeDrainPreview | null>(null);
   const [search, setSearchState] = useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -102,8 +106,18 @@ export function useNodesData(): UseNodesDataResult {
 
       setIsBusy(true);
       try {
-        const response = await api.getNodeDetail(name);
-        setSelectedNode(response);
+        const [detail, pods, events] = await Promise.all([api.getNodeDetail(name), api.getPods(), api.getEvents()]);
+        const nodePods = pods.filter((pod) => pod.nodeName === name);
+        const nodeEvents = events.filter((event) => {
+          if ((event.resourceKind ?? "").toLowerCase() !== "node") {
+            return false;
+          }
+          return (event.resource ?? "").toLowerCase() === name.toLowerCase();
+        });
+
+        setSelectedNode(detail);
+        setSelectedNodePods(nodePods);
+        setSelectedNodeEvents(nodeEvents);
         setError(null);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load node details");
@@ -231,6 +245,8 @@ export function useNodesData(): UseNodesDataResult {
 
   const clearSelectedNode = useCallback(() => {
     setSelectedNode(null);
+    setSelectedNodePods([]);
+    setSelectedNodeEvents([]);
   }, []);
 
   return {
@@ -239,6 +255,8 @@ export function useNodesData(): UseNodesDataResult {
     nodes,
     filteredNodes,
     selectedNode,
+    selectedNodePods,
+    selectedNodeEvents,
     lastDrainPreview,
     search,
     isLoading,

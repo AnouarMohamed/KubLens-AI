@@ -168,6 +168,7 @@ func mapPodSummaryFromState(pod state.PodInfo) model.PodSummary {
 		ID:        pod.UID,
 		Name:      pod.Name,
 		Namespace: pod.Namespace,
+		NodeName:  pod.NodeName,
 		Status:    status,
 		CPU:       formatMilliCPU(pod.Usage.CPUMilli),
 		Memory:    formatMemoryBytes(pod.Usage.MemoryBytes),
@@ -231,6 +232,9 @@ func mapK8sEventFromState(event state.EventInfo) model.K8sEvent {
 		Age:           formatAge(lastSeen),
 		From:          event.Source,
 		Message:       event.Message,
+		Namespace:     event.Namespace,
+		Resource:      event.InvolvedObjectName,
+		ResourceKind:  event.InvolvedObjectKind,
 		Count:         event.Count,
 		LastTimestamp: formatRFC3339(lastSeen),
 	}

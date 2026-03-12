@@ -12,6 +12,7 @@ export interface Pod {
   id: string;
   name: string;
   namespace: string;
+  nodeName?: string;
   status: PodStatus;
   cpu: string;
   memory: string;
@@ -26,6 +27,9 @@ export interface K8sEvent {
   // Keep backend contract field name ("from") to avoid a runtime mapping layer.
   from: string;
   message: string;
+  namespace?: string;
+  resource?: string;
+  resourceKind?: string;
   count?: number;
   lastTimestamp?: string;
 }

@@ -208,6 +208,9 @@ func (s *Service) PodEvents(ctx context.Context, namespace, name string) []model
 			Age:           formatAge(lastSeen),
 			From:          firstNonEmpty(event.ReportingController, event.Source.Component, "kubernetes"),
 			Message:       event.Message,
+			Namespace:     event.Namespace,
+			Resource:      event.InvolvedObject.Name,
+			ResourceKind:  event.InvolvedObject.Kind,
 			Count:         event.Count,
 			LastTimestamp: formatRFC3339(lastSeen),
 		})
@@ -430,6 +433,9 @@ func (s *Service) ListClusterEvents(ctx context.Context) []model.K8sEvent {
 			Age:           formatAge(lastSeen),
 			From:          firstNonEmpty(event.ReportingController, event.Source.Component, "kubernetes"),
 			Message:       event.Message,
+			Namespace:     event.Namespace,
+			Resource:      event.InvolvedObject.Name,
+			ResourceKind:  event.InvolvedObject.Kind,
 			Count:         event.Count,
 			LastTimestamp: formatRFC3339(lastSeen),
 		})

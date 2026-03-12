@@ -111,23 +111,28 @@ func (s *Service) mockClusterEvents() []model.K8sEvent {
 		}
 
 		events = append(events, model.K8sEvent{
-			Type:    eventType,
-			Reason:  reason,
-			Age:     "1m",
-			From:    "kubelet",
-			Message: message,
-			Count:   1,
+			Type:         eventType,
+			Reason:       reason,
+			Age:          "1m",
+			From:         "kubelet",
+			Message:      message,
+			Namespace:    pod.Namespace,
+			Resource:     pod.Name,
+			ResourceKind: "Pod",
+			Count:        1,
 		})
 	}
 
 	if len(events) == 0 {
 		return []model.K8sEvent{{
-			Type:    "Normal",
-			Reason:  "Synced",
-			Age:     "1m",
-			From:    "controller-manager",
-			Message: "Cluster event stream is healthy",
-			Count:   1,
+			Type:         "Normal",
+			Reason:       "Synced",
+			Age:          "1m",
+			From:         "controller-manager",
+			Message:      "Cluster event stream is healthy",
+			Resource:     "cluster",
+			ResourceKind: "Cluster",
+			Count:        1,
 		}}
 	}
 
