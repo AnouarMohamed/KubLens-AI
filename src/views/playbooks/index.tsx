@@ -2,22 +2,63 @@ import { useMemo, useState } from "react";
 import { PlaybookCard } from "./components/PlaybookCard";
 import { PLAYBOOKS } from "./data/playbooks";
 import type { PlaybookDomain } from "./types";
-import { classifyPlaybook, domainLabel, matchesPlaybookQuery, sortedDomains } from "./utils";
+import { classifyPlaybook, domainLabel, matchesPlaybookQuery, playbookUrgency, sortedDomains } from "./utils";
+
+const FAVORITES_STORAGE_KEY = "kubelens.playbook-favorites";
 
 export default function Playbooks() {
   const [query, setQuery] = useState("");
   const [domain, setDomain] = useState<"all" | PlaybookDomain>("all");
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const [sortBy, setSortBy] = useState<"default" | "urgency" | "title">("default");
+  const [favoriteIDs, setFavoriteIDs] = useState<string[]>(() => {
+    if (typeof window === "undefined") {
+      return [];
+    }
+    try {
+      const raw = window.localStorage.getItem(FAVORITES_STORAGE_KEY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      if (!Array.isArray(parsed)) {
+        return [];
+      }
+      return parsed.filter((item): item is string => typeof item === "string");
+    } catch {
+      return [];
+    }
+  });
 
   const domains = useMemo(() => sortedDomains(PLAYBOOKS), []);
 
   const filtered = useMemo(() => {
-    return PLAYBOOKS.filter((playbook) => {
+    const filteredRows = PLAYBOOKS.filter((playbook) => {
       if (domain !== "all" && classifyPlaybook(playbook) !== domain) {
+        return false;
+      }
+      if (favoritesOnly && !favoriteIDs.includes(playbook.id)) {
         return false;
       }
       return matchesPlaybookQuery(playbook, query);
     });
-  }, [domain, query]);
+
+    if (sortBy === "title") {
+      return [...filteredRows].sort((left, right) => left.title.localeCompare(right.title));
+    }
+    if (sortBy === "urgency") {
+      const rank = { high: 0, medium: 1, low: 2 } as const;
+      return [...filteredRows].sort((left, right) => {
+        return rank[playbookUrgency(left)] - rank[playbookUrgency(right)];
+      });
+    }
+    return filteredRows;
+  }, [domain, favoriteIDs, favoritesOnly, query, sortBy]);
+
+  const toggleFavorite = (id: string) => {
+    setFavoriteIDs((state) => {
+      const next = state.includes(id) ? state.filter((item) => item !== id) : [...state, id];
+      window.localStorage.setItem(FAVORITES_STORAGE_KEY, JSON.stringify(next));
+      return next;
+    });
+  };
 
   return (
     <div className="space-y-5">
@@ -50,17 +91,33 @@ export default function Playbooks() {
               </option>
             ))}
           </select>
+          <select value={sortBy} onChange={(event) => setSortBy(event.target.value as "default" | "urgency" | "title")} className="input w-[180px]">
+            <option value="default">Sort: Default</option>
+            <option value="urgency">Sort: Urgency</option>
+            <option value="title">Sort: Title</option>
+          </select>
+          <button onClick={() => setFavoritesOnly((state) => !state)} className="btn-sm border-zinc-600">
+            {favoritesOnly ? "Show All" : "Favorites Only"}
+          </button>
         </div>
 
         <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-400">
           <span>{PLAYBOOKS.length} total playbooks</span>
           <span>{filtered.length} matching current filters</span>
+          <span>{favoriteIDs.length} saved</span>
         </div>
       </section>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         {filtered.map((playbook) => (
-          <PlaybookCard key={playbook.id} playbook={playbook} domain={classifyPlaybook(playbook)} />
+          <PlaybookCard
+            key={playbook.id}
+            playbook={playbook}
+            domain={classifyPlaybook(playbook)}
+            urgency={playbookUrgency(playbook)}
+            isFavorite={favoriteIDs.includes(playbook.id)}
+            onToggleFavorite={toggleFavorite}
+          />
         ))}
       </div>
 

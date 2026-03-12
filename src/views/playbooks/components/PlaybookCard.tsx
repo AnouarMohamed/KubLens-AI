@@ -1,13 +1,17 @@
 import { useState } from "react";
 import type { Playbook, PlaybookDomain } from "../types";
-import { domainLabel } from "../utils";
+import type { PlaybookUrgency } from "../utils";
+import { domainLabel, urgencyLabel } from "../utils";
 
 interface PlaybookCardProps {
   playbook: Playbook;
   domain: PlaybookDomain;
+  urgency: PlaybookUrgency;
+  isFavorite: boolean;
+  onToggleFavorite: (id: string) => void;
 }
 
-export function PlaybookCard({ playbook, domain }: PlaybookCardProps) {
+export function PlaybookCard({ playbook, domain, urgency, isFavorite, onToggleFavorite }: PlaybookCardProps) {
   const [copyState, setCopyState] = useState<"idle" | "ok" | "err">("idle");
 
   const copyCommands = async () => {
@@ -27,10 +31,26 @@ export function PlaybookCard({ playbook, domain }: PlaybookCardProps) {
         <div>
           <h3 className="text-lg font-semibold text-zinc-100">{playbook.title}</h3>
           <p className="mt-1 text-sm text-zinc-400">{playbook.whenToUse}</p>
+          <div className="mt-2 flex items-center gap-2">
+            <span className="rounded-md border border-zinc-700 bg-zinc-800/70 px-2 py-0.5 text-[10px] uppercase tracking-wide text-zinc-300">
+              {domainLabel(domain)}
+            </span>
+            <span
+              className={`rounded-md border px-2 py-0.5 text-[10px] uppercase tracking-wide text-zinc-200 ${
+                urgency === "high"
+                  ? "border-[#ff4444]/45 bg-[#ff4444]/12"
+                  : urgency === "medium"
+                    ? "border-[#eab308]/45 bg-[#eab308]/12"
+                    : "border-zinc-700 bg-zinc-800/60"
+              }`}
+            >
+              {urgencyLabel(urgency)}
+            </span>
+          </div>
         </div>
-        <span className="rounded-md border border-zinc-700 bg-zinc-800/70 px-2 py-0.5 text-[10px] uppercase tracking-wide text-zinc-300">
-          {domainLabel(domain)}
-        </span>
+        <button onClick={() => onToggleFavorite(playbook.id)} className="btn-sm border-zinc-600">
+          {isFavorite ? "★ Saved" : "☆ Save"}
+        </button>
       </div>
 
       <div className="rounded-md border border-zinc-800 bg-zinc-950/60 px-3 py-2">
