@@ -5,32 +5,49 @@ import type { Node } from "../../../types";
  */
 interface NodesTableProps {
   nodes: Node[];
+  selectedNodeNames: string[];
   isLoading: boolean;
   canRead: boolean;
   canWrite: boolean;
+  onToggleNodeSelection: (name: string) => void;
+  onToggleSelectAllVisible: (names: string[]) => void;
   onOpenDetail: (name: string) => Promise<void>;
   onCordon: (name: string) => Promise<void>;
   onUncordon: (name: string) => Promise<void>;
   onPreviewDrain: (name: string) => Promise<void>;
-  onDrain: (name: string) => Promise<void>;
+  onDrain: (name: string, force?: boolean) => Promise<void>;
 }
 
 export function NodesTable({
   nodes,
+  selectedNodeNames,
   isLoading,
   canRead,
   canWrite,
+  onToggleNodeSelection,
+  onToggleSelectAllVisible,
   onOpenDetail,
   onCordon,
   onUncordon,
   onPreviewDrain,
   onDrain,
 }: NodesTableProps) {
+  const visibleNames = nodes.map((node) => node.name);
+  const allVisibleSelected = visibleNames.length > 0 && visibleNames.every((name) => selectedNodeNames.includes(name));
+
   return (
     <div className="table-shell">
       <table className="min-w-full text-left text-sm">
         <thead className="table-head table-head-sticky">
           <tr>
+            <th className="px-4 py-3 font-semibold">
+              <input
+                type="checkbox"
+                checked={allVisibleSelected}
+                onChange={() => onToggleSelectAllVisible(visibleNames)}
+                aria-label="Select all visible nodes"
+              />
+            </th>
             <th className="px-4 py-3 font-semibold">Node</th>
             <th className="px-4 py-3 font-semibold">Status</th>
             <th className="px-4 py-3 font-semibold">Roles</th>
@@ -44,8 +61,23 @@ export function NodesTable({
         <tbody className="divide-y divide-zinc-800 text-zinc-200">
           {nodes.map((node) => (
             <tr key={node.name} className="table-row">
+              <td className="px-4 py-3">
+                <input
+                  type="checkbox"
+                  checked={selectedNodeNames.includes(node.name)}
+                  onChange={() => onToggleNodeSelection(node.name)}
+                  aria-label={`Select node ${node.name}`}
+                />
+              </td>
               <td className="px-4 py-3 font-medium">{node.name}</td>
-              <td className="px-4 py-3">{node.status}</td>
+              <td className="px-4 py-3">
+                <span>{node.status}</span>
+                {node.unschedulable && (
+                  <span className="ml-2 rounded-md border border-[#eab308]/45 bg-[#eab308]/12 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-zinc-100">
+                    Cordoned
+                  </span>
+                )}
+              </td>
               <td className="px-4 py-3 text-zinc-400">{node.roles}</td>
               <td className="px-4 py-3 text-zinc-400">{node.cpuUsage}</td>
               <td className="px-4 py-3 text-zinc-400">{node.memUsage}</td>

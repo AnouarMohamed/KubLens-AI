@@ -57,6 +57,7 @@ export interface Node {
   name: string;
   status: NodeStatus;
   roles: string;
+  unschedulable?: boolean;
   age: string;
   version: string;
   cpuUsage: string;

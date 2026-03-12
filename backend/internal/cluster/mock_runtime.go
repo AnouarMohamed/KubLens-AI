@@ -207,6 +207,7 @@ func (s *Service) mockCordonNode(name string) (model.ActionResult, error) {
 		if s.mockNodes[i].Name != name {
 			continue
 		}
+		s.mockNodes[i].Unschedulable = true
 		if !strings.Contains(s.mockNodes[i].Roles, "cordoned") {
 			s.mockNodes[i].Roles = strings.TrimSpace(s.mockNodes[i].Roles + ",cordoned")
 		}
@@ -224,6 +225,7 @@ func (s *Service) mockUncordonNode(name string) (model.ActionResult, error) {
 		if s.mockNodes[i].Name != name {
 			continue
 		}
+		s.mockNodes[i].Unschedulable = false
 		roles := strings.Split(s.mockNodes[i].Roles, ",")
 		trimmed := make([]string, 0, len(roles))
 		for _, role := range roles {

@@ -187,14 +187,15 @@ func mapNodeSummaryFromState(node state.NodeInfo) model.NodeSummary {
 	}
 
 	return model.NodeSummary{
-		Name:       node.Name,
-		Status:     mapNodeStatusFromState(node.Status),
-		Roles:      roles,
-		Age:        formatAge(node.CreatedAt),
-		Version:    node.Version,
-		CPUUsage:   cpuUsage,
-		MemUsage:   memUsage,
-		CPUHistory: mapCPUHistory(node),
+		Name:          node.Name,
+		Status:        mapNodeStatusFromState(node.Status),
+		Roles:         roles,
+		Unschedulable: node.Unschedulable,
+		Age:           formatAge(node.CreatedAt),
+		Version:       node.Version,
+		CPUUsage:      cpuUsage,
+		MemUsage:      memUsage,
+		CPUHistory:    mapCPUHistory(node),
 	}
 }
 

@@ -1448,6 +1448,8 @@ components:
           type: string
         roles:
           type: string
+        unschedulable:
+          type: boolean
         age:
           type: string
         version:

@@ -54,19 +54,20 @@ type PodInfo struct {
 }
 
 type NodeInfo struct {
-	UID          string
-	Name         string
-	Status       string
-	Roles        []string
-	Version      string
-	CreatedAt    time.Time
-	Conditions   []ConditionInfo
-	Capacity     ResourceQuantities
-	Allocatable  ResourceQuantities
-	Usage        ResourceQuantities
-	UsageHistory []UsagePoint
-	Labels       map[string]string
-	Taints       []string
+	UID           string
+	Name          string
+	Status        string
+	Roles         []string
+	Unschedulable bool
+	Version       string
+	CreatedAt     time.Time
+	Conditions    []ConditionInfo
+	Capacity      ResourceQuantities
+	Allocatable   ResourceQuantities
+	Usage         ResourceQuantities
+	UsageHistory  []UsagePoint
+	Labels        map[string]string
+	Taints        []string
 }
 
 type DeploymentInfo struct {

@@ -73,14 +73,15 @@ func mapPodSummary(pod corev1.Pod) model.PodSummary {
 
 func mapNodeSummary(node corev1.Node) model.NodeSummary {
 	return model.NodeSummary{
-		Name:       node.Name,
-		Status:     mapNodeStatus(node.Status.Conditions),
-		Roles:      nodeRoles(node.Labels),
-		Age:        formatAge(node.CreationTimestamp.Time),
-		Version:    node.Status.NodeInfo.KubeletVersion,
-		CPUUsage:   "N/A",
-		MemUsage:   "N/A",
-		CPUHistory: buildCPUHistory(node.Name),
+		Name:          node.Name,
+		Status:        mapNodeStatus(node.Status.Conditions),
+		Roles:         nodeRoles(node.Labels),
+		Unschedulable: node.Spec.Unschedulable,
+		Age:           formatAge(node.CreationTimestamp.Time),
+		Version:       node.Status.NodeInfo.KubeletVersion,
+		CPUUsage:      "N/A",
+		MemUsage:      "N/A",
+		CPUHistory:    buildCPUHistory(node.Name),
 	}
 }
 

@@ -88,14 +88,15 @@ type CPUPoint struct {
 }
 
 type NodeSummary struct {
-	Name       string     `json:"name"`
-	Status     NodeStatus `json:"status"`
-	Roles      string     `json:"roles"`
-	Age        string     `json:"age"`
-	Version    string     `json:"version"`
-	CPUUsage   string     `json:"cpuUsage"`
-	MemUsage   string     `json:"memUsage"`
-	CPUHistory []CPUPoint `json:"cpuHistory,omitempty"`
+	Name          string     `json:"name"`
+	Status        NodeStatus `json:"status"`
+	Roles         string     `json:"roles"`
+	Unschedulable bool       `json:"unschedulable,omitempty"`
+	Age           string     `json:"age"`
+	Version       string     `json:"version"`
+	CPUUsage      string     `json:"cpuUsage"`
+	MemUsage      string     `json:"memUsage"`
+	CPUHistory    []CPUPoint `json:"cpuHistory,omitempty"`
 }
 
 type ResourceCapacity struct {

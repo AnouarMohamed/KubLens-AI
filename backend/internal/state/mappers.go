@@ -138,17 +138,18 @@ func mapNodeInfo(node *corev1.Node) NodeInfo {
 	}
 
 	return NodeInfo{
-		UID:         string(node.UID),
-		Name:        node.Name,
-		Status:      status,
-		Roles:       roles,
-		Version:     node.Status.NodeInfo.KubeletVersion,
-		CreatedAt:   node.CreationTimestamp.Time,
-		Conditions:  conditions,
-		Capacity:    mapQuantities(node.Status.Capacity),
-		Allocatable: mapQuantities(node.Status.Allocatable),
-		Labels:      cloneStringMap(node.Labels),
-		Taints:      taints,
+		UID:           string(node.UID),
+		Name:          node.Name,
+		Status:        status,
+		Roles:         roles,
+		Unschedulable: node.Spec.Unschedulable,
+		Version:       node.Status.NodeInfo.KubeletVersion,
+		CreatedAt:     node.CreationTimestamp.Time,
+		Conditions:    conditions,
+		Capacity:      mapQuantities(node.Status.Capacity),
+		Allocatable:   mapQuantities(node.Status.Allocatable),
+		Labels:        cloneStringMap(node.Labels),
+		Taints:        taints,
 	}
 }
 
