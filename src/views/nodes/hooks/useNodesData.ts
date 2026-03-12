@@ -4,9 +4,10 @@ import { useAuthSession } from "../../../context/AuthSessionContext";
 import { api } from "../../../lib/api";
 import type { K8sEvent, Node, NodeAlertLifecycle, NodeDetail, NodeDrainPreview, Pod } from "../../../types";
 import { buildAllocatableDropAlert, deriveNodeRuleAlerts } from "./nodeRuleEngine";
+import { useNodeAlertActions } from "./useNodeAlertActions";
+import { useNodeSelection } from "./useNodeSelection";
 import type { NodeDrainOptions, NodeRuleAlert } from "./nodesTypes";
 import { ensureForceDrainReason, indexAlertLifecycleByID, parseCPUCapacity, parseMemoryCapacity } from "./nodesUtils";
-export type { NodeDrainOptions, NodeRuleAlert } from "./nodesTypes";
 
 /**
  * UI state and actions for the nodes view.
@@ -64,15 +65,14 @@ export function useNodesData(): UseNodesDataResult {
   const [selectedNodeEvents, setSelectedNodeEvents] = useState<K8sEvent[]>([]);
   const [lastDrainPreview, setLastDrainPreview] = useState<NodeDrainPreview | null>(null);
   const [allocatableDropAlerts, setAllocatableDropAlerts] = useState<NodeRuleAlert[]>([]);
-  const [isDispatchingNodeAlert, setIsDispatchingNodeAlert] = useState(false);
-  const [isUpdatingNodeAlertLifecycle, setIsUpdatingNodeAlertLifecycle] = useState(false);
   const [alertLifecycleByID, setAlertLifecycleByID] = useState<Record<string, NodeAlertLifecycle>>({});
-  const [selectedNodeNames, setSelectedNodeNames] = useState<string[]>([]);
   const [search, setSearchState] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const { selectedNodeNames, setSelectedNodeNames, toggleNodeSelection, toggleSelectAllVisible, clearNodeSelection } =
+    useNodeSelection();
   const canRead = can("read");
   const canWrite = can("write");
   const allocatableSnapshotRef = useRef<Record<string, { cpu: number; memory: number }>>({});
@@ -116,7 +116,7 @@ export function useNodesData(): UseNodesDataResult {
     } finally {
       setIsLoading(false);
     }
-  }, [canRead, reportError]);
+  }, [canRead, reportError, setSelectedNodeNames]);
 
   useEffect(() => {
     if (authLoading) {
@@ -146,6 +146,14 @@ export function useNodesData(): UseNodesDataResult {
     () => deriveNodeRuleAlerts(nodes, clusterEvents, allocatableDropAlerts, alertLifecycleByID),
     [alertLifecycleByID, allocatableDropAlerts, clusterEvents, nodes],
   );
+  const { isDispatchingNodeAlert, isUpdatingNodeAlertLifecycle, dispatchNodeRuleAlert, updateNodeAlertLifecycle } =
+    useNodeAlertActions({
+      canWrite,
+      nodeRuleAlerts,
+      reportError,
+      reportNotice,
+      setAlertLifecycleByID,
+    });
 
   const loadNodeContext = useCallback(async (name: string) => {
     const [detail, nodePods, nodeEvents] = await Promise.all([
@@ -335,32 +343,6 @@ export function useNodesData(): UseNodesDataResult {
     setSelectedNodeEvents([]);
   }, []);
 
-  const toggleNodeSelection = useCallback((name: string) => {
-    setSelectedNodeNames((state) => (state.includes(name) ? state.filter((item) => item !== name) : [...state, name]));
-  }, []);
-
-  const toggleSelectAllVisible = useCallback((names: string[]) => {
-    if (names.length === 0) {
-      setSelectedNodeNames([]);
-      return;
-    }
-    setSelectedNodeNames((state) => {
-      const allSelected = names.every((name) => state.includes(name));
-      if (allSelected) {
-        return state.filter((name) => !names.includes(name));
-      }
-      const next = new Set(state);
-      for (const name of names) {
-        next.add(name);
-      }
-      return Array.from(next);
-    });
-  }, []);
-
-  const clearNodeSelection = useCallback(() => {
-    setSelectedNodeNames([]);
-  }, []);
-
   const bulkCordon = useCallback(async () => {
     if (!canWrite) {
       reportError("Your role does not allow node cordon actions.");
@@ -385,7 +367,7 @@ export function useNodesData(): UseNodesDataResult {
     } finally {
       setIsBusy(false);
     }
-  }, [canWrite, load, reportError, reportNotice, selectedNodeNames]);
+  }, [canWrite, load, reportError, reportNotice, selectedNodeNames, setSelectedNodeNames]);
 
   const bulkUncordon = useCallback(async () => {
     if (!canWrite) {
@@ -411,7 +393,7 @@ export function useNodesData(): UseNodesDataResult {
     } finally {
       setIsBusy(false);
     }
-  }, [canWrite, load, reportError, reportNotice, selectedNodeNames]);
+  }, [canWrite, load, reportError, reportNotice, selectedNodeNames, setSelectedNodeNames]);
 
   const bulkDrain = useCallback(
     async (options: NodeDrainOptions = {}) => {
@@ -462,99 +444,7 @@ export function useNodesData(): UseNodesDataResult {
         setIsBusy(false);
       }
     },
-    [canWrite, load, reportError, reportNotice, selectedNodeNames],
-  );
-
-  const dispatchNodeRuleAlert = useCallback(
-    async (alertID: string) => {
-      if (!canWrite) {
-        reportError("Your role does not allow alert dispatch.");
-        return;
-      }
-      const alert = nodeRuleAlerts.find((item) => item.id === alertID);
-      if (!alert) {
-        reportError("Selected node alert no longer exists.");
-        return;
-      }
-
-      setIsDispatchingNodeAlert(true);
-      try {
-        const response = await api.dispatchAlert({
-          title: alert.title,
-          message: alert.message,
-          severity: alert.severity,
-          source: "nodes-rule-engine",
-          tags: ["nodes", alert.rule, alert.node],
-        });
-        if (response.success) {
-          reportNotice("Node alert dispatched to configured channels.");
-        } else {
-          reportError("Node alert dispatch partially failed.");
-        }
-      } catch (err) {
-        reportError(err instanceof Error ? err.message : "Failed to dispatch node alert");
-      } finally {
-        setIsDispatchingNodeAlert(false);
-      }
-    },
-    [canWrite, nodeRuleAlerts, reportError, reportNotice],
-  );
-
-  const updateNodeAlertLifecycle = useCallback(
-    async (alertID: string, status: "acknowledged" | "snoozed" | "dismissed" | "active") => {
-      if (!canWrite) {
-        reportError("Your role does not allow alert lifecycle updates.");
-        return;
-      }
-      const alert = nodeRuleAlerts.find((item) => item.id === alertID);
-      if (!alert) {
-        reportError("Selected node alert no longer exists.");
-        return;
-      }
-
-      let snoozeMinutes = 0;
-      if (status === "snoozed") {
-        const raw = window.prompt("Snooze duration in minutes (1-1440):", "30");
-        if (raw === null) {
-          return;
-        }
-        const parsed = Number.parseInt(raw.trim(), 10);
-        if (!Number.isFinite(parsed) || parsed < 1 || parsed > 1440) {
-          reportError("Invalid snooze duration. Enter a number between 1 and 1440.");
-          return;
-        }
-        snoozeMinutes = parsed;
-      }
-
-      setIsUpdatingNodeAlertLifecycle(true);
-      try {
-        const updated = await api.updateAlertLifecycle({
-          id: alert.id,
-          node: alert.node,
-          rule: alert.rule,
-          status,
-          snoozeMinutes: snoozeMinutes > 0 ? snoozeMinutes : undefined,
-        });
-        setAlertLifecycleByID((state) => ({
-          ...state,
-          [updated.id]: updated,
-        }));
-        reportNotice(
-          status === "active"
-            ? "Node alert moved back to active."
-            : status === "acknowledged"
-              ? "Node alert acknowledged."
-              : status === "dismissed"
-                ? "Node alert dismissed."
-                : `Node alert snoozed for ${snoozeMinutes} minute(s).`,
-        );
-      } catch (err) {
-        reportError(err instanceof Error ? err.message : "Failed to update node alert lifecycle");
-      } finally {
-        setIsUpdatingNodeAlertLifecycle(false);
-      }
-    },
-    [canWrite, nodeRuleAlerts, reportError, reportNotice],
+    [canWrite, load, reportError, reportNotice, selectedNodeNames, setSelectedNodeNames],
   );
 
   return {

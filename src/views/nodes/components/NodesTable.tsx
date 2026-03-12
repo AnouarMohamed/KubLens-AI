@@ -1,5 +1,5 @@
 import type { Node } from "../../../types";
-import type { NodeDrainOptions } from "../hooks/useNodesData";
+import type { NodeDrainOptions } from "../hooks/nodesTypes";
 
 /**
  * Tabular node inventory with node-level actions.
