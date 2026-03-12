@@ -40,6 +40,7 @@ import type {
   K8sEvent,
   Node,
   NodeDetail,
+  NodeDrainPreview,
   Pod,
   PodCreateRequest,
   PodDetail,
@@ -296,6 +297,16 @@ export const api = {
   cordonNode: (name: string) =>
     requestJson<ActionResult>(apiPath("nodes", name, "cordon"), {
       method: "POST",
+    }),
+  uncordonNode: (name: string) =>
+    requestJson<ActionResult>(apiPath("nodes", name, "uncordon"), {
+      method: "POST",
+    }),
+  previewNodeDrain: (name: string) => requestJson<NodeDrainPreview>(apiPath("nodes", name, "drain", "preview")),
+  drainNode: (name: string, force = false) =>
+    requestJson<ActionResult>(`${apiPath("nodes", name, "drain")}${force ? "?force=true" : ""}`, {
+      method: "POST",
+      body: JSON.stringify({}),
     }),
   getStats: () => requestJson<ClusterStats>(apiPath("stats")),
   getDiagnostics: () => requestJson<DiagnosticsResult>(apiPath("diagnostics")),

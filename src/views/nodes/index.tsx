@@ -19,6 +19,9 @@ export default function Nodes() {
     load,
     openDetail,
     cordon,
+    uncordon,
+    previewDrain,
+    drain,
     clearSelectedNode,
   } = useNodesData();
 
@@ -51,6 +54,9 @@ export default function Nodes() {
         canWrite={canWrite}
         onOpenDetail={openDetail}
         onCordon={cordon}
+        onUncordon={uncordon}
+        onPreviewDrain={previewDrain}
+        onDrain={drain}
       />
 
       <NodeDetailModal selectedNode={selectedNode} onClose={clearSelectedNode} />

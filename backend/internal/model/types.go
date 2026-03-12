@@ -124,6 +124,32 @@ type NodeDetail struct {
 	Addresses   []NodeAddress    `json:"addresses"`
 }
 
+type NodeDrainPod struct {
+	Namespace string `json:"namespace"`
+	Name      string `json:"name"`
+	Reason    string `json:"reason,omitempty"`
+}
+
+type NodeDrainBlocker struct {
+	Kind      string       `json:"kind"`
+	Message   string       `json:"message"`
+	Pod       NodeDrainPod `json:"pod"`
+	Reference string       `json:"reference,omitempty"`
+}
+
+type NodeDrainPreview struct {
+	Node        string             `json:"node"`
+	Evictable   []NodeDrainPod     `json:"evictable"`
+	Skipped     []NodeDrainPod     `json:"skipped"`
+	Blockers    []NodeDrainBlocker `json:"blockers"`
+	SafeToDrain bool               `json:"safeToDrain"`
+	GeneratedAt string             `json:"generatedAt"`
+}
+
+type NodeDrainRequest struct {
+	Force bool `json:"force"`
+}
+
 type K8sEvent struct {
 	Type          string `json:"type"`
 	Reason        string `json:"reason"`

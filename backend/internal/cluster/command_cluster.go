@@ -138,16 +138,7 @@ func (s *Service) CordonNode(ctx context.Context, name string) (model.ActionResu
 		return s.mockCordonNode(name)
 	}
 
-	body, _ := json.Marshal(map[string]any{
-		"spec": map[string]bool{
-			"unschedulable": true,
-		},
-	})
-
-	callCtx, cancel := s.withTimeout(ctx)
-	defer cancel()
-
-	if _, err := s.client.CoreV1().Nodes().Patch(callCtx, name, k8stypes.MergePatchType, body, metav1.PatchOptions{}); err != nil {
+	if err := s.patchNodeSchedulable(ctx, name, true); err != nil {
 		if apierrors.IsNotFound(err) {
 			return model.ActionResult{}, ErrNotFound
 		}
@@ -159,4 +150,42 @@ func (s *Service) CordonNode(ctx context.Context, name string) (model.ActionResu
 		Success: true,
 		Message: fmt.Sprintf("Node %s cordoned", name),
 	}, nil
+}
+
+func (s *Service) UncordonNode(ctx context.Context, name string) (model.ActionResult, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return model.ActionResult{}, errors.New("node name is required")
+	}
+
+	if s.inMockMode() {
+		return s.mockUncordonNode(name)
+	}
+
+	if err := s.patchNodeSchedulable(ctx, name, false); err != nil {
+		if apierrors.IsNotFound(err) {
+			return model.ActionResult{}, ErrNotFound
+		}
+		return model.ActionResult{}, fmt.Errorf("uncordon node: %w", err)
+	}
+	s.invalidateCache()
+
+	return model.ActionResult{
+		Success: true,
+		Message: fmt.Sprintf("Node %s uncordoned", name),
+	}, nil
+}
+
+func (s *Service) patchNodeSchedulable(ctx context.Context, name string, unschedulable bool) error {
+	body, _ := json.Marshal(map[string]any{
+		"spec": map[string]bool{
+			"unschedulable": unschedulable,
+		},
+	})
+
+	callCtx, cancel := s.withTimeout(ctx)
+	defer cancel()
+
+	_, err := s.client.CoreV1().Nodes().Patch(callCtx, name, k8stypes.MergePatchType, body, metav1.PatchOptions{})
+	return err
 }

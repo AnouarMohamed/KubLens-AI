@@ -462,6 +462,62 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ActionResult"
+  /nodes/{name}/uncordon:
+    post:
+      operationId: uncordonNode
+      summary: Uncordon node
+      parameters:
+        - in: path
+          name: name
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Action result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActionResult"
+  /nodes/{name}/drain/preview:
+    get:
+      operationId: previewDrainNode
+      summary: Preview node drain safety
+      parameters:
+        - in: path
+          name: name
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Drain preview details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NodeDrainPreview"
+  /nodes/{name}/drain:
+    post:
+      operationId: drainNode
+      summary: Drain node workloads
+      parameters:
+        - in: path
+          name: name
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: force
+          required: false
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: Action result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActionResult"
   /resources/{kind}:
     get:
       operationId: listResources
@@ -1454,6 +1510,50 @@ components:
         type:
           type: string
         address:
+          type: string
+    NodeDrainPod:
+      type: object
+      required: [namespace, name]
+      properties:
+        namespace:
+          type: string
+        name:
+          type: string
+        reason:
+          type: string
+    NodeDrainBlocker:
+      type: object
+      required: [kind, message, pod]
+      properties:
+        kind:
+          type: string
+        message:
+          type: string
+        pod:
+          $ref: "#/components/schemas/NodeDrainPod"
+        reference:
+          type: string
+    NodeDrainPreview:
+      type: object
+      required: [node, evictable, skipped, blockers, safeToDrain, generatedAt]
+      properties:
+        node:
+          type: string
+        evictable:
+          type: array
+          items:
+            $ref: "#/components/schemas/NodeDrainPod"
+        skipped:
+          type: array
+          items:
+            $ref: "#/components/schemas/NodeDrainPod"
+        blockers:
+          type: array
+          items:
+            $ref: "#/components/schemas/NodeDrainBlocker"
+        safeToDrain:
+          type: boolean
+        generatedAt:
           type: string
     K8sEvent:
       type: object

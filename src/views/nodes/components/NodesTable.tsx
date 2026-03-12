@@ -10,9 +10,22 @@ interface NodesTableProps {
   canWrite: boolean;
   onOpenDetail: (name: string) => Promise<void>;
   onCordon: (name: string) => Promise<void>;
+  onUncordon: (name: string) => Promise<void>;
+  onPreviewDrain: (name: string) => Promise<void>;
+  onDrain: (name: string) => Promise<void>;
 }
 
-export function NodesTable({ nodes, isLoading, canRead, canWrite, onOpenDetail, onCordon }: NodesTableProps) {
+export function NodesTable({
+  nodes,
+  isLoading,
+  canRead,
+  canWrite,
+  onOpenDetail,
+  onCordon,
+  onUncordon,
+  onPreviewDrain,
+  onDrain,
+}: NodesTableProps) {
   return (
     <div className="table-shell">
       <table className="min-w-full text-left text-sm">
@@ -42,6 +55,15 @@ export function NodesTable({ nodes, isLoading, canRead, canWrite, onOpenDetail, 
                 <div className="flex gap-2">
                   <button onClick={() => void onCordon(node.name)} className="btn-sm" disabled={!canWrite}>
                     Cordon
+                  </button>
+                  <button onClick={() => void onUncordon(node.name)} className="btn-sm" disabled={!canWrite}>
+                    Uncordon
+                  </button>
+                  <button onClick={() => void onPreviewDrain(node.name)} className="btn-sm" disabled={!canWrite}>
+                    Preview Drain
+                  </button>
+                  <button onClick={() => void onDrain(node.name)} className="btn-sm" disabled={!canWrite}>
+                    Drain
                   </button>
                   <button onClick={() => void onOpenDetail(node.name)} className="btn-sm" disabled={!canRead}>
                     Details

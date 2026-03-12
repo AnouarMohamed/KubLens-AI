@@ -97,6 +97,10 @@ func RequiresWriteGate(method, path string) bool {
 		return true
 	case cleanMethod == http.MethodPost && strings.HasPrefix(cleanPath, "/api/nodes/") && strings.HasSuffix(cleanPath, "/cordon"):
 		return true
+	case cleanMethod == http.MethodPost && strings.HasPrefix(cleanPath, "/api/nodes/") && strings.HasSuffix(cleanPath, "/uncordon"):
+		return true
+	case cleanMethod == http.MethodPost && strings.HasPrefix(cleanPath, "/api/nodes/") && strings.HasSuffix(cleanPath, "/drain"):
+		return true
 	case cleanMethod == http.MethodPut && strings.HasPrefix(cleanPath, "/api/resources/") && strings.HasSuffix(cleanPath, "/yaml"):
 		return true
 	case cleanMethod == http.MethodPost && strings.HasPrefix(cleanPath, "/api/resources/") && strings.HasSuffix(cleanPath, "/scale"):

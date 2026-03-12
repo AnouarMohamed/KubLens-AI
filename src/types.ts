@@ -84,6 +84,28 @@ export interface NodeDetail extends Node {
   }>;
 }
 
+export interface NodeDrainPod {
+  namespace: string;
+  name: string;
+  reason?: string;
+}
+
+export interface NodeDrainBlocker {
+  kind: string;
+  message: string;
+  pod: NodeDrainPod;
+  reference?: string;
+}
+
+export interface NodeDrainPreview {
+  node: string;
+  evictable: NodeDrainPod[];
+  skipped: NodeDrainPod[];
+  blockers: NodeDrainBlocker[];
+  safeToDrain: boolean;
+  generatedAt: string;
+}
+
 export interface ClusterInfo {
   isRealCluster: boolean;
 }

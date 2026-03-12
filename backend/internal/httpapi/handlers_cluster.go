@@ -18,6 +18,15 @@ import (
 	"kubelens-backend/internal/model"
 )
 
+type nodeMaintenanceReader interface {
+	DrainNodePreview(ctx context.Context, name string) (model.NodeDrainPreview, error)
+}
+
+type nodeMaintenanceWriter interface {
+	UncordonNode(ctx context.Context, name string) (model.ActionResult, error)
+	DrainNode(ctx context.Context, name string, force bool) (model.ActionResult, error)
+}
+
 func (s *Server) handleClusterInfo(w http.ResponseWriter, r *http.Request) {
 	if selector, ok := s.cluster.(clusterSelector); ok {
 		name := selector.ClusterName(r.Context())
@@ -325,6 +334,72 @@ func (s *Server) handleNodeDetail(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleCordonNode(w http.ResponseWriter, r *http.Request) {
 	name := chi.URLParam(r, "name")
 	result, err := s.cluster.CordonNode(r.Context(), name)
+	if err != nil {
+		if errors.Is(err, apperrors.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "Node not found")
+			return
+		}
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	s.invalidatePredictionsCache()
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (s *Server) handleUncordonNode(w http.ResponseWriter, r *http.Request) {
+	name := chi.URLParam(r, "name")
+
+	provider, ok := s.cluster.(nodeMaintenanceWriter)
+	if !ok {
+		writeError(w, http.StatusNotImplemented, "uncordon is not supported by the active cluster provider")
+		return
+	}
+
+	result, err := provider.UncordonNode(r.Context(), name)
+	if err != nil {
+		if errors.Is(err, apperrors.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "Node not found")
+			return
+		}
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	s.invalidatePredictionsCache()
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (s *Server) handleNodeDrainPreview(w http.ResponseWriter, r *http.Request) {
+	name := chi.URLParam(r, "name")
+
+	provider, ok := s.cluster.(nodeMaintenanceReader)
+	if !ok {
+		writeError(w, http.StatusNotImplemented, "node drain preview is not supported by the active cluster provider")
+		return
+	}
+
+	preview, err := provider.DrainNodePreview(r.Context(), name)
+	if err != nil {
+		if errors.Is(err, apperrors.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "Node not found")
+			return
+		}
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, preview)
+}
+
+func (s *Server) handleDrainNode(w http.ResponseWriter, r *http.Request) {
+	name := chi.URLParam(r, "name")
+	force := queryBool(r, "force")
+
+	provider, ok := s.cluster.(nodeMaintenanceWriter)
+	if !ok {
+		writeError(w, http.StatusNotImplemented, "node drain is not supported by the active cluster provider")
+		return
+	}
+
+	result, err := provider.DrainNode(r.Context(), name, force)
 	if err != nil {
 		if errors.Is(err, apperrors.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "Node not found")

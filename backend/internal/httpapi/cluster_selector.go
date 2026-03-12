@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"slices"
@@ -280,6 +281,42 @@ func (r *routedCluster) CordonNode(ctx context.Context, name string) (model.Acti
 		return model.ActionResult{}, nil
 	}
 	return reader.CordonNode(ctx, name)
+}
+
+func (r *routedCluster) UncordonNode(ctx context.Context, name string) (model.ActionResult, error) {
+	reader := r.selectReader(ctx)
+	if reader == nil {
+		return model.ActionResult{}, errors.New("cluster reader is unavailable")
+	}
+	provider, ok := reader.(nodeMaintenanceWriter)
+	if !ok {
+		return model.ActionResult{}, errors.New("node maintenance actions are not supported by the selected cluster")
+	}
+	return provider.UncordonNode(ctx, name)
+}
+
+func (r *routedCluster) DrainNodePreview(ctx context.Context, name string) (model.NodeDrainPreview, error) {
+	reader := r.selectReader(ctx)
+	if reader == nil {
+		return model.NodeDrainPreview{}, errors.New("cluster reader is unavailable")
+	}
+	provider, ok := reader.(nodeMaintenanceReader)
+	if !ok {
+		return model.NodeDrainPreview{}, errors.New("node drain preview is not supported by the selected cluster")
+	}
+	return provider.DrainNodePreview(ctx, name)
+}
+
+func (r *routedCluster) DrainNode(ctx context.Context, name string, force bool) (model.ActionResult, error) {
+	reader := r.selectReader(ctx)
+	if reader == nil {
+		return model.ActionResult{}, errors.New("cluster reader is unavailable")
+	}
+	provider, ok := reader.(nodeMaintenanceWriter)
+	if !ok {
+		return model.ActionResult{}, errors.New("node maintenance actions are not supported by the selected cluster")
+	}
+	return provider.DrainNode(ctx, name, force)
 }
 
 func (r *routedCluster) StateSnapshot(ctx context.Context) (state.ClusterState, bool) {

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useStreamRefresh } from "../../../app/hooks/useStreamRefresh";
 import { useAuthSession } from "../../../context/AuthSessionContext";
 import { api } from "../../../lib/api";
-import type { Node, NodeDetail } from "../../../types";
+import type { Node, NodeDetail, NodeDrainPreview } from "../../../types";
 
 /**
  * UI state and actions for the nodes view.
@@ -13,6 +13,7 @@ interface UseNodesDataResult {
   nodes: Node[];
   filteredNodes: Node[];
   selectedNode: NodeDetail | null;
+  lastDrainPreview: NodeDrainPreview | null;
   search: string;
   isLoading: boolean;
   isBusy: boolean;
@@ -21,6 +22,9 @@ interface UseNodesDataResult {
   load: () => Promise<void>;
   openDetail: (name: string) => Promise<void>;
   cordon: (name: string) => Promise<void>;
+  uncordon: (name: string) => Promise<void>;
+  previewDrain: (name: string) => Promise<void>;
+  drain: (name: string) => Promise<void>;
   clearSelectedNode: () => void;
 }
 
@@ -33,6 +37,7 @@ export function useNodesData(): UseNodesDataResult {
   const { can, isLoading: authLoading } = useAuthSession();
   const [nodes, setNodes] = useState<Node[]>([]);
   const [selectedNode, setSelectedNode] = useState<NodeDetail | null>(null);
+  const [lastDrainPreview, setLastDrainPreview] = useState<NodeDrainPreview | null>(null);
   const [search, setSearchState] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isBusy, setIsBusy] = useState(false);
@@ -133,6 +138,97 @@ export function useNodesData(): UseNodesDataResult {
     [canWrite, load],
   );
 
+  const uncordon = useCallback(
+    async (name: string) => {
+      if (!canWrite) {
+        setError("Your role does not allow node uncordon actions.");
+        return;
+      }
+      if (!window.confirm(`Uncordon node ${name}?`)) {
+        return;
+      }
+
+      setIsBusy(true);
+      try {
+        await api.uncordonNode(name);
+        await load();
+        setError(null);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to uncordon node");
+      } finally {
+        setIsBusy(false);
+      }
+    },
+    [canWrite, load],
+  );
+
+  const previewDrain = useCallback(
+    async (name: string) => {
+      if (!canWrite) {
+        setError("Your role does not allow node drain actions.");
+        return;
+      }
+      setIsBusy(true);
+      try {
+        const preview = await api.previewNodeDrain(name);
+        setLastDrainPreview(preview);
+        const summary =
+          preview.blockers.length > 0
+            ? `Drain preview: ${preview.evictable.length} evictable pods, ${preview.blockers.length} blockers.`
+            : `Drain preview: ${preview.evictable.length} evictable pods, no blockers.`;
+        setError(summary);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to preview node drain");
+      } finally {
+        setIsBusy(false);
+      }
+    },
+    [canWrite],
+  );
+
+  const drain = useCallback(
+    async (name: string) => {
+      if (!canWrite) {
+        setError("Your role does not allow node drain actions.");
+        return;
+      }
+
+      setIsBusy(true);
+      try {
+        const preview = await api.previewNodeDrain(name);
+        setLastDrainPreview(preview);
+
+        if (preview.evictable.length === 0) {
+          setError("No evictable pods found on this node.");
+          return;
+        }
+
+        const forceDrain =
+          preview.blockers.length > 0
+            ? window.confirm(
+                `Drain preview found ${preview.blockers.length} blockers for ${preview.evictable.length} pods. Press OK to force drain, Cancel to abort.`,
+              )
+            : window.confirm(`Drain node ${name}? This will evict ${preview.evictable.length} pods.`);
+        if (!forceDrain && preview.blockers.length > 0) {
+          setError("Drain canceled. Review blockers before forcing.");
+          return;
+        }
+        if (preview.blockers.length === 0 && !forceDrain) {
+          return;
+        }
+
+        await api.drainNode(name, preview.blockers.length > 0 && forceDrain);
+        await load();
+        setError(null);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to drain node");
+      } finally {
+        setIsBusy(false);
+      }
+    },
+    [canWrite, load],
+  );
+
   const clearSelectedNode = useCallback(() => {
     setSelectedNode(null);
   }, []);
@@ -143,6 +239,7 @@ export function useNodesData(): UseNodesDataResult {
     nodes,
     filteredNodes,
     selectedNode,
+    lastDrainPreview,
     search,
     isLoading,
     isBusy,
@@ -151,6 +248,9 @@ export function useNodesData(): UseNodesDataResult {
     load,
     openDetail,
     cordon,
+    uncordon,
+    previewDrain,
+    drain,
     clearSelectedNode,
   };
 }

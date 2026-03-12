@@ -325,6 +325,10 @@ func actionForRequest(method, path string) string {
 		return "pod.delete"
 	case m == http.MethodPost && strings.HasSuffix(path, "/cordon"):
 		return "node.cordon"
+	case m == http.MethodPost && strings.HasSuffix(path, "/uncordon"):
+		return "node.uncordon"
+	case m == http.MethodPost && strings.HasSuffix(path, "/drain"):
+		return "node.drain"
 	case m == http.MethodPut && strings.HasSuffix(path, "/yaml"):
 		return "resource.apply"
 	case m == http.MethodPost && strings.HasSuffix(path, "/scale"):

@@ -211,6 +211,104 @@ func (s *Service) mockCordonNode(name string) (model.ActionResult, error) {
 	return model.ActionResult{}, ErrNotFound
 }
 
+func (s *Service) mockUncordonNode(name string) (model.ActionResult, error) {
+	s.mockMu.Lock()
+	defer s.mockMu.Unlock()
+
+	for i := range s.mockNodes {
+		if s.mockNodes[i].Name != name {
+			continue
+		}
+		roles := strings.Split(s.mockNodes[i].Roles, ",")
+		trimmed := make([]string, 0, len(roles))
+		for _, role := range roles {
+			clean := strings.TrimSpace(role)
+			if clean == "" || clean == "cordoned" {
+				continue
+			}
+			trimmed = append(trimmed, clean)
+		}
+		if len(trimmed) == 0 {
+			trimmed = []string{"worker"}
+		}
+		s.mockNodes[i].Roles = strings.Join(trimmed, ",")
+		return model.ActionResult{Success: true, Message: fmt.Sprintf("Node %s uncordoned", name)}, nil
+	}
+
+	return model.ActionResult{}, ErrNotFound
+}
+
+func (s *Service) mockDrainNodePreview(name string) (model.NodeDrainPreview, error) {
+	s.mockMu.RLock()
+	defer s.mockMu.RUnlock()
+
+	exists := false
+	for _, node := range s.mockNodes {
+		if node.Name == name {
+			exists = true
+			break
+		}
+	}
+	if !exists {
+		return model.NodeDrainPreview{}, ErrNotFound
+	}
+
+	evictable := make([]model.NodeDrainPod, 0, len(s.mockPods))
+	skipped := make([]model.NodeDrainPod, 0)
+	for _, pod := range s.mockPods {
+		if strings.Contains(pod.Namespace, "kube-system") {
+			skipped = append(skipped, model.NodeDrainPod{
+				Namespace: pod.Namespace,
+				Name:      pod.Name,
+				Reason:    "system pod",
+			})
+			continue
+		}
+		evictable = append(evictable, model.NodeDrainPod{
+			Namespace: pod.Namespace,
+			Name:      pod.Name,
+		})
+	}
+
+	blockers := []model.NodeDrainBlocker{}
+	if strings.Contains(strings.ToLower(name), "master") {
+		blockers = append(blockers, model.NodeDrainBlocker{
+			Kind:      "pdb",
+			Message:   "Control-plane pods are protected by disruption budget in mock mode.",
+			Pod:       model.NodeDrainPod{Namespace: "kube-system", Name: "kube-apiserver"},
+			Reference: "kube-system/control-plane-pdb",
+		})
+	}
+
+	return model.NodeDrainPreview{
+		Node:        name,
+		Evictable:   evictable,
+		Skipped:     skipped,
+		Blockers:    blockers,
+		SafeToDrain: len(blockers) == 0,
+		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
+	}, nil
+}
+
+func (s *Service) mockDrainNode(name string, force bool) (model.ActionResult, error) {
+	preview, err := s.mockDrainNodePreview(name)
+	if err != nil {
+		return model.ActionResult{}, err
+	}
+	if len(preview.Blockers) > 0 && !force {
+		return model.ActionResult{}, fmt.Errorf("drain blocked by %d safety checks; retry with force=true after review", len(preview.Blockers))
+	}
+
+	if _, err := s.mockCordonNode(name); err != nil {
+		return model.ActionResult{}, err
+	}
+
+	return model.ActionResult{
+		Success: true,
+		Message: fmt.Sprintf("Node %s drained (%d pod evictions requested).", name, len(preview.Evictable)),
+	}, nil
+}
+
 func containsString(values []string, target string) bool {
 	for _, value := range values {
 		if value == target {
