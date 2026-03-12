@@ -1,4 +1,5 @@
 import type { Node } from "../../../types";
+import type { NodeDrainOptions } from "../hooks/useNodesData";
 
 /**
  * Tabular node inventory with node-level actions.
@@ -15,7 +16,7 @@ interface NodesTableProps {
   onCordon: (name: string) => Promise<void>;
   onUncordon: (name: string) => Promise<void>;
   onPreviewDrain: (name: string) => Promise<void>;
-  onDrain: (name: string, force?: boolean) => Promise<void>;
+  onDrain: (name: string, options?: NodeDrainOptions) => Promise<void>;
 }
 
 export function NodesTable({

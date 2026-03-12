@@ -149,7 +149,8 @@ type NodeDrainPreview struct {
 }
 
 type NodeDrainRequest struct {
-	Force bool `json:"force"`
+	Force  bool   `json:"force"`
+	Reason string `json:"reason,omitempty"`
 }
 
 type K8sEvent struct {

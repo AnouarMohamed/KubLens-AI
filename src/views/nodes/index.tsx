@@ -98,11 +98,15 @@ export default function Nodes() {
           >
             Uncordon Selected
           </button>
-          <button onClick={() => void bulkDrain(false)} className="btn-sm" disabled={!canWrite || isBusy || selectedNodeNames.length === 0}>
+          <button
+            onClick={() => void bulkDrain({ force: false })}
+            className="btn-sm"
+            disabled={!canWrite || isBusy || selectedNodeNames.length === 0}
+          >
             Drain Selected
           </button>
           <button
-            onClick={() => void bulkDrain(true)}
+            onClick={() => void bulkDrain({ force: true })}
             className="btn-sm"
             disabled={!canWrite || isBusy || selectedNodeNames.length === 0}
           >

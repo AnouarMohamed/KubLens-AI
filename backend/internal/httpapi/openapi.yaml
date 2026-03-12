@@ -511,6 +511,12 @@ paths:
           required: false
           schema:
             type: boolean
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NodeDrainRequest"
       responses:
         "200":
           description: Action result
@@ -1596,6 +1602,14 @@ components:
         safeToDrain:
           type: boolean
         generatedAt:
+          type: string
+    NodeDrainRequest:
+      type: object
+      required: [force]
+      properties:
+        force:
+          type: boolean
+        reason:
           type: string
     K8sEvent:
       type: object

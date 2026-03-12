@@ -29,13 +29,13 @@ interface UseNodesDataResult {
   cordon: (name: string) => Promise<void>;
   uncordon: (name: string) => Promise<void>;
   previewDrain: (name: string) => Promise<void>;
-  drain: (name: string, force?: boolean) => Promise<void>;
+  drain: (name: string, options?: NodeDrainOptions) => Promise<void>;
   toggleNodeSelection: (name: string) => void;
   toggleSelectAllVisible: (names: string[]) => void;
   clearNodeSelection: () => void;
   bulkCordon: () => Promise<void>;
   bulkUncordon: () => Promise<void>;
-  bulkDrain: (force?: boolean) => Promise<void>;
+  bulkDrain: (options?: NodeDrainOptions) => Promise<void>;
   dispatchNodeRuleAlert: (alertID: string) => Promise<void>;
   clearSelectedNode: () => void;
 }
@@ -47,6 +47,11 @@ export interface NodeRuleAlert {
   severity: "warning" | "critical";
   title: string;
   message: string;
+}
+
+export interface NodeDrainOptions {
+  force?: boolean;
+  reason?: string;
 }
 
 /**
@@ -316,7 +321,8 @@ export function useNodesData(): UseNodesDataResult {
   );
 
   const drain = useCallback(
-    async (name: string, force = false) => {
+    async (name: string, options: NodeDrainOptions = {}) => {
+      const force = options.force === true;
       if (!canWrite) {
         setError("Your role does not allow node drain actions.");
         return;
@@ -340,7 +346,13 @@ export function useNodesData(): UseNodesDataResult {
           return;
         }
 
-        await api.drainNode(name, force);
+        const reason = force ? ensureForceDrainReason(name, options.reason) : "";
+        if (force && reason === null) {
+          setError("Force drain cancelled. A reason is required to continue.");
+          return;
+        }
+
+        await api.drainNode(name, { force, reason: reason ?? "" });
         await load();
         if (selectedNode?.name === name) {
           await loadNodeContext(name);
@@ -440,7 +452,8 @@ export function useNodesData(): UseNodesDataResult {
   }, [canWrite, load, selectedNodeNames]);
 
   const bulkDrain = useCallback(
-    async (force = false) => {
+    async (options: NodeDrainOptions = {}) => {
+      const force = options.force === true;
       if (!canWrite) {
         setError("Your role does not allow node drain actions.");
         return;
@@ -459,6 +472,12 @@ export function useNodesData(): UseNodesDataResult {
 
       setIsBusy(true);
       try {
+        const reason = force ? ensureForceDrainReason("selected nodes", options.reason) : "";
+        if (force && reason === null) {
+          setError("Force drain cancelled. A reason is required to continue.");
+          return;
+        }
+
         const blocked: string[] = [];
         for (const name of selectedNodeNames) {
           const preview = await api.previewNodeDrain(name);
@@ -466,7 +485,7 @@ export function useNodesData(): UseNodesDataResult {
             blocked.push(name);
             continue;
           }
-          await api.drainNode(name, force);
+          await api.drainNode(name, { force, reason: reason ?? "" });
         }
         await load();
         setSelectedNodeNames([]);
@@ -560,6 +579,24 @@ function parseCPUCapacity(raw: string): number {
   }
   const cores = Number.parseFloat(value);
   return Number.isFinite(cores) ? cores : 0;
+}
+
+function ensureForceDrainReason(target: string, initialReason?: string): string | null {
+  const trimmed = (initialReason ?? "").trim();
+  if (trimmed !== "") {
+    return trimmed.slice(0, 240);
+  }
+
+  const input = window.prompt(`Force drain requires an audit reason for ${target}. Enter reason (max 240 chars):`, "");
+  if (input === null) {
+    return null;
+  }
+
+  const reason = input.trim();
+  if (reason === "") {
+    return null;
+  }
+  return reason.slice(0, 240);
 }
 
 function parseMemoryCapacity(raw: string): number {

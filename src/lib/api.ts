@@ -305,10 +305,13 @@ export const api = {
       method: "POST",
     }),
   previewNodeDrain: (name: string) => requestJson<NodeDrainPreview>(apiPath("nodes", name, "drain", "preview")),
-  drainNode: (name: string, force = false) =>
-    requestJson<ActionResult>(`${apiPath("nodes", name, "drain")}${force ? "?force=true" : ""}`, {
+  drainNode: (name: string, options?: { force?: boolean; reason?: string }) =>
+    requestJson<ActionResult>(`${apiPath("nodes", name, "drain")}${options?.force ? "?force=true" : ""}`, {
       method: "POST",
-      body: JSON.stringify({}),
+      body: JSON.stringify({
+        force: options?.force ?? false,
+        reason: options?.reason ?? "",
+      }),
     }),
   getStats: () => requestJson<ClusterStats>(apiPath("stats")),
   getDiagnostics: () => requestJson<DiagnosticsResult>(apiPath("diagnostics")),

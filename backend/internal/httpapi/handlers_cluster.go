@@ -462,7 +462,28 @@ func (s *Server) handleNodeDrainPreview(w http.ResponseWriter, r *http.Request) 
 
 func (s *Server) handleDrainNode(w http.ResponseWriter, r *http.Request) {
 	name := chi.URLParam(r, "name")
-	force := queryBool(r, "force")
+	var req model.NodeDrainRequest
+	if err := s.decodeJSONBody(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	force := req.Force || queryBool(r, "force")
+	forceReason := strings.TrimSpace(req.Reason)
+	if force {
+		if len(forceReason) > 240 {
+			forceReason = forceReason[:240]
+		}
+		principal, ok := auth.PrincipalFromContext(r.Context())
+		if !ok || principal.Role < auth.RoleAdmin {
+			writeError(w, http.StatusForbidden, "force drain requires admin role")
+			return
+		}
+		if forceReason == "" {
+			writeError(w, http.StatusBadRequest, "force drain reason is required")
+			return
+		}
+	}
 
 	provider, ok := s.cluster.(nodeMaintenanceWriter)
 	if !ok {
@@ -478,6 +499,23 @@ func (s *Server) handleDrainNode(w http.ResponseWriter, r *http.Request) {
 		}
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
+	}
+	if force && s.audit != nil {
+		entry := model.AuditEntry{
+			Timestamp: s.now().UTC().Format(time.RFC3339),
+			RequestID: middleware.GetReqID(r.Context()),
+			Method:    r.Method,
+			Path:      sanitizeAuditPath(r.URL.Path),
+			Action:    fmt.Sprintf("node.drain.force_override reason=%q", forceReason),
+			Status:    http.StatusOK,
+			ClientIP:  sanitizeClientIP(r.RemoteAddr),
+			Success:   true,
+		}
+		if principal, ok := auth.PrincipalFromContext(r.Context()); ok {
+			entry.User = principal.User
+			entry.Role = auth.RoleLabel(principal.Role)
+		}
+		s.audit.append(entry)
 	}
 	s.invalidatePredictionsCache()
 	writeJSON(w, http.StatusOK, result)

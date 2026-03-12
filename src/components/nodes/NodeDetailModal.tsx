@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../../lib/api";
 import type { K8sEvent, NodeDetail, NodeDrainPreview, Pod } from "../../types";
+import type { NodeDrainOptions } from "../../views/nodes/hooks/useNodesData";
 
 type NodeDetailTab = "conditions" | "pods" | "events" | "maintenance";
 
@@ -13,7 +14,7 @@ interface NodeDetailModalProps {
   onCordon: (name: string) => Promise<void>;
   onUncordon: (name: string) => Promise<void>;
   onPreviewDrain: (name: string) => Promise<void>;
-  onDrain: (name: string, force?: boolean) => Promise<void>;
+  onDrain: (name: string, options?: NodeDrainOptions) => Promise<void>;
   onClose: () => void;
 }
 
@@ -363,7 +364,9 @@ export default function NodeDetailModal({
                   state={workloadsCleared ? "done" : "pending"}
                   actionLabel={preview && preview.blockers.length > 0 ? "Force Drain" : "Drain"}
                   disabled={isBusy || !isCordoned}
-                  onAction={() => void onDrain(selectedNode.name, Boolean(preview && preview.blockers.length > 0))}
+                  onAction={() =>
+                    void onDrain(selectedNode.name, { force: Boolean(preview && preview.blockers.length > 0) })
+                  }
                 />
                 <MaintenanceStep
                   title="4. Verify workload migration"
