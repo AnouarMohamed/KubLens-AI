@@ -5,8 +5,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"kubelens-backend/internal/model"
@@ -53,17 +56,33 @@ func (s *Service) Enabled() bool {
 }
 
 func (s *Service) Dispatch(ctx context.Context, req model.AlertDispatchRequest) model.AlertDispatchResponse {
-	results := make([]model.AlertChannelResult, 0, 3)
-
+	dispatchers := make([]func() model.AlertChannelResult, 0, 3)
 	if s.alertmanagerURL != "" {
-		results = append(results, s.dispatchAlertmanager(ctx, req))
+		dispatchers = append(dispatchers, func() model.AlertChannelResult {
+			return s.dispatchAlertmanager(ctx, req)
+		})
 	}
 	if s.slackWebhookURL != "" {
-		results = append(results, s.dispatchSlack(ctx, req))
+		dispatchers = append(dispatchers, func() model.AlertChannelResult {
+			return s.dispatchSlack(ctx, req)
+		})
 	}
 	if s.pagerDutyEventsURL != "" {
-		results = append(results, s.dispatchPagerDuty(ctx, req))
+		dispatchers = append(dispatchers, func() model.AlertChannelResult {
+			return s.dispatchPagerDuty(ctx, req)
+		})
 	}
+
+	results := make([]model.AlertChannelResult, len(dispatchers))
+	var wg sync.WaitGroup
+	wg.Add(len(dispatchers))
+	for i, dispatch := range dispatchers {
+		go func(index int, run func() model.AlertChannelResult) {
+			defer wg.Done()
+			results[index] = run()
+		}(i, dispatch)
+	}
+	wg.Wait()
 
 	success := true
 	for _, item := range results {
@@ -151,7 +170,12 @@ func (s *Service) postJSON(ctx context.Context, url string, payload any) error {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		return errors.New("webhook returned status " + resp.Status)
+		raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		body := strings.TrimSpace(string(raw))
+		if body == "" {
+			return errors.New("webhook returned status " + resp.Status)
+		}
+		return fmt.Errorf("webhook returned status %s: %s", resp.Status, body)
 	}
 	return nil
 }
