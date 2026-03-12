@@ -294,6 +294,8 @@ export const api = {
     }),
   getNodes: () => requestJson<Node[]>(apiPath("nodes")),
   getNodeDetail: (name: string) => requestJson<NodeDetail>(apiPath("nodes", name)),
+  getNodePods: (name: string) => requestJson<Pod[]>(apiPath("nodes", name, "pods")),
+  getNodeEvents: (name: string) => requestJson<K8sEvent[]>(apiPath("nodes", name, "events")),
   cordonNode: (name: string) =>
     requestJson<ActionResult>(apiPath("nodes", name, "cordon"), {
       method: "POST",

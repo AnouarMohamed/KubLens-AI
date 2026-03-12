@@ -27,6 +27,11 @@ type nodeMaintenanceWriter interface {
 	DrainNode(ctx context.Context, name string, force bool) (model.ActionResult, error)
 }
 
+type nodeScopeReader interface {
+	NodePods(ctx context.Context, name string) ([]model.PodSummary, error)
+	NodeEvents(ctx context.Context, name string) ([]model.K8sEvent, error)
+}
+
 func (s *Server) handleClusterInfo(w http.ResponseWriter, r *http.Request) {
 	if selector, ok := s.cluster.(clusterSelector); ok {
 		name := selector.ClusterName(r.Context())
@@ -329,6 +334,72 @@ func (s *Server) handleNodeDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, node)
+}
+
+func (s *Server) handleNodePods(w http.ResponseWriter, r *http.Request) {
+	name := chi.URLParam(r, "name")
+	if name == "" {
+		writeError(w, http.StatusBadRequest, "node name is required")
+		return
+	}
+
+	if provider, ok := s.cluster.(nodeScopeReader); ok {
+		pods, err := provider.NodePods(r.Context(), name)
+		if err != nil {
+			if errors.Is(err, apperrors.ErrNotFound) {
+				writeError(w, http.StatusNotFound, "Node not found")
+				return
+			}
+			writeError(w, http.StatusInternalServerError, "Failed to fetch node pods")
+			return
+		}
+		writeJSON(w, http.StatusOK, pods)
+		return
+	}
+
+	pods, _ := s.cluster.Snapshot(r.Context())
+	out := make([]model.PodSummary, 0, len(pods))
+	for _, pod := range pods {
+		if pod.NodeName == name {
+			out = append(out, pod)
+		}
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+func (s *Server) handleNodeEvents(w http.ResponseWriter, r *http.Request) {
+	name := chi.URLParam(r, "name")
+	if name == "" {
+		writeError(w, http.StatusBadRequest, "node name is required")
+		return
+	}
+
+	if provider, ok := s.cluster.(nodeScopeReader); ok {
+		events, err := provider.NodeEvents(r.Context(), name)
+		if err != nil {
+			if errors.Is(err, apperrors.ErrNotFound) {
+				writeError(w, http.StatusNotFound, "Node not found")
+				return
+			}
+			writeError(w, http.StatusInternalServerError, "Failed to fetch node events")
+			return
+		}
+		writeJSON(w, http.StatusOK, events)
+		return
+	}
+
+	events := s.cluster.ListClusterEvents(r.Context())
+	out := make([]model.K8sEvent, 0, len(events))
+	for _, event := range events {
+		if !strings.EqualFold(event.ResourceKind, "Node") {
+			continue
+		}
+		if event.Resource != name {
+			continue
+		}
+		out = append(out, event)
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 func (s *Server) handleCordonNode(w http.ResponseWriter, r *http.Request) {

@@ -319,6 +319,48 @@ func (r *routedCluster) DrainNode(ctx context.Context, name string, force bool) 
 	return provider.DrainNode(ctx, name, force)
 }
 
+func (r *routedCluster) NodePods(ctx context.Context, name string) ([]model.PodSummary, error) {
+	reader := r.selectReader(ctx)
+	if reader == nil {
+		return nil, errors.New("cluster reader is unavailable")
+	}
+	provider, ok := reader.(interface {
+		NodePods(context.Context, string) ([]model.PodSummary, error)
+	})
+	if !ok {
+		pods, _ := reader.Snapshot(ctx)
+		out := make([]model.PodSummary, 0, len(pods))
+		for _, pod := range pods {
+			if pod.NodeName == name {
+				out = append(out, pod)
+			}
+		}
+		return out, nil
+	}
+	return provider.NodePods(ctx, name)
+}
+
+func (r *routedCluster) NodeEvents(ctx context.Context, name string) ([]model.K8sEvent, error) {
+	reader := r.selectReader(ctx)
+	if reader == nil {
+		return nil, errors.New("cluster reader is unavailable")
+	}
+	provider, ok := reader.(interface {
+		NodeEvents(context.Context, string) ([]model.K8sEvent, error)
+	})
+	if !ok {
+		events := reader.ListClusterEvents(ctx)
+		out := make([]model.K8sEvent, 0, len(events))
+		for _, event := range events {
+			if strings.EqualFold(event.ResourceKind, "Node") && event.Resource == name {
+				out = append(out, event)
+			}
+		}
+		return out, nil
+	}
+	return provider.NodeEvents(ctx, name)
+}
+
 func (r *routedCluster) StateSnapshot(ctx context.Context) (state.ClusterState, bool) {
 	reader := r.selectReader(ctx)
 	if reader == nil {

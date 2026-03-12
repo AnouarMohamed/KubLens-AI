@@ -384,6 +384,8 @@ func (s *Server) Router(distDir string) http.Handler {
 		api.Post("/nodes/{name}/uncordon", s.handleUncordonNode)
 		api.Get("/nodes/{name}/drain/preview", s.handleNodeDrainPreview)
 		api.Post("/nodes/{name}/drain", s.handleDrainNode)
+		api.Get("/nodes/{name}/pods", s.handleNodePods)
+		api.Get("/nodes/{name}/events", s.handleNodeEvents)
 		api.Get("/nodes/{name}", s.handleNodeDetail)
 		api.Get("/stats", s.handleStats)
 		api.Get("/diagnostics", s.handleDiagnostics)

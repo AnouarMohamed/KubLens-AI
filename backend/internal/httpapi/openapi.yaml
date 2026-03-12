@@ -518,6 +518,44 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ActionResult"
+  /nodes/{name}/pods:
+    get:
+      operationId: listNodePods
+      summary: List pods scheduled on a node
+      parameters:
+        - in: path
+          name: name
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Pod list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PodSummary"
+  /nodes/{name}/events:
+    get:
+      operationId: listNodeEvents
+      summary: List events for a node
+      parameters:
+        - in: path
+          name: name
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Node events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/K8sEvent"
   /resources/{kind}:
     get:
       operationId: listResources

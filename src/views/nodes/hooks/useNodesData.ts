@@ -168,14 +168,11 @@ export function useNodesData(): UseNodesDataResult {
   }, [allocatableDropAlerts, clusterEvents, nodes]);
 
   const loadNodeContext = useCallback(async (name: string) => {
-    const [detail, pods, events] = await Promise.all([api.getNodeDetail(name), api.getPods(), api.getEvents()]);
-    const nodePods = pods.filter((pod) => pod.nodeName === name);
-    const nodeEvents = events.filter((event) => {
-      if ((event.resourceKind ?? "").toLowerCase() !== "node") {
-        return false;
-      }
-      return (event.resource ?? "").toLowerCase() === name.toLowerCase();
-    });
+    const [detail, nodePods, nodeEvents] = await Promise.all([
+      api.getNodeDetail(name),
+      api.getNodePods(name),
+      api.getNodeEvents(name),
+    ]);
 
     setSelectedNode(detail);
     setSelectedNodePods(nodePods);
