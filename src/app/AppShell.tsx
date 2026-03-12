@@ -33,6 +33,8 @@ const OpsAssistant = lazy(() => import("../views/opsassistant"));
 const IncidentCommander = lazy(() => import("../views/incident"));
 const Remediation = lazy(() => import("../views/remediation"));
 const ClusterMemory = lazy(() => import("../views/memory"));
+const ShiftBrief = lazy(() => import("../views/shiftbrief"));
+const Playbooks = lazy(() => import("../views/playbooks"));
 const RiskGuard = lazy(() => import("../views/riskguard"));
 const Postmortems = lazy(() => import("../views/postmortem"));
 const ResourceCatalog = lazy(() => import("../views/resourcecatalog"));
@@ -357,6 +359,18 @@ function renderView(view: View): ReactElement {
       return (
         <Suspense fallback={<ViewLoadingState label="Loading cluster memory..." />}>
           <ClusterMemory />
+        </Suspense>
+      );
+    case "shiftbrief":
+      return (
+        <Suspense fallback={<ViewLoadingState label="Loading shift brief..." />}>
+          <ShiftBrief />
+        </Suspense>
+      );
+    case "playbooks":
+      return (
+        <Suspense fallback={<ViewLoadingState label="Loading playbooks..." />}>
+          <Playbooks />
         </Suspense>
       );
     case "riskguard":

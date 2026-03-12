@@ -39,6 +39,8 @@ const VALID_VIEWS = new Set<View>([
   "incidents",
   "remediation",
   "memory",
+  "shiftbrief",
+  "playbooks",
   "riskguard",
   "postmortems",
 ]);
@@ -87,6 +89,9 @@ function mapPathToView(pathname: string): View | null {
     { prefix: "/incidents", view: "incidents" },
     { prefix: "/remediation", view: "remediation" },
     { prefix: "/memory", view: "memory" },
+    { prefix: "/shift-brief", view: "shiftbrief" },
+    { prefix: "/shiftbrief", view: "shiftbrief" },
+    { prefix: "/playbooks", view: "playbooks" },
     { prefix: "/risk-guard", view: "riskguard" },
     { prefix: "/riskguard", view: "riskguard" },
     { prefix: "/postmortems", view: "postmortems" },

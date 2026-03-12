@@ -615,5 +615,7 @@ export type View =
   | "incidents"
   | "remediation"
   | "memory"
+  | "shiftbrief"
+  | "playbooks"
   | "riskguard"
   | "postmortems";

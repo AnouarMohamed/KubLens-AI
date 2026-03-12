@@ -236,6 +236,18 @@ export const VIEW_SECTIONS: ViewSection[] = [
     label: "Ops",
     items: [
       {
+        id: "shiftbrief",
+        label: "Shift Brief",
+        description: "On-call handoff snapshot of risk, incidents, and recent changes.",
+        kubectlCommand: "kubectl get events -A --sort-by=.metadata.creationTimestamp",
+      },
+      {
+        id: "playbooks",
+        label: "Playbooks",
+        description: "Structured response guides for recurring production issues.",
+        kubectlCommand: "kubectl describe node <name>",
+      },
+      {
         id: "incidents",
         label: "Incidents",
         description: "Incident commander timeline and runbook execution.",

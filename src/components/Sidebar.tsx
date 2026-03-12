@@ -62,6 +62,8 @@ const VIEW_ICON: Record<View, LucideIcon> = {
   audit: ClipboardList,
   predictions: Activity,
   diagnostics: ClipboardList,
+  shiftbrief: Activity,
+  playbooks: FileText,
   incidents: Activity,
   remediation: Rocket,
   memory: Archive,
