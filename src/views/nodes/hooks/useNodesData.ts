@@ -2,15 +2,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useStreamRefresh } from "../../../app/hooks/useStreamRefresh";
 import { useAuthSession } from "../../../context/AuthSessionContext";
 import { api } from "../../../lib/api";
-import type {
-  K8sEvent,
-  Node,
-  NodeAlertLifecycle,
-  NodeAlertLifecycleStatus,
-  NodeDetail,
-  NodeDrainPreview,
-  Pod,
-} from "../../../types";
+import type { K8sEvent, Node, NodeAlertLifecycle, NodeDetail, NodeDrainPreview, Pod } from "../../../types";
+import { buildAllocatableDropAlert, deriveNodeRuleAlerts } from "./nodeRuleEngine";
+import type { NodeDrainOptions, NodeRuleAlert } from "./nodesTypes";
+import { ensureForceDrainReason, indexAlertLifecycleByID, parseCPUCapacity, parseMemoryCapacity } from "./nodesUtils";
+export type { NodeDrainOptions, NodeRuleAlert } from "./nodesTypes";
 
 /**
  * UI state and actions for the nodes view.
@@ -52,25 +48,6 @@ interface UseNodesDataResult {
     status: "acknowledged" | "snoozed" | "dismissed" | "active",
   ) => Promise<void>;
   clearSelectedNode: () => void;
-}
-
-export interface NodeRuleAlert {
-  id: string;
-  node: string;
-  rule: "readiness_flap" | "sustained_pressure" | "allocatable_drop";
-  severity: "warning" | "critical";
-  title: string;
-  message: string;
-  lifecycleStatus: NodeAlertLifecycleStatus;
-  lifecycleNote?: string;
-  lifecycleUpdatedAt?: string;
-  lifecycleUpdatedBy?: string;
-  snoozedUntil?: string;
-}
-
-export interface NodeDrainOptions {
-  force?: boolean;
-  reason?: string;
 }
 
 /**
@@ -165,64 +142,10 @@ export function useNodesData(): UseNodesDataResult {
     return nodes.filter((node) => `${node.name} ${node.roles} ${node.status}`.toLowerCase().includes(query));
   }, [nodes, search]);
 
-  const nodeRuleAlerts = useMemo(() => {
-    const alerts: NodeRuleAlert[] = [];
-    const nodeEvents = clusterEvents.filter((event) => (event.resourceKind ?? "").toLowerCase() === "node");
-
-    for (const node of nodes) {
-      const eventsForNode = nodeEvents.filter((event) => (event.resource ?? "").toLowerCase() === node.name.toLowerCase());
-      const readinessTransitions = eventsForNode.filter((event) =>
-        ["nodeready", "nodenotready"].includes((event.reason ?? "").toLowerCase()),
-      ).length;
-      if (readinessTransitions >= 3) {
-        alerts.push({
-          id: `readiness-flap-${node.name}`,
-          node: node.name,
-          rule: "readiness_flap",
-          severity: "warning",
-          title: `Readiness flap on ${node.name}`,
-          message: `${readinessTransitions} readiness transitions detected. Investigate kubelet, networking, or node stability.`,
-          lifecycleStatus: "active",
-        });
-      }
-
-      const pressureSignals = eventsForNode.filter((event) => {
-        const reason = (event.reason ?? "").toLowerCase();
-        const message = (event.message ?? "").toLowerCase();
-        return reason.includes("pressure") || message.includes("pressure");
-      }).length;
-      if (pressureSignals >= 2) {
-        alerts.push({
-          id: `pressure-${node.name}`,
-          node: node.name,
-          rule: "sustained_pressure",
-          severity: "critical",
-          title: `Sustained pressure on ${node.name}`,
-          message: `${pressureSignals} pressure events detected. Review memory, disk, and PID pressure conditions.`,
-          lifecycleStatus: "active",
-        });
-      }
-    }
-
-    const dedup = new Map<string, NodeRuleAlert>();
-    for (const alert of [...alerts, ...allocatableDropAlerts]) {
-      dedup.set(alert.id, alert);
-    }
-    return Array.from(dedup.values()).map((alert) => {
-      const lifecycle = alertLifecycleByID[alert.id];
-      if (!lifecycle) {
-        return alert;
-      }
-      return {
-        ...alert,
-        lifecycleStatus: lifecycle.status,
-        lifecycleNote: lifecycle.note,
-        lifecycleUpdatedAt: lifecycle.updatedAt,
-        lifecycleUpdatedBy: lifecycle.updatedBy,
-        snoozedUntil: lifecycle.snoozedUntil,
-      };
-    });
-  }, [alertLifecycleByID, allocatableDropAlerts, clusterEvents, nodes]);
+  const nodeRuleAlerts = useMemo(
+    () => deriveNodeRuleAlerts(nodes, clusterEvents, allocatableDropAlerts, alertLifecycleByID),
+    [alertLifecycleByID, allocatableDropAlerts, clusterEvents, nodes],
+  );
 
   const loadNodeContext = useCallback(async (name: string) => {
     const [detail, nodePods, nodeEvents] = await Promise.all([
@@ -251,22 +174,8 @@ export function useNodesData(): UseNodesDataResult {
           if (state.some((alert) => alert.node === name && alert.rule === "allocatable_drop")) {
             return state;
           }
-          const details =
-            cpuDrop >= threshold && memoryDrop >= threshold
-              ? `CPU allocatable dropped ${(cpuDrop * 100).toFixed(1)}% and memory allocatable dropped ${(memoryDrop * 100).toFixed(1)}%.`
-              : cpuDrop >= threshold
-                ? `CPU allocatable dropped ${(cpuDrop * 100).toFixed(1)}%.`
-                : `Memory allocatable dropped ${(memoryDrop * 100).toFixed(1)}%.`;
           return [
-            {
-              id: `allocatable-drop-${name}-${Date.now()}`,
-              node: name,
-              rule: "allocatable_drop",
-              severity: "critical",
-              title: `Allocatable drop detected on ${name}`,
-              message: `${details} This can indicate kubelet reservation changes, tainting side effects, or node pressure.`,
-              lifecycleStatus: "active",
-            },
+            buildAllocatableDropAlert(name, cpuDrop, memoryDrop),
             ...state,
           ];
         });
@@ -683,86 +592,4 @@ export function useNodesData(): UseNodesDataResult {
     updateNodeAlertLifecycle,
     clearSelectedNode,
   };
-}
-
-function indexAlertLifecycleByID(items: NodeAlertLifecycle[]): Record<string, NodeAlertLifecycle> {
-  const out: Record<string, NodeAlertLifecycle> = {};
-  for (const item of items) {
-    out[item.id] = item;
-  }
-  return out;
-}
-
-function parseCPUCapacity(raw: string): number {
-  const value = raw.trim().toLowerCase();
-  if (value === "") {
-    return 0;
-  }
-  if (value.endsWith("m")) {
-    const milli = Number.parseFloat(value.slice(0, -1));
-    return Number.isFinite(milli) ? milli / 1000 : 0;
-  }
-  const cores = Number.parseFloat(value);
-  return Number.isFinite(cores) ? cores : 0;
-}
-
-function ensureForceDrainReason(target: string, initialReason?: string): string | null {
-  const trimmed = (initialReason ?? "").trim();
-  if (trimmed !== "") {
-    return trimmed.slice(0, 240);
-  }
-
-  const input = window.prompt(`Force drain requires an audit reason for ${target}. Enter reason (max 240 chars):`, "");
-  if (input === null) {
-    return null;
-  }
-
-  const reason = input.trim();
-  if (reason === "") {
-    return null;
-  }
-  return reason.slice(0, 240);
-}
-
-function parseMemoryCapacity(raw: string): number {
-  const value = raw.trim();
-  if (value === "") {
-    return 0;
-  }
-
-  const match = /^([0-9]+(?:\.[0-9]+)?)([KMGTE]i?)?$/i.exec(value);
-  if (!match) {
-    return 0;
-  }
-
-  const amount = Number.parseFloat(match[1]);
-  if (!Number.isFinite(amount)) {
-    return 0;
-  }
-
-  const unit = (match[2] ?? "").toLowerCase();
-  const multiplier =
-    unit === "ki"
-      ? 1024
-      : unit === "mi"
-        ? 1024 ** 2
-        : unit === "gi"
-          ? 1024 ** 3
-          : unit === "ti"
-            ? 1024 ** 4
-            : unit === "ei"
-              ? 1024 ** 6
-              : unit === "k"
-                ? 1000
-                : unit === "m"
-                  ? 1000 ** 2
-                  : unit === "g"
-                    ? 1000 ** 3
-                    : unit === "t"
-                      ? 1000 ** 4
-                      : unit === "e"
-                        ? 1000 ** 6
-                        : 1;
-
-  return amount * multiplier;
 }
