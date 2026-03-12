@@ -32,6 +32,7 @@ interface UseNodesDataResult {
   isLoading: boolean;
   isBusy: boolean;
   error: string | null;
+  notice: string | null;
   setSearch: (value: string) => void;
   load: () => Promise<void>;
   openDetail: (name: string) => Promise<void>;
@@ -94,6 +95,7 @@ export function useNodesData(): UseNodesDataResult {
   const [isLoading, setIsLoading] = useState(true);
   const [isBusy, setIsBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const canRead = can("read");
   const canWrite = can("write");
   const allocatableSnapshotRef = useRef<Record<string, { cpu: number; memory: number }>>({});
@@ -102,10 +104,20 @@ export function useNodesData(): UseNodesDataResult {
     setSearchState(value);
   }, []);
 
+  const reportError = useCallback((message: string) => {
+    setError(message);
+    setNotice(null);
+  }, []);
+
+  const reportNotice = useCallback((message: string) => {
+    setNotice(message);
+    setError(null);
+  }, []);
+
   const load = useCallback(async () => {
     if (!canRead) {
       setNodes([]);
-      setError("Authenticate to view node data.");
+      reportError("Authenticate to view node data.");
       setIsLoading(false);
       return;
     }
@@ -123,11 +135,11 @@ export function useNodesData(): UseNodesDataResult {
       setSelectedNodeNames((state) => state.filter((name) => nodeRows.some((node) => node.name === name)));
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load nodes");
+      reportError(err instanceof Error ? err.message : "Failed to load nodes");
     } finally {
       setIsLoading(false);
     }
-  }, [canRead]);
+  }, [canRead, reportError]);
 
   useEffect(() => {
     if (authLoading) {
@@ -265,7 +277,7 @@ export function useNodesData(): UseNodesDataResult {
   const openDetail = useCallback(
     async (name: string) => {
       if (!canRead) {
-        setError("Authenticate to view node details.");
+        reportError("Authenticate to view node details.");
         return;
       }
 
@@ -275,18 +287,18 @@ export function useNodesData(): UseNodesDataResult {
         await loadNodeContext(name);
         setError(null);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load node details");
+        reportError(err instanceof Error ? err.message : "Failed to load node details");
       } finally {
         setIsBusy(false);
       }
     },
-    [canRead, loadNodeContext],
+    [canRead, loadNodeContext, reportError],
   );
 
   const cordon = useCallback(
     async (name: string) => {
       if (!canWrite) {
-        setError("Your role does not allow node cordon actions.");
+        reportError("Your role does not allow node cordon actions.");
         return;
       }
       if (!window.confirm(`Cordon node ${name}?`)) {
@@ -295,25 +307,25 @@ export function useNodesData(): UseNodesDataResult {
 
       setIsBusy(true);
       try {
-        await api.cordonNode(name);
+        const result = await api.cordonNode(name);
         await load();
         if (selectedNode?.name === name) {
           await loadNodeContext(name);
         }
-        setError(null);
+        reportNotice(result.message || `Node ${name} cordoned.`);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to cordon node");
+        reportError(err instanceof Error ? err.message : "Failed to cordon node");
       } finally {
         setIsBusy(false);
       }
     },
-    [canWrite, load, loadNodeContext, selectedNode?.name],
+    [canWrite, load, loadNodeContext, reportError, reportNotice, selectedNode?.name],
   );
 
   const uncordon = useCallback(
     async (name: string) => {
       if (!canWrite) {
-        setError("Your role does not allow node uncordon actions.");
+        reportError("Your role does not allow node uncordon actions.");
         return;
       }
       if (!window.confirm(`Uncordon node ${name}?`)) {
@@ -322,25 +334,25 @@ export function useNodesData(): UseNodesDataResult {
 
       setIsBusy(true);
       try {
-        await api.uncordonNode(name);
+        const result = await api.uncordonNode(name);
         await load();
         if (selectedNode?.name === name) {
           await loadNodeContext(name);
         }
-        setError(null);
+        reportNotice(result.message || `Node ${name} uncordoned.`);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to uncordon node");
+        reportError(err instanceof Error ? err.message : "Failed to uncordon node");
       } finally {
         setIsBusy(false);
       }
     },
-    [canWrite, load, loadNodeContext, selectedNode?.name],
+    [canWrite, load, loadNodeContext, reportError, reportNotice, selectedNode?.name],
   );
 
   const previewDrain = useCallback(
     async (name: string) => {
       if (!canWrite) {
-        setError("Your role does not allow node drain actions.");
+        reportError("Your role does not allow node drain actions.");
         return;
       }
       setIsBusy(true);
@@ -351,21 +363,21 @@ export function useNodesData(): UseNodesDataResult {
           preview.blockers.length > 0
             ? `Drain preview: ${preview.evictable.length} evictable pods, ${preview.blockers.length} blockers.`
             : `Drain preview: ${preview.evictable.length} evictable pods, no blockers.`;
-        setError(summary);
+        reportNotice(summary);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to preview node drain");
+        reportError(err instanceof Error ? err.message : "Failed to preview node drain");
       } finally {
         setIsBusy(false);
       }
     },
-    [canWrite],
+    [canWrite, reportError, reportNotice],
   );
 
   const drain = useCallback(
     async (name: string, options: NodeDrainOptions = {}) => {
       const force = options.force === true;
       if (!canWrite) {
-        setError("Your role does not allow node drain actions.");
+        reportError("Your role does not allow node drain actions.");
         return;
       }
 
@@ -375,12 +387,12 @@ export function useNodesData(): UseNodesDataResult {
         setLastDrainPreview(preview);
 
         if (preview.evictable.length === 0) {
-          setError("No evictable pods found on this node.");
+          reportNotice("No evictable pods found on this node.");
           return;
         }
 
         if (preview.blockers.length > 0 && !force) {
-          setError("Drain blocked by safety checks. Run force drain from maintenance mode if you accept the risks.");
+          reportNotice("Drain blocked by safety checks. Run force drain from maintenance mode if you accept the risks.");
           return;
         }
         if (!force && !window.confirm(`Drain node ${name}? This will evict ${preview.evictable.length} pods.`)) {
@@ -389,23 +401,23 @@ export function useNodesData(): UseNodesDataResult {
 
         const reason = force ? ensureForceDrainReason(name, options.reason) : "";
         if (force && reason === null) {
-          setError("Force drain cancelled. A reason is required to continue.");
+          reportNotice("Force drain cancelled. A reason is required to continue.");
           return;
         }
 
-        await api.drainNode(name, { force, reason: reason ?? "" });
+        const result = await api.drainNode(name, { force, reason: reason ?? "" });
         await load();
         if (selectedNode?.name === name) {
           await loadNodeContext(name);
         }
-        setError(null);
+        reportNotice(result.message || `Node ${name} drain requested.`);
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to drain node");
+        reportError(err instanceof Error ? err.message : "Failed to drain node");
       } finally {
         setIsBusy(false);
       }
     },
-    [canWrite, load, loadNodeContext, selectedNode?.name],
+    [canWrite, load, loadNodeContext, reportError, reportNotice, selectedNode?.name],
   );
 
   const clearSelectedNode = useCallback(() => {
@@ -442,11 +454,11 @@ export function useNodesData(): UseNodesDataResult {
 
   const bulkCordon = useCallback(async () => {
     if (!canWrite) {
-      setError("Your role does not allow node cordon actions.");
+      reportError("Your role does not allow node cordon actions.");
       return;
     }
     if (selectedNodeNames.length === 0) {
-      setError("Select at least one node for bulk actions.");
+      reportError("Select at least one node for bulk actions.");
       return;
     }
     if (!window.confirm(`Cordon ${selectedNodeNames.length} selected node(s)?`)) {
@@ -455,24 +467,24 @@ export function useNodesData(): UseNodesDataResult {
 
     setIsBusy(true);
     try {
-      await Promise.all(selectedNodeNames.map((name) => api.cordonNode(name)));
+      const results = await Promise.all(selectedNodeNames.map((name) => api.cordonNode(name)));
       await load();
-      setError(null);
+      reportNotice(results[0]?.message || `Cordoned ${selectedNodeNames.length} node(s).`);
       setSelectedNodeNames([]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to bulk cordon nodes");
+      reportError(err instanceof Error ? err.message : "Failed to bulk cordon nodes");
     } finally {
       setIsBusy(false);
     }
-  }, [canWrite, load, selectedNodeNames]);
+  }, [canWrite, load, reportError, reportNotice, selectedNodeNames]);
 
   const bulkUncordon = useCallback(async () => {
     if (!canWrite) {
-      setError("Your role does not allow node uncordon actions.");
+      reportError("Your role does not allow node uncordon actions.");
       return;
     }
     if (selectedNodeNames.length === 0) {
-      setError("Select at least one node for bulk actions.");
+      reportError("Select at least one node for bulk actions.");
       return;
     }
     if (!window.confirm(`Uncordon ${selectedNodeNames.length} selected node(s)?`)) {
@@ -481,26 +493,26 @@ export function useNodesData(): UseNodesDataResult {
 
     setIsBusy(true);
     try {
-      await Promise.all(selectedNodeNames.map((name) => api.uncordonNode(name)));
+      const results = await Promise.all(selectedNodeNames.map((name) => api.uncordonNode(name)));
       await load();
-      setError(null);
+      reportNotice(results[0]?.message || `Uncordoned ${selectedNodeNames.length} node(s).`);
       setSelectedNodeNames([]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to bulk uncordon nodes");
+      reportError(err instanceof Error ? err.message : "Failed to bulk uncordon nodes");
     } finally {
       setIsBusy(false);
     }
-  }, [canWrite, load, selectedNodeNames]);
+  }, [canWrite, load, reportError, reportNotice, selectedNodeNames]);
 
   const bulkDrain = useCallback(
     async (options: NodeDrainOptions = {}) => {
       const force = options.force === true;
       if (!canWrite) {
-        setError("Your role does not allow node drain actions.");
+        reportError("Your role does not allow node drain actions.");
         return;
       }
       if (selectedNodeNames.length === 0) {
-        setError("Select at least one node for bulk actions.");
+        reportError("Select at least one node for bulk actions.");
         return;
       }
       if (
@@ -515,7 +527,7 @@ export function useNodesData(): UseNodesDataResult {
       try {
         const reason = force ? ensureForceDrainReason("selected nodes", options.reason) : "";
         if (force && reason === null) {
-          setError("Force drain cancelled. A reason is required to continue.");
+          reportNotice("Force drain cancelled. A reason is required to continue.");
           return;
         }
 
@@ -531,28 +543,28 @@ export function useNodesData(): UseNodesDataResult {
         await load();
         setSelectedNodeNames([]);
         if (blocked.length > 0) {
-          setError(`Skipped ${blocked.length} node(s) due to blockers: ${blocked.join(", ")}`);
+          reportNotice(`Skipped ${blocked.length} node(s) due to blockers: ${blocked.join(", ")}`);
         } else {
-          setError(null);
+          reportNotice(`Drain requested for ${selectedNodeNames.length} node(s).`);
         }
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to bulk drain nodes");
+        reportError(err instanceof Error ? err.message : "Failed to bulk drain nodes");
       } finally {
         setIsBusy(false);
       }
     },
-    [canWrite, load, selectedNodeNames],
+    [canWrite, load, reportError, reportNotice, selectedNodeNames],
   );
 
   const dispatchNodeRuleAlert = useCallback(
     async (alertID: string) => {
       if (!canWrite) {
-        setError("Your role does not allow alert dispatch.");
+        reportError("Your role does not allow alert dispatch.");
         return;
       }
       const alert = nodeRuleAlerts.find((item) => item.id === alertID);
       if (!alert) {
-        setError("Selected node alert no longer exists.");
+        reportError("Selected node alert no longer exists.");
         return;
       }
 
@@ -565,25 +577,29 @@ export function useNodesData(): UseNodesDataResult {
           source: "nodes-rule-engine",
           tags: ["nodes", alert.rule, alert.node],
         });
-        setError(response.success ? "Node alert dispatched to configured channels." : "Node alert dispatch partially failed.");
+        if (response.success) {
+          reportNotice("Node alert dispatched to configured channels.");
+        } else {
+          reportError("Node alert dispatch partially failed.");
+        }
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to dispatch node alert");
+        reportError(err instanceof Error ? err.message : "Failed to dispatch node alert");
       } finally {
         setIsDispatchingNodeAlert(false);
       }
     },
-    [canWrite, nodeRuleAlerts],
+    [canWrite, nodeRuleAlerts, reportError, reportNotice],
   );
 
   const updateNodeAlertLifecycle = useCallback(
     async (alertID: string, status: "acknowledged" | "snoozed" | "dismissed" | "active") => {
       if (!canWrite) {
-        setError("Your role does not allow alert lifecycle updates.");
+        reportError("Your role does not allow alert lifecycle updates.");
         return;
       }
       const alert = nodeRuleAlerts.find((item) => item.id === alertID);
       if (!alert) {
-        setError("Selected node alert no longer exists.");
+        reportError("Selected node alert no longer exists.");
         return;
       }
 
@@ -595,7 +611,7 @@ export function useNodesData(): UseNodesDataResult {
         }
         const parsed = Number.parseInt(raw.trim(), 10);
         if (!Number.isFinite(parsed) || parsed < 1 || parsed > 1440) {
-          setError("Invalid snooze duration. Enter a number between 1 and 1440.");
+          reportError("Invalid snooze duration. Enter a number between 1 and 1440.");
           return;
         }
         snoozeMinutes = parsed;
@@ -614,7 +630,7 @@ export function useNodesData(): UseNodesDataResult {
           ...state,
           [updated.id]: updated,
         }));
-        setError(
+        reportNotice(
           status === "active"
             ? "Node alert moved back to active."
             : status === "acknowledged"
@@ -624,12 +640,12 @@ export function useNodesData(): UseNodesDataResult {
                 : `Node alert snoozed for ${snoozeMinutes} minute(s).`,
         );
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to update node alert lifecycle");
+        reportError(err instanceof Error ? err.message : "Failed to update node alert lifecycle");
       } finally {
         setIsUpdatingNodeAlertLifecycle(false);
       }
     },
-    [canWrite, nodeRuleAlerts],
+    [canWrite, nodeRuleAlerts, reportError, reportNotice],
   );
 
   return {
@@ -649,6 +665,7 @@ export function useNodesData(): UseNodesDataResult {
     isLoading,
     isBusy,
     error,
+    notice,
     setSearch,
     load,
     openDetail,
