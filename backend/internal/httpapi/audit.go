@@ -317,6 +317,8 @@ func actionForRequest(method, path string) string {
 		return "memory.fix.record"
 	case m == http.MethodPost && path == apiMountPrefix+"/risk-guard/analyze":
 		return "riskguard.analyze"
+	case m == http.MethodPost && path == apiMountPrefix+"/alerts/lifecycle":
+		return "alert.lifecycle.update"
 	case m == http.MethodPost && path == apiMountPrefix+"/pods":
 		return "pod.create"
 	case m == http.MethodPost && strings.HasSuffix(path, "/restart") && strings.Contains(path, apiMountPrefix+"/pods/"):

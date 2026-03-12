@@ -2,7 +2,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useStreamRefresh } from "../../../app/hooks/useStreamRefresh";
 import { useAuthSession } from "../../../context/AuthSessionContext";
 import { api } from "../../../lib/api";
-import type { K8sEvent, Node, NodeDetail, NodeDrainPreview, Pod } from "../../../types";
+import type {
+  K8sEvent,
+  Node,
+  NodeAlertLifecycle,
+  NodeAlertLifecycleStatus,
+  NodeDetail,
+  NodeDrainPreview,
+  Pod,
+} from "../../../types";
 
 /**
  * UI state and actions for the nodes view.
@@ -18,6 +26,7 @@ interface UseNodesDataResult {
   lastDrainPreview: NodeDrainPreview | null;
   nodeRuleAlerts: NodeRuleAlert[];
   isDispatchingNodeAlert: boolean;
+  isUpdatingNodeAlertLifecycle: boolean;
   selectedNodeNames: string[];
   search: string;
   isLoading: boolean;
@@ -37,6 +46,10 @@ interface UseNodesDataResult {
   bulkUncordon: () => Promise<void>;
   bulkDrain: (options?: NodeDrainOptions) => Promise<void>;
   dispatchNodeRuleAlert: (alertID: string) => Promise<void>;
+  updateNodeAlertLifecycle: (
+    alertID: string,
+    status: "acknowledged" | "snoozed" | "dismissed" | "active",
+  ) => Promise<void>;
   clearSelectedNode: () => void;
 }
 
@@ -47,6 +60,11 @@ export interface NodeRuleAlert {
   severity: "warning" | "critical";
   title: string;
   message: string;
+  lifecycleStatus: NodeAlertLifecycleStatus;
+  lifecycleNote?: string;
+  lifecycleUpdatedAt?: string;
+  lifecycleUpdatedBy?: string;
+  snoozedUntil?: string;
 }
 
 export interface NodeDrainOptions {
@@ -69,6 +87,8 @@ export function useNodesData(): UseNodesDataResult {
   const [lastDrainPreview, setLastDrainPreview] = useState<NodeDrainPreview | null>(null);
   const [allocatableDropAlerts, setAllocatableDropAlerts] = useState<NodeRuleAlert[]>([]);
   const [isDispatchingNodeAlert, setIsDispatchingNodeAlert] = useState(false);
+  const [isUpdatingNodeAlertLifecycle, setIsUpdatingNodeAlertLifecycle] = useState(false);
+  const [alertLifecycleByID, setAlertLifecycleByID] = useState<Record<string, NodeAlertLifecycle>>({});
   const [selectedNodeNames, setSelectedNodeNames] = useState<string[]>([]);
   const [search, setSearchState] = useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -92,9 +112,14 @@ export function useNodesData(): UseNodesDataResult {
 
     setIsLoading(true);
     try {
-      const [nodeRows, eventRows] = await Promise.all([api.getNodes(), api.getEvents()]);
+      const [nodeRows, eventRows, lifecycleRows] = await Promise.all([
+        api.getNodes(),
+        api.getEvents(),
+        api.getAlertLifecycle().catch(() => [] as NodeAlertLifecycle[]),
+      ]);
       setNodes(nodeRows);
       setClusterEvents(eventRows);
+      setAlertLifecycleByID(indexAlertLifecycleByID(lifecycleRows));
       setSelectedNodeNames((state) => state.filter((name) => nodeRows.some((node) => node.name === name)));
       setError(null);
     } catch (err) {
@@ -145,6 +170,7 @@ export function useNodesData(): UseNodesDataResult {
           severity: "warning",
           title: `Readiness flap on ${node.name}`,
           message: `${readinessTransitions} readiness transitions detected. Investigate kubelet, networking, or node stability.`,
+          lifecycleStatus: "active",
         });
       }
 
@@ -161,6 +187,7 @@ export function useNodesData(): UseNodesDataResult {
           severity: "critical",
           title: `Sustained pressure on ${node.name}`,
           message: `${pressureSignals} pressure events detected. Review memory, disk, and PID pressure conditions.`,
+          lifecycleStatus: "active",
         });
       }
     }
@@ -169,8 +196,21 @@ export function useNodesData(): UseNodesDataResult {
     for (const alert of [...alerts, ...allocatableDropAlerts]) {
       dedup.set(alert.id, alert);
     }
-    return Array.from(dedup.values());
-  }, [allocatableDropAlerts, clusterEvents, nodes]);
+    return Array.from(dedup.values()).map((alert) => {
+      const lifecycle = alertLifecycleByID[alert.id];
+      if (!lifecycle) {
+        return alert;
+      }
+      return {
+        ...alert,
+        lifecycleStatus: lifecycle.status,
+        lifecycleNote: lifecycle.note,
+        lifecycleUpdatedAt: lifecycle.updatedAt,
+        lifecycleUpdatedBy: lifecycle.updatedBy,
+        snoozedUntil: lifecycle.snoozedUntil,
+      };
+    });
+  }, [alertLifecycleByID, allocatableDropAlerts, clusterEvents, nodes]);
 
   const loadNodeContext = useCallback(async (name: string) => {
     const [detail, nodePods, nodeEvents] = await Promise.all([
@@ -213,6 +253,7 @@ export function useNodesData(): UseNodesDataResult {
               severity: "critical",
               title: `Allocatable drop detected on ${name}`,
               message: `${details} This can indicate kubelet reservation changes, tainting side effects, or node pressure.`,
+              lifecycleStatus: "active",
             },
             ...state,
           ];
@@ -534,6 +575,63 @@ export function useNodesData(): UseNodesDataResult {
     [canWrite, nodeRuleAlerts],
   );
 
+  const updateNodeAlertLifecycle = useCallback(
+    async (alertID: string, status: "acknowledged" | "snoozed" | "dismissed" | "active") => {
+      if (!canWrite) {
+        setError("Your role does not allow alert lifecycle updates.");
+        return;
+      }
+      const alert = nodeRuleAlerts.find((item) => item.id === alertID);
+      if (!alert) {
+        setError("Selected node alert no longer exists.");
+        return;
+      }
+
+      let snoozeMinutes = 0;
+      if (status === "snoozed") {
+        const raw = window.prompt("Snooze duration in minutes (1-1440):", "30");
+        if (raw === null) {
+          return;
+        }
+        const parsed = Number.parseInt(raw.trim(), 10);
+        if (!Number.isFinite(parsed) || parsed < 1 || parsed > 1440) {
+          setError("Invalid snooze duration. Enter a number between 1 and 1440.");
+          return;
+        }
+        snoozeMinutes = parsed;
+      }
+
+      setIsUpdatingNodeAlertLifecycle(true);
+      try {
+        const updated = await api.updateAlertLifecycle({
+          id: alert.id,
+          node: alert.node,
+          rule: alert.rule,
+          status,
+          snoozeMinutes: snoozeMinutes > 0 ? snoozeMinutes : undefined,
+        });
+        setAlertLifecycleByID((state) => ({
+          ...state,
+          [updated.id]: updated,
+        }));
+        setError(
+          status === "active"
+            ? "Node alert moved back to active."
+            : status === "acknowledged"
+              ? "Node alert acknowledged."
+              : status === "dismissed"
+                ? "Node alert dismissed."
+                : `Node alert snoozed for ${snoozeMinutes} minute(s).`,
+        );
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to update node alert lifecycle");
+      } finally {
+        setIsUpdatingNodeAlertLifecycle(false);
+      }
+    },
+    [canWrite, nodeRuleAlerts],
+  );
+
   return {
     canRead,
     canWrite,
@@ -545,6 +643,7 @@ export function useNodesData(): UseNodesDataResult {
     lastDrainPreview,
     nodeRuleAlerts,
     isDispatchingNodeAlert,
+    isUpdatingNodeAlertLifecycle,
     selectedNodeNames,
     search,
     isLoading,
@@ -564,8 +663,17 @@ export function useNodesData(): UseNodesDataResult {
     bulkUncordon,
     bulkDrain,
     dispatchNodeRuleAlert,
+    updateNodeAlertLifecycle,
     clearSelectedNode,
   };
+}
+
+function indexAlertLifecycleByID(items: NodeAlertLifecycle[]): Record<string, NodeAlertLifecycle> {
+  const out: Record<string, NodeAlertLifecycle> = {};
+  for (const item of items) {
+    out[item.id] = item;
+  }
+  return out;
 }
 
 function parseCPUCapacity(raw: string): number {

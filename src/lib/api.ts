@@ -13,6 +13,8 @@ import type {
   ApplyResourceYAMLResponse,
   AlertDispatchRequest,
   AlertDispatchResponse,
+  NodeAlertLifecycle,
+  NodeAlertLifecycleUpdateRequest,
   Incident,
   IncidentStepStatusPatch,
   MemoryFixCreateRequest,
@@ -204,6 +206,12 @@ export const api = {
     requestJson<AlertDispatchResponse>(apiPath("alerts", "test"), {
       method: "POST",
       body: JSON.stringify({}),
+    }),
+  getAlertLifecycle: () => requestJson<NodeAlertLifecycle[]>(apiPath("alerts", "lifecycle")),
+  updateAlertLifecycle: (payload: NodeAlertLifecycleUpdateRequest) =>
+    requestJson<NodeAlertLifecycle>(apiPath("alerts", "lifecycle"), {
+      method: "POST",
+      body: JSON.stringify(payload),
     }),
   getAuditLog: (limit = 120) => requestJson<AuditLogResponse>(`${apiPath("audit")}?limit=${limit}`),
   getNamespaces: () => requestJson<string[]>(apiPath("namespaces")),

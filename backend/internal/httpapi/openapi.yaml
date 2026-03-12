@@ -1231,6 +1231,35 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AlertDispatchResponse"
+  /alerts/lifecycle:
+    get:
+      operationId: getAlertLifecycle
+      summary: List node alert lifecycle states
+      responses:
+        "200":
+          description: Alert lifecycle items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/NodeAlertLifecycle"
+    post:
+      operationId: postAlertLifecycle
+      summary: Upsert node alert lifecycle state
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NodeAlertLifecycleUpdateRequest"
+      responses:
+        "200":
+          description: Updated alert lifecycle item
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NodeAlertLifecycle"
 components:
   schemas:
     RuntimeStatus:
@@ -2423,3 +2452,43 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/AlertChannelResult"
+    NodeAlertLifecycle:
+      type: object
+      required: [id, node, rule, status, updatedAt]
+      properties:
+        id:
+          type: string
+        node:
+          type: string
+        rule:
+          type: string
+        status:
+          type: string
+          enum: [active, acknowledged, snoozed, dismissed]
+        note:
+          type: string
+        snoozedUntil:
+          type: string
+        updatedAt:
+          type: string
+        updatedBy:
+          type: string
+    NodeAlertLifecycleUpdateRequest:
+      type: object
+      required: [id, node, rule, status]
+      properties:
+        id:
+          type: string
+        node:
+          type: string
+        rule:
+          type: string
+        status:
+          type: string
+          enum: [active, acknowledged, snoozed, dismissed]
+        note:
+          type: string
+        snoozeMinutes:
+          type: integer
+          minimum: 1
+          maximum: 1440

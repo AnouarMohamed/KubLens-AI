@@ -44,31 +44,32 @@ type ClusterReader interface {
 }
 
 type Server struct {
-	cluster      ClusterReader
-	now          func() time.Time
-	logger       *slog.Logger
-	metrics      *requestMetrics
-	runtime      model.RuntimeStatus
-	auth         authRuntime
-	authLogin    *authLoginProtection
-	limiter      rateLimiter
-	writesOn     bool
-	anonPerms    []string
-	audit        *auditLog
-	eventBus     *events.Bus
-	alerts       alertDispatcher
-	ai           ai.Provider
-	aiTTL        time.Duration
-	docs         docsRetriever
-	memory       memoryStore
-	incidents    incidentStore
-	remediations remediationStore
-	riskGuard    riskAnalyzer
-	postmortems  postmortemStore
-	chatops      chatopsNotifier
-	predictor    predictionProvider
-	buildInfo    model.BuildInfo
-	intel        *intelligence.Analyzer
+	cluster        ClusterReader
+	now            func() time.Time
+	logger         *slog.Logger
+	metrics        *requestMetrics
+	runtime        model.RuntimeStatus
+	auth           authRuntime
+	authLogin      *authLoginProtection
+	limiter        rateLimiter
+	writesOn       bool
+	anonPerms      []string
+	audit          *auditLog
+	eventBus       *events.Bus
+	alerts         alertDispatcher
+	alertLifecycle *alertLifecycleStore
+	ai             ai.Provider
+	aiTTL          time.Duration
+	docs           docsRetriever
+	memory         memoryStore
+	incidents      incidentStore
+	remediations   remediationStore
+	riskGuard      riskAnalyzer
+	postmortems    postmortemStore
+	chatops        chatopsNotifier
+	predictor      predictionProvider
+	buildInfo      model.BuildInfo
+	intel          *intelligence.Analyzer
 
 	predictionsTTL   time.Duration
 	predictionsMu    sync.RWMutex
@@ -294,6 +295,7 @@ func newServer(clusterSvc ClusterReader, now func() time.Time, logger *slog.Logg
 		authLogin:      newAuthLoginProtection(defaultAuthLoginProtectionConfig()),
 		audit:          newAuditLog(maxAuditLimit, "", logger),
 		eventBus:       events.NewBus(64),
+		alertLifecycle: newAlertLifecycleStore(defaultAlertLifecycleLimit, now),
 		aiTTL:          8 * time.Second,
 		predictionsTTL: 8 * time.Second,
 		buildInfo: model.BuildInfo{
@@ -359,6 +361,8 @@ func (s *Server) Router(distDir string) http.Handler {
 		api.Get("/metrics/prometheus", s.handlePrometheusMetrics)
 		api.Post("/alerts/dispatch", s.handleAlertDispatch)
 		api.Post("/alerts/test", s.handleAlertTest)
+		api.Get("/alerts/lifecycle", s.handleListAlertLifecycle)
+		api.Post("/alerts/lifecycle", s.handleUpsertAlertLifecycle)
 		api.Get("/audit", s.handleAuditLog)
 		api.Get("/stream", s.handleStream)
 		api.Get("/stream/ws", s.handleStreamWebSocket)

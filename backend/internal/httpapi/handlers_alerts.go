@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strings"
 
+	"kubelens-backend/internal/auth"
 	"kubelens-backend/internal/model"
 )
 
@@ -54,4 +55,38 @@ func (s *Server) handleAlertTest(w http.ResponseWriter, r *http.Request) {
 		status = http.StatusBadGateway
 	}
 	writeJSON(w, status, result)
+}
+
+func (s *Server) handleListAlertLifecycle(w http.ResponseWriter, _ *http.Request) {
+	if s.alertLifecycle == nil {
+		writeJSON(w, http.StatusOK, []model.NodeAlertLifecycle{})
+		return
+	}
+	writeJSON(w, http.StatusOK, s.alertLifecycle.List())
+}
+
+func (s *Server) handleUpsertAlertLifecycle(w http.ResponseWriter, r *http.Request) {
+	if s.alertLifecycle == nil {
+		writeError(w, http.StatusServiceUnavailable, "alert lifecycle store is unavailable")
+		return
+	}
+
+	var req model.NodeAlertLifecycleUpdateRequest
+	if err := s.decodeJSONBody(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	actor := "unknown"
+	if principal, ok := auth.PrincipalFromContext(r.Context()); ok {
+		actor = strings.TrimSpace(principal.User)
+	}
+
+	item, err := s.alertLifecycle.Upsert(req, actor)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid alert lifecycle request")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, item)
 }

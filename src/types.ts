@@ -510,6 +510,28 @@ export interface AlertDispatchResponse {
   results: AlertChannelResult[];
 }
 
+export type NodeAlertLifecycleStatus = "active" | "acknowledged" | "snoozed" | "dismissed";
+
+export interface NodeAlertLifecycle {
+  id: string;
+  node: string;
+  rule: string;
+  status: NodeAlertLifecycleStatus;
+  note?: string;
+  snoozedUntil?: string;
+  updatedAt: string;
+  updatedBy?: string;
+}
+
+export interface NodeAlertLifecycleUpdateRequest {
+  id: string;
+  node: string;
+  rule: string;
+  status: NodeAlertLifecycleStatus;
+  note?: string;
+  snoozeMinutes?: number;
+}
+
 export interface ApiRouteMetrics {
   route: string;
   requests: number;
