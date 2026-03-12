@@ -138,7 +138,10 @@ export function NodePodsTab({
           <div className="flex items-center justify-between border-b border-zinc-800 px-3 py-2 gap-2">
             <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">{podInspector.title}</p>
             <div className="flex items-center gap-2">
-              <button onClick={() => void copyInspectorContent()} className="rounded-md border border-zinc-700 px-2 py-1 text-xs text-zinc-300 hover:bg-zinc-800">
+              <button
+                onClick={() => void copyInspectorContent()}
+                className="rounded-md border border-zinc-700 px-2 py-1 text-xs text-zinc-300 hover:bg-zinc-800"
+              >
                 {copyState === "idle" ? "Copy" : copyState === "ok" ? "Copied" : "Copy Failed"}
               </button>
               <button
@@ -149,7 +152,9 @@ export function NodePodsTab({
               </button>
             </div>
           </div>
-          <pre className="max-h-72 overflow-auto whitespace-pre-wrap px-3 py-3 text-xs text-zinc-200">{podInspector.content}</pre>
+          <pre className="max-h-72 overflow-auto whitespace-pre-wrap px-3 py-3 text-xs text-zinc-200">
+            {podInspector.content}
+          </pre>
         </div>
       )}
     </section>

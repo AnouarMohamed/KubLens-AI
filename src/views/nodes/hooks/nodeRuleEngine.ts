@@ -14,7 +14,9 @@ export function deriveNodeRuleAlerts(
   const nodeEvents = clusterEvents.filter((event) => (event.resourceKind ?? "").toLowerCase() === "node");
 
   for (const node of nodes) {
-    const eventsForNode = nodeEvents.filter((event) => (event.resource ?? "").toLowerCase() === node.name.toLowerCase());
+    const eventsForNode = nodeEvents.filter(
+      (event) => (event.resource ?? "").toLowerCase() === node.name.toLowerCase(),
+    );
     const readinessTransitions = eventsForNode.filter((event) =>
       ["nodeready", "nodenotready"].includes((event.reason ?? "").toLowerCase()),
     ).length;

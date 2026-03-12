@@ -40,7 +40,18 @@ describe("NodeDetailModal", () => {
     render(
       <NodeDetailModal
         selectedNode={selectedNode}
-        nodePods={[{ id: "1", namespace: "default", name: "api", status: "Running", cpu: "10m", memory: "64Mi", age: "5m", restarts: 0 }]}
+        nodePods={[
+          {
+            id: "1",
+            namespace: "default",
+            name: "api",
+            status: "Running",
+            cpu: "10m",
+            memory: "64Mi",
+            age: "5m",
+            restarts: 0,
+          },
+        ]}
         nodeEvents={[]}
         lastDrainPreview={previewWithBlockers}
         isBusy={false}

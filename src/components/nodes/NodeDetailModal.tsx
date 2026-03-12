@@ -51,13 +51,21 @@ export default function NodeDetailModal({
               active={activeTab === "conditions"}
               onClick={() => setActiveTab("conditions")}
             />
-            <TabButton label={`Pods (${nodePods.length})`} active={activeTab === "pods"} onClick={() => setActiveTab("pods")} />
+            <TabButton
+              label={`Pods (${nodePods.length})`}
+              active={activeTab === "pods"}
+              onClick={() => setActiveTab("pods")}
+            />
             <TabButton
               label={`Events (${orderedNodeEvents.length})`}
               active={activeTab === "events"}
               onClick={() => setActiveTab("events")}
             />
-            <TabButton label="Maintenance" active={activeTab === "maintenance"} onClick={() => setActiveTab("maintenance")} />
+            <TabButton
+              label="Maintenance"
+              active={activeTab === "maintenance"}
+              onClick={() => setActiveTab("maintenance")}
+            />
             <button onClick={onClose} className="btn-sm">
               Close
             </button>

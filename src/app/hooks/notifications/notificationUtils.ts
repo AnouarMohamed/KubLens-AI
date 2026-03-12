@@ -16,7 +16,13 @@ export function parseWSStreamPayload<T>(data: string): { type: string; timestamp
 }
 
 export function buildEventKey(event: K8sEvent): string {
-  return [event.type ?? "", event.reason ?? "", event.from ?? "", event.message ?? "", event.lastTimestamp ?? event.age ?? ""].join("|");
+  return [
+    event.type ?? "",
+    event.reason ?? "",
+    event.from ?? "",
+    event.message ?? "",
+    event.lastTimestamp ?? event.age ?? "",
+  ].join("|");
 }
 
 export function maybeSendDesktopNotification(event: K8sEvent, permissionRequestedRef: MutableRefObject<boolean>): void {

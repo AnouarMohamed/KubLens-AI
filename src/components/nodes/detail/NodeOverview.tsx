@@ -19,7 +19,11 @@ export function NodeOverview({ selectedNode }: NodeOverviewProps) {
       <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">Capacity and risk trend</p>
       <div className="mt-2 grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
         <InfoCard label="CPU" capacity={selectedNode.capacity.cpu} allocatable={selectedNode.allocatable.cpu} />
-        <InfoCard label="Memory" capacity={selectedNode.capacity.memory} allocatable={selectedNode.allocatable.memory} />
+        <InfoCard
+          label="Memory"
+          capacity={selectedNode.capacity.memory}
+          allocatable={selectedNode.allocatable.memory}
+        />
         <InfoCard label="Pods" capacity={selectedNode.capacity.pods} allocatable={selectedNode.allocatable.pods} />
       </div>
       <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -35,7 +39,12 @@ export function NodeOverview({ selectedNode }: NodeOverviewProps) {
           note={`Current usage ${selectedNode.memUsage}`}
           tone={memoryHeadroom < 20 ? "warning" : "normal"}
         />
-        <SignalCard title="CPU risk trend" value={cpuProjection.message} note={cpuProjection.detail} tone={cpuProjection.tone} />
+        <SignalCard
+          title="CPU risk trend"
+          value={cpuProjection.message}
+          note={cpuProjection.detail}
+          tone={cpuProjection.tone}
+        />
       </div>
     </section>
   );

@@ -117,7 +117,10 @@ export function NodeMaintenanceTab({
           <p className="text-xs font-semibold uppercase tracking-wide text-zinc-200">Drain blockers</p>
           <div className="mt-2 space-y-1">
             {preview.blockers.slice(0, 6).map((blocker, index) => (
-              <p key={`${blocker.kind}-${blocker.pod.namespace}-${blocker.pod.name}-${index}`} className="text-xs text-zinc-300">
+              <p
+                key={`${blocker.kind}-${blocker.pod.namespace}-${blocker.pod.name}-${index}`}
+                className="text-xs text-zinc-300"
+              >
                 [{blocker.kind}] {blocker.pod.namespace}/{blocker.pod.name}: {blocker.message}
                 {blocker.reference ? ` (${blocker.reference})` : ""}
               </p>

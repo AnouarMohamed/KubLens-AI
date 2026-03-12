@@ -182,10 +182,7 @@ export function useNodesData(): UseNodesDataResult {
           if (state.some((alert) => alert.node === name && alert.rule === "allocatable_drop")) {
             return state;
           }
-          return [
-            buildAllocatableDropAlert(name, cpuDrop, memoryDrop),
-            ...state,
-          ];
+          return [buildAllocatableDropAlert(name, cpuDrop, memoryDrop), ...state];
         });
       }
     }
@@ -309,7 +306,9 @@ export function useNodesData(): UseNodesDataResult {
         }
 
         if (preview.blockers.length > 0 && !force) {
-          reportNotice("Drain blocked by safety checks. Run force drain from maintenance mode if you accept the risks.");
+          reportNotice(
+            "Drain blocked by safety checks. Run force drain from maintenance mode if you accept the risks.",
+          );
           return;
         }
         if (!force && !window.confirm(`Drain node ${name}? This will evict ${preview.evictable.length} pods.`)) {

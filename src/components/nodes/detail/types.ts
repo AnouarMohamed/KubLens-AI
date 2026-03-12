@@ -1,5 +1,9 @@
 import type { K8sEvent, NodeDetail, NodeDrainPreview, Pod } from "../../../types";
-import type { NodeDrainOptions } from "../../../views/nodes/hooks/nodesTypes";
+
+interface NodeDrainOptions {
+  force?: boolean;
+  reason?: string;
+}
 
 export type NodeDetailTab = "conditions" | "pods" | "events" | "maintenance";
 

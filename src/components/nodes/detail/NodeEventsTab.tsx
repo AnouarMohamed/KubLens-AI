@@ -38,7 +38,11 @@ export function NodeEventsTab({ orderedNodeEvents }: NodeEventsTabProps) {
             placeholder="Filter by reason, message, or source"
             className="input flex-1 min-w-[220px]"
           />
-          <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value as "all" | "warning" | "normal")} className="input w-[170px]">
+          <select
+            value={typeFilter}
+            onChange={(event) => setTypeFilter(event.target.value as "all" | "warning" | "normal")}
+            className="input w-[170px]"
+          >
             <option value="all">All Types</option>
             <option value="warning">Warning only</option>
             <option value="normal">Normal only</option>

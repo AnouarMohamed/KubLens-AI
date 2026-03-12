@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { PlaybookCard } from "./components/PlaybookCard";
-import { PLAYBOOKS } from "./data/playbooks";
+import { PLAYBOOKS } from "./api/playbooks";
 import type { PlaybookDomain } from "./types";
 import { classifyPlaybook, domainLabel, matchesPlaybookQuery, playbookUrgency, sortedDomains } from "./utils";
 
@@ -91,7 +91,11 @@ export default function Playbooks() {
               </option>
             ))}
           </select>
-          <select value={sortBy} onChange={(event) => setSortBy(event.target.value as "default" | "urgency" | "title")} className="input w-[180px]">
+          <select
+            value={sortBy}
+            onChange={(event) => setSortBy(event.target.value as "default" | "urgency" | "title")}
+            className="input w-[180px]"
+          >
             <option value="default">Sort: Default</option>
             <option value="urgency">Sort: Urgency</option>
             <option value="title">Sort: Title</option>

@@ -54,7 +54,8 @@ export function matchesPlaybookQuery(playbook: Playbook, query: string): boolean
   if (needle === "") {
     return true;
   }
-  const haystack = `${playbook.title} ${playbook.whenToUse} ${playbook.primaryGoal} ${playbook.commands.join(" ")} ${playbook.steps.join(" ")} ${playbook.verify.join(" ")}`.toLowerCase();
+  const haystack =
+    `${playbook.title} ${playbook.whenToUse} ${playbook.primaryGoal} ${playbook.commands.join(" ")} ${playbook.steps.join(" ")} ${playbook.verify.join(" ")}`.toLowerCase();
   return haystack.includes(needle);
 }
 

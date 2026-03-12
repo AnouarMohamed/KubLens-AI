@@ -143,8 +143,8 @@ export function NotificationsPanel({
         </p>
         <p className="text-xs text-zinc-500">Displaying up to {settings.notificationLimit} events</p>
         <p className="text-xs text-zinc-500">
-          Velocity: {notificationSignal.totalLast5Minutes} events in 5m | {notificationSignal.warningLast10Minutes} warnings
-          in 10m
+          Velocity: {notificationSignal.totalLast5Minutes} events in 5m | {notificationSignal.warningLast10Minutes}{" "}
+          warnings in 10m
         </p>
       </div>
 
@@ -180,7 +180,10 @@ export function NotificationsPanel({
           <p className="text-xs uppercase tracking-wide text-zinc-500">Top repeating reasons</p>
           <div className="mt-2 flex flex-wrap gap-2">
             {topReasons.map((item) => (
-              <span key={item.reason} className="rounded-full border border-zinc-700 bg-zinc-800 px-2 py-0.5 text-xs text-zinc-300">
+              <span
+                key={item.reason}
+                className="rounded-full border border-zinc-700 bg-zinc-800 px-2 py-0.5 text-xs text-zinc-300"
+              >
                 {item.reason} x{item.count}
               </span>
             ))}
@@ -216,7 +219,8 @@ export function NotificationsPanel({
         <div className="rounded-xl border border-[var(--amber)]/45 bg-[var(--amber)]/10 px-3 py-2">
           <p className="text-xs uppercase tracking-wide text-[var(--amber)]">Operational signal</p>
           <p className="mt-1 text-sm text-zinc-100">
-            Warning burst detected. Prioritize events with repeated reasons and open incident workflow if trend persists.
+            Warning burst detected. Prioritize events with repeated reasons and open incident workflow if trend
+            persists.
           </p>
         </div>
       )}
@@ -224,7 +228,10 @@ export function NotificationsPanel({
       {notificationError && <p className="text-sm text-zinc-200">{notificationError}</p>}
 
       {filteredNotifications.map((event, index) => (
-        <article key={`${buildNotificationKey(event)}-${index}`} className="rounded-xl border border-zinc-700 bg-zinc-800/70 p-3">
+        <article
+          key={`${buildNotificationKey(event)}-${index}`}
+          className="rounded-xl border border-zinc-700 bg-zinc-800/70 p-3"
+        >
           <div className="flex items-start justify-between gap-2">
             <div>
               <p className="text-sm font-semibold text-zinc-100">{event.reason || "Cluster event"}</p>
@@ -232,11 +239,15 @@ export function NotificationsPanel({
                 {formatNotificationTime(event, settings.relativeTimestamps)} | {event.from || "unknown source"}
               </p>
             </div>
-            <span className={`rounded-full border px-2 py-0.5 text-[11px] uppercase ${notificationBadgeClass(event.type)}`}>
+            <span
+              className={`rounded-full border px-2 py-0.5 text-[11px] uppercase ${notificationBadgeClass(event.type)}`}
+            >
               {event.type || "event"}
             </span>
           </div>
-          <p className="text-xs text-zinc-300 mt-2 leading-relaxed whitespace-pre-wrap">{event.message || "No message"}</p>
+          <p className="text-xs text-zinc-300 mt-2 leading-relaxed whitespace-pre-wrap">
+            {event.message || "No message"}
+          </p>
           {(event.count ?? 0) > 1 && (
             <p className="mt-2 text-xs text-zinc-500">
               Repeated <span className="text-zinc-300">{event.count}</span> times

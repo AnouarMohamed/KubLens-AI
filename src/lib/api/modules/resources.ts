@@ -1,4 +1,10 @@
-import type { ActionResult, ApplyResourceYAMLResponse, ResourceList, ResourceManifest, ScaleRequest } from "../../../types";
+import type {
+  ActionResult,
+  ApplyResourceYAMLResponse,
+  ResourceList,
+  ResourceManifest,
+  ScaleRequest,
+} from "../../../types";
 import { apiPath, requestJson } from "../core";
 
 export const resourcesApi = {

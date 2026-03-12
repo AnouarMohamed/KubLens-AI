@@ -38,7 +38,12 @@ export function SettingsPanel({ settings, setSettings, resetSettings }: Settings
             onChange={(event) =>
               setSettings((state) => ({
                 ...state,
-                inactivityLogoutMinutes: clampNumber(event.target.value, 0, 240, DEFAULT_SETTINGS.inactivityLogoutMinutes),
+                inactivityLogoutMinutes: clampNumber(
+                  event.target.value,
+                  0,
+                  240,
+                  DEFAULT_SETTINGS.inactivityLogoutMinutes,
+                ),
               }))
             }
             className="field mt-2 w-full"

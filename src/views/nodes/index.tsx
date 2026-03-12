@@ -62,7 +62,9 @@ export default function Nodes() {
       )}
 
       {notice && (
-        <div className="rounded-md border border-[#00d4a8]/40 bg-[#00d4a8]/12 px-3 py-2 text-sm text-zinc-100">{notice}</div>
+        <div className="rounded-md border border-[#00d4a8]/40 bg-[#00d4a8]/12 px-3 py-2 text-sm text-zinc-100">
+          {notice}
+        </div>
       )}
 
       <NodesSummary nodes={nodes} filteredCount={filteredNodes.length} />
@@ -81,7 +83,9 @@ export default function Nodes() {
                     {alert.lifecycleStatus}
                   </span>
                   {alert.snoozedUntil && (
-                    <span className="text-[10px] text-zinc-500">until {new Date(alert.snoozedUntil).toLocaleString()}</span>
+                    <span className="text-[10px] text-zinc-500">
+                      until {new Date(alert.snoozedUntil).toLocaleString()}
+                    </span>
                   )}
                 </div>
                 <p className="text-xs text-zinc-400 mt-1">{alert.message}</p>
@@ -138,7 +142,11 @@ export default function Nodes() {
           <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
             Bulk actions ({selectedNodeNames.length} selected)
           </p>
-          <button onClick={() => void bulkCordon()} className="btn-sm" disabled={!canWrite || isBusy || selectedNodeNames.length === 0}>
+          <button
+            onClick={() => void bulkCordon()}
+            className="btn-sm"
+            disabled={!canWrite || isBusy || selectedNodeNames.length === 0}
+          >
             Cordon Selected
           </button>
           <button

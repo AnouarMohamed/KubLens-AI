@@ -12,15 +12,7 @@ export function PanelShell({ title, subtitle, children }: { title: string; subti
   );
 }
 
-export function StatTile({
-  label,
-  value,
-  toneClass,
-}: {
-  label: string;
-  value: string;
-  toneClass: string;
-}) {
+export function StatTile({ label, value, toneClass }: { label: string; value: string; toneClass: string }) {
   return (
     <div className="rounded-lg border border-zinc-700 bg-zinc-800/60 px-3 py-2">
       <p className="text-[10px] uppercase tracking-wide text-zinc-500">{label}</p>

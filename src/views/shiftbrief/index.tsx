@@ -99,13 +99,23 @@ export default function ShiftBrief() {
         </button>
       </header>
 
-      {error && <div className="rounded-md border border-red-500/35 bg-red-500/10 px-3 py-2 text-sm text-red-100">{error}</div>}
+      {error && (
+        <div className="rounded-md border border-red-500/35 bg-red-500/10 px-3 py-2 text-sm text-red-100">{error}</div>
+      )}
 
       <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
-        <BriefTile label="Health score" value={snapshot ? String(snapshot.diagnostics.healthScore) : "-"} note="Diagnostics engine" />
+        <BriefTile
+          label="Health score"
+          value={snapshot ? String(snapshot.diagnostics.healthScore) : "-"}
+          note="Diagnostics engine"
+        />
         <BriefTile label="Open incidents" value={String(openIncidents.length)} note="Incident commander queue" />
         <BriefTile label="Critical predictions" value={String(criticalPredictions.length)} note="Risk score >= 80" />
-        <BriefTile label="Pending remediation" value={String(pendingRemediations.length)} note="Proposed or approved actions" />
+        <BriefTile
+          label="Pending remediation"
+          value={String(pendingRemediations.length)}
+          note="Proposed or approved actions"
+        />
       </section>
 
       <section className="grid grid-cols-1 xl:grid-cols-2 gap-4">
@@ -124,7 +134,9 @@ export default function ShiftBrief() {
                 </p>
               </div>
             ))}
-            {criticalPredictions.length === 0 && <p className="text-sm text-zinc-500">No critical predictions in the latest snapshot.</p>}
+            {criticalPredictions.length === 0 && (
+              <p className="text-sm text-zinc-500">No critical predictions in the latest snapshot.</p>
+            )}
           </div>
         </div>
 

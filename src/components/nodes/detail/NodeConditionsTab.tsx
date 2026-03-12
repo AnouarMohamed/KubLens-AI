@@ -43,7 +43,10 @@ export function NodeConditionsTab({ selectedNode }: NodeConditionsTabProps) {
       <p className="mt-4 text-xs font-semibold uppercase tracking-wide text-zinc-500">Addresses</p>
       <div className="mt-2 rounded-md border border-zinc-800 divide-y divide-zinc-800">
         {selectedNode.addresses.map((address) => (
-          <div key={`${address.type}-${address.address}`} className="px-4 py-2 text-sm flex items-center justify-between gap-3">
+          <div
+            key={`${address.type}-${address.address}`}
+            className="px-4 py-2 text-sm flex items-center justify-between gap-3"
+          >
             <span className="font-medium text-zinc-100">{address.type}</span>
             <span className="text-zinc-400">{address.address}</span>
           </div>

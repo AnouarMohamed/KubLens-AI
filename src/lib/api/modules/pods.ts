@@ -10,7 +10,8 @@ export const podsApi = {
       body: JSON.stringify(payload),
     }),
   getPodDetail: (namespace: string, name: string) => requestJson<PodDetail>(apiPath("pods", namespace, name)),
-  getPodEvents: (namespace: string, name: string) => requestJson<K8sEvent[]>(apiPath("pods", namespace, name, "events")),
+  getPodEvents: (namespace: string, name: string) =>
+    requestJson<K8sEvent[]>(apiPath("pods", namespace, name, "events")),
   getPodLogs: (namespace: string, name: string, lines = 100, container?: string) => {
     const params = new URLSearchParams();
     if (lines > 0) {
