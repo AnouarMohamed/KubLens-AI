@@ -1,8 +1,19 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "../../lib/api";
 import type { AuditEntry, StreamEvent } from "../../types";
 
-const MAX_ROWS = 300;
+const MAX_ROWS = 3000;
+const ROW_HEIGHT = 44;
+const ROW_OVERSCAN = 8;
+const DEFAULT_VIEWPORT_HEIGHT = 520;
+const BASE_RECONNECT_MS = 1000;
+const MAX_RECONNECT_MS = 30000;
+
+interface VirtualRows {
+  visibleRows: AuditEntry[];
+  topPadding: number;
+  bottomPadding: number;
+}
 
 export default function AuditView() {
   const [rows, setRows] = useState<AuditEntry[]>([]);
@@ -10,6 +21,21 @@ export default function AuditView() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
+  const [livePaused, setLivePaused] = useState(false);
+  const [bufferedCount, setBufferedCount] = useState(0);
+  const [reconnectDelayMs, setReconnectDelayMs] = useState<number | null>(null);
+  const [scrollTop, setScrollTop] = useState(0);
+  const [viewportHeight, setViewportHeight] = useState(DEFAULT_VIEWPORT_HEIGHT);
+  const tableScrollRef = useRef<HTMLDivElement | null>(null);
+  const socketRef = useRef<WebSocket | null>(null);
+  const reconnectTimerRef = useRef<number | null>(null);
+  const reconnectAttemptRef = useRef(0);
+  const pausedBufferRef = useRef<AuditEntry[]>([]);
+  const livePausedRef = useRef(livePaused);
+
+  useEffect(() => {
+    livePausedRef.current = livePaused;
+  }, [livePaused]);
 
   const filteredRows = useMemo(() => {
     const needle = filter.trim().toLowerCase();
@@ -22,10 +48,38 @@ export default function AuditView() {
     });
   }, [rows, filter]);
 
-  const loadAudit = async () => {
+  const virtualRows = useMemo<VirtualRows>(() => {
+    if (filteredRows.length === 0) {
+      return { visibleRows: [], topPadding: 0, bottomPadding: 0 };
+    }
+
+    const visibleCount = Math.max(1, Math.ceil(viewportHeight / ROW_HEIGHT) + ROW_OVERSCAN * 2);
+    const startIndex = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - ROW_OVERSCAN);
+    const endIndex = Math.min(filteredRows.length, startIndex + visibleCount);
+    const topPadding = startIndex * ROW_HEIGHT;
+    const bottomPadding = Math.max(0, (filteredRows.length - endIndex) * ROW_HEIGHT);
+
+    return {
+      visibleRows: filteredRows.slice(startIndex, endIndex),
+      topPadding,
+      bottomPadding,
+    };
+  }, [filteredRows, scrollTop, viewportHeight]);
+
+  const flushBufferedRows = useCallback(() => {
+    if (pausedBufferRef.current.length === 0) {
+      return;
+    }
+    const bufferedRows = [...pausedBufferRef.current].reverse();
+    pausedBufferRef.current = [];
+    setBufferedCount(0);
+    setRows((current) => [...bufferedRows, ...current].slice(0, MAX_ROWS));
+  }, []);
+
+  const loadAudit = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await api.getAuditLog(150);
+      const data = await api.getAuditLog(300);
       setRows(data.items);
       setError(null);
     } catch (err) {
@@ -33,17 +87,64 @@ export default function AuditView() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  useEffect(() => {
-    void loadAudit();
+  const clearReconnectTimer = useCallback(() => {
+    if (reconnectTimerRef.current !== null) {
+      window.clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+    }
   }, []);
 
   useEffect(() => {
-    let socket: WebSocket | null = null;
+    void loadAudit();
+  }, [loadAudit]);
+
+  useEffect(() => {
+    if (livePaused) {
+      return;
+    }
+    flushBufferedRows();
+  }, [flushBufferedRows, livePaused]);
+
+  useEffect(() => {
+    const updateViewportHeight = () => {
+      if (!tableScrollRef.current) {
+        return;
+      }
+      setViewportHeight(tableScrollRef.current.clientHeight || DEFAULT_VIEWPORT_HEIGHT);
+    };
+    updateViewportHeight();
+    window.addEventListener("resize", updateViewportHeight);
+    return () => window.removeEventListener("resize", updateViewportHeight);
+  }, []);
+
+  useEffect(() => {
     let cancelled = false;
 
+    const scheduleReconnect = () => {
+      if (cancelled) {
+        return;
+      }
+      const attempt = reconnectAttemptRef.current;
+      const exponential = Math.min(MAX_RECONNECT_MS, BASE_RECONNECT_MS * 2 ** attempt);
+      const jitter = Math.floor(Math.random() * 250);
+      const delay = Math.min(MAX_RECONNECT_MS, exponential + jitter);
+      reconnectAttemptRef.current = Math.min(attempt + 1, 10);
+      setReconnectDelayMs(delay);
+      clearReconnectTimer();
+      reconnectTimerRef.current = window.setTimeout(() => {
+        setReconnectDelayMs(null);
+        void connectStream();
+      }, delay);
+    };
+
     const connectStream = async () => {
+      clearReconnectTimer();
+      if (cancelled) {
+        return;
+      }
+
       try {
         const session = await api.getAuthSession();
         if (cancelled) {
@@ -52,36 +153,68 @@ export default function AuditView() {
         if (session.enabled && !session.authenticated) {
           setConnected(false);
           setError("Authenticate from Profile to enable live stream.");
+          scheduleReconnect();
           return;
         }
       } catch {
         // Keep trying to open stream in local mode.
       }
 
-      socket = new WebSocket(api.getStreamWSURL());
+      const socket = new WebSocket(api.getStreamWSURL());
+      socketRef.current = socket;
+
       socket.onopen = () => {
+        if (cancelled) {
+          return;
+        }
+        reconnectAttemptRef.current = 0;
+        setReconnectDelayMs(null);
         setConnected(true);
         setError(null);
       };
+
       socket.onmessage = (event) => {
         const payload = parseWSStreamEvent<AuditEntry>(event.data);
         if (!payload || payload.type !== "audit") {
           return;
         }
+        if (livePausedRef.current) {
+          pausedBufferRef.current.push(payload.payload);
+          if (pausedBufferRef.current.length > MAX_ROWS) {
+            pausedBufferRef.current = pausedBufferRef.current.slice(-MAX_ROWS);
+          }
+          setBufferedCount(pausedBufferRef.current.length);
+          return;
+        }
         setRows((current) => [payload.payload, ...current].slice(0, MAX_ROWS));
       };
+
       socket.onerror = () => {
+        if (cancelled) {
+          return;
+        }
         setConnected(false);
+      };
+
+      socket.onclose = () => {
+        if (cancelled) {
+          return;
+        }
+        setConnected(false);
+        scheduleReconnect();
       };
     };
 
     void connectStream();
     return () => {
       cancelled = true;
-      socket?.close();
+      clearReconnectTimer();
+      socketRef.current?.close();
+      socketRef.current = null;
       setConnected(false);
+      setReconnectDelayMs(null);
     };
-  }, []);
+  }, [clearReconnectTimer]);
 
   return (
     <div className="space-y-4">
@@ -96,6 +229,9 @@ export default function AuditView() {
           >
             {connected ? "Stream connected" : "Stream disconnected"}
           </span>
+          <button onClick={() => setLivePaused((value) => !value)} className="btn">
+            {livePaused ? "Resume Live" : "Pause Live"}
+          </button>
           <button onClick={() => void loadAudit()} className="btn">
             Refresh
           </button>
@@ -103,7 +239,7 @@ export default function AuditView() {
       </header>
 
       <section className="surface p-4 space-y-3">
-        <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_auto] gap-2">
+        <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_auto_auto] gap-2">
           <input
             value={filter}
             onChange={(event) => setFilter(event.target.value)}
@@ -114,17 +250,36 @@ export default function AuditView() {
             Showing <span className="text-zinc-100">{filteredRows.length}</span> rows
           </div>
           <div className="rounded-lg border border-zinc-700 bg-zinc-800/60 px-3 py-2 text-xs text-zinc-400">
-            Total cached <span className="text-zinc-100">{rows.length}</span>
+            Cached <span className="text-zinc-100">{rows.length}</span>
+          </div>
+          <div className="rounded-lg border border-zinc-700 bg-zinc-800/60 px-3 py-2 text-xs text-zinc-400">
+            Buffered <span className="text-zinc-100">{bufferedCount}</span>
           </div>
         </div>
+
+        {livePaused && (
+          <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
+            Live feed paused. Incoming entries are buffered and will be merged when resumed.
+          </p>
+        )}
+
+        {!connected && reconnectDelayMs !== null && (
+          <p className="rounded-lg border border-zinc-700 bg-zinc-800/60 px-3 py-2 text-sm text-zinc-300">
+            Stream reconnect scheduled in ~{Math.ceil(reconnectDelayMs / 1000)}s.
+          </p>
+        )}
 
         {error && (
           <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">{error}</p>
         )}
 
-        <div className="overflow-x-auto rounded-xl border border-zinc-800">
+        <div
+          ref={tableScrollRef}
+          onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}
+          className="overflow-auto rounded-xl border border-zinc-800 max-h-[65vh]"
+        >
           <table className="min-w-full text-sm">
-            <thead className="bg-zinc-900">
+            <thead className="bg-zinc-900 sticky top-0 z-10">
               <tr className="text-left text-xs uppercase tracking-wide text-zinc-500">
                 <th className="px-3 py-2">Time</th>
                 <th className="px-3 py-2">User</th>
@@ -143,9 +298,14 @@ export default function AuditView() {
                   </td>
                 </tr>
               )}
+              {!loading && virtualRows.topPadding > 0 && (
+                <tr aria-hidden>
+                  <td colSpan={7} style={{ height: virtualRows.topPadding, padding: 0 }} />
+                </tr>
+              )}
               {!loading &&
-                filteredRows.map((row) => (
-                  <tr key={row.id} className="border-t border-zinc-800 text-zinc-300">
+                virtualRows.visibleRows.map((row) => (
+                  <tr key={row.id} className="h-11 border-t border-zinc-800 text-zinc-300">
                     <td className="px-3 py-2 text-xs text-zinc-400">{formatTime(row.timestamp)}</td>
                     <td className="px-3 py-2">
                       <span className="text-zinc-100">{row.user ?? "unknown"}</span>
@@ -164,6 +324,11 @@ export default function AuditView() {
                     <td className="px-3 py-2 text-xs text-zinc-400">{row.durationMs}ms</td>
                   </tr>
                 ))}
+              {!loading && virtualRows.bottomPadding > 0 && (
+                <tr aria-hidden>
+                  <td colSpan={7} style={{ height: virtualRows.bottomPadding, padding: 0 }} />
+                </tr>
+              )}
               {!loading && filteredRows.length === 0 && (
                 <tr>
                   <td colSpan={7} className="px-3 py-8 text-center text-zinc-500">
