@@ -16,8 +16,8 @@ export const systemApi = {
   getReadiness: () => requestJson<HealthStatus>(apiPath("readyz")),
   getRuntimeStatus: () => requestJson<RuntimeStatus>(apiPath("runtime")),
   getClusterInfo: () => requestJson<ClusterInfo>(apiPath("cluster-info")),
-  getApiMetrics: () => requestJson<ApiMetricsSnapshot>(apiPath("metrics")),
-  getStats: () => requestJson<ClusterStats>(apiPath("stats")),
-  getDiagnostics: () => requestJson<DiagnosticsResult>(apiPath("diagnostics")),
+  getApiMetrics: (signal?: AbortSignal) => requestJson<ApiMetricsSnapshot>(apiPath("metrics"), { signal }),
+  getStats: (signal?: AbortSignal) => requestJson<ClusterStats>(apiPath("stats"), { signal }),
+  getDiagnostics: (signal?: AbortSignal) => requestJson<DiagnosticsResult>(apiPath("diagnostics"), { signal }),
   getPredictions: (force = false): Promise<PredictionsResult> => requestPredictions(force),
 };

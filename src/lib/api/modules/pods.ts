@@ -2,8 +2,8 @@ import type { ActionResult, K8sEvent, Pod, PodCreateRequest, PodDetail } from ".
 import { apiPath, requestJson, requestText } from "../core";
 
 export const podsApi = {
-  getEvents: () => requestJson<K8sEvent[]>(apiPath("events")),
-  getPods: () => requestJson<Pod[]>(apiPath("pods")),
+  getEvents: (signal?: AbortSignal) => requestJson<K8sEvent[]>(apiPath("events"), { signal }),
+  getPods: (signal?: AbortSignal) => requestJson<Pod[]>(apiPath("pods"), { signal }),
   createPod: (payload: PodCreateRequest) =>
     requestJson<ActionResult>(apiPath("pods"), {
       method: "POST",

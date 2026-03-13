@@ -2,11 +2,34 @@ import type { ReactNode } from "react";
 import { AMBER, BLUE, RED } from "../constants";
 import { riskColor } from "../utils";
 
-export function RiskRail({ label, value }: { label: string; value: number }) {
+export function RiskRail({ label, value, onClick }: { label: string; value: number; onClick?: () => void }) {
   const color = riskColor(value);
+  const baseClass = "rounded-xl border border-zinc-700 bg-zinc-900 p-4";
+
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className={`${baseClass} text-left transition-colors hover:border-zinc-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]`}
+        title={`Open related view for ${label}`}
+      >
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">{label}</p>
+          <p className="text-sm font-semibold text-zinc-100">{value.toFixed(1)}%</p>
+        </div>
+        <div className="mt-3 h-1 rounded-none bg-zinc-700 overflow-hidden">
+          <div
+            className="h-full rounded-none"
+            style={{ width: `${Math.max(0, Math.min(100, value))}%`, backgroundColor: color }}
+          />
+        </div>
+      </button>
+    );
+  }
 
   return (
-    <div className="rounded-xl border border-zinc-700 bg-zinc-900 p-4">
+    <div className={baseClass}>
       <div className="flex items-center justify-between gap-3">
         <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">{label}</p>
         <p className="text-sm font-semibold text-zinc-100">{value.toFixed(1)}%</p>
@@ -21,10 +44,29 @@ export function RiskRail({ label, value }: { label: string; value: number }) {
   );
 }
 
-export function ChartCard({ title, subtitle, children }: { title: string; subtitle: string; children: ReactNode }) {
+export function ChartCard({
+  title,
+  subtitle,
+  children,
+  onDrilldown,
+  drilldownLabel,
+}: {
+  title: string;
+  subtitle: string;
+  children: ReactNode;
+  onDrilldown?: () => void;
+  drilldownLabel?: string;
+}) {
   return (
     <div className="surface p-5">
-      <h3 className="text-sm font-semibold text-zinc-100">{title}</h3>
+      <div className="flex items-start justify-between gap-3">
+        <h3 className="text-sm font-semibold text-zinc-100">{title}</h3>
+        {onDrilldown && (
+          <button type="button" onClick={onDrilldown} className="btn-sm whitespace-nowrap">
+            {drilldownLabel ?? "Open view"}
+          </button>
+        )}
+      </div>
       <p className="text-xs text-zinc-400 mt-1">{subtitle}</p>
       <div className="mt-4">{children}</div>
     </div>

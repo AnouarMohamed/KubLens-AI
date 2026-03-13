@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { toErrorMessage } from "../../../app/hooks/asyncTask";
 import { api } from "../../../lib/api";
 import type { ApiMetricsSnapshot, ClusterStats, DiagnosticsResult, K8sEvent, Node, Pod } from "../../../types";
 import {
@@ -11,6 +12,8 @@ import {
   buildRestartHotspots,
   percentage,
 } from "../utils";
+
+const DASHBOARD_REFRESH_MS = 30000;
 
 interface DashboardKpi {
   label: string;
@@ -66,19 +69,36 @@ export function useDashboardData(): UseDashboardDataResult {
   const [apiMetrics, setApiMetrics] = useState<ApiMetricsSnapshot | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const requestSeqRef = useRef(0);
+  const activeControllerRef = useRef<AbortController | null>(null);
 
-  const load = useCallback(async () => {
-    setIsLoading(true);
+  const loadWithMode = useCallback(async (backgroundRefresh: boolean) => {
+    const requestID = requestSeqRef.current + 1;
+    requestSeqRef.current = requestID;
+
+    activeControllerRef.current?.abort();
+    const controller = new AbortController();
+    activeControllerRef.current = controller;
+
+    if (!backgroundRefresh) {
+      setIsLoading(true);
+    }
+
     try {
       const [statsResponse, diagnosticsResponse, eventsResponse, nodesResponse, podsResponse, apiMetricsResponse] =
         await Promise.all([
-          api.getStats(),
-          api.getDiagnostics(),
-          api.getEvents(),
-          api.getNodes(),
-          api.getPods(),
-          api.getApiMetrics(),
+          api.getStats(controller.signal),
+          api.getDiagnostics(controller.signal),
+          api.getEvents(controller.signal),
+          api.getNodes(controller.signal),
+          api.getPods(controller.signal),
+          api.getApiMetrics(controller.signal),
         ]);
+
+      if (controller.signal.aborted || requestID !== requestSeqRef.current) {
+        return;
+      }
+
       setStats(statsResponse);
       setDiagnostics(diagnosticsResponse);
       setEvents(eventsResponse);
@@ -87,15 +107,38 @@ export function useDashboardData(): UseDashboardDataResult {
       setApiMetrics(apiMetricsResponse);
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load dashboard data");
+      if (controller.signal.aborted || requestID !== requestSeqRef.current) {
+        return;
+      }
+      setError(toErrorMessage(err, "Failed to load dashboard data"));
     } finally {
-      setIsLoading(false);
+      if (activeControllerRef.current === controller) {
+        activeControllerRef.current = null;
+      }
+      if (!backgroundRefresh && requestID === requestSeqRef.current) {
+        setIsLoading(false);
+      }
     }
   }, []);
 
+  const load = useCallback(async () => {
+    await loadWithMode(false);
+  }, [loadWithMode]);
+
   useEffect(() => {
-    void load();
-  }, [load]);
+    void loadWithMode(false);
+
+    const timerID = window.setInterval(() => {
+      void loadWithMode(true);
+    }, DASHBOARD_REFRESH_MS);
+
+    return () => {
+      window.clearInterval(timerID);
+      requestSeqRef.current += 1;
+      activeControllerRef.current?.abort();
+      activeControllerRef.current = null;
+    };
+  }, [loadWithMode]);
 
   const topRiskPods = useMemo(() => [...pods].sort((a, b) => b.restarts - a.restarts).slice(0, 6), [pods]);
   const prioritizedIssues = useMemo(() => buildPrioritizedIssues(diagnostics), [diagnostics]);

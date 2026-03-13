@@ -16,6 +16,7 @@ import { useClusterSwitcher } from "./hooks/useClusterSwitcher";
 import { useSearchNavigation } from "./hooks/useSearchNavigation";
 import { blockedViewMessage, useViewAccess } from "./hooks/useViewAccess";
 import { useTransientMessage } from "./hooks/useTransientMessage";
+import { VIEW_NAVIGATE_EVENT, type ViewNavigateDetail } from "./viewNavigation";
 import type { View } from "../types";
 import Dashboard from "../views/dashboard";
 
@@ -133,6 +134,25 @@ export function AppShell() {
       showMessage(blockedViewMessage(currentView), 1800);
     }
   }, [authLoading, currentView, isAllowed, setCurrentView, showMessage]);
+
+  useEffect(() => {
+    const onNavigate = (event: Event) => {
+      const custom = event as CustomEvent<ViewNavigateDetail>;
+      const targetView = custom.detail?.view;
+      if (!targetView) {
+        return;
+      }
+      if (!isAllowed(targetView)) {
+        showMessage(blockedViewMessage(targetView), 1800);
+        return;
+      }
+      setCurrentView(targetView);
+      setPanel("none");
+    };
+
+    window.addEventListener(VIEW_NAVIGATE_EVENT, onNavigate as EventListener);
+    return () => window.removeEventListener(VIEW_NAVIGATE_EVENT, onNavigate as EventListener);
+  }, [isAllowed, setCurrentView, showMessage]);
 
   useEffect(() => {
     if (inactivityTimerRef.current !== null) {

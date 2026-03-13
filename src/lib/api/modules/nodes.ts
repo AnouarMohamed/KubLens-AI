@@ -2,7 +2,7 @@ import type { ActionResult, K8sEvent, Node, NodeDetail, NodeDrainPreview, Pod } 
 import { apiPath, requestJson } from "../core";
 
 export const nodesApi = {
-  getNodes: () => requestJson<Node[]>(apiPath("nodes")),
+  getNodes: (signal?: AbortSignal) => requestJson<Node[]>(apiPath("nodes"), { signal }),
   getNodeDetail: (name: string) => requestJson<NodeDetail>(apiPath("nodes", name)),
   getNodePods: (name: string) => requestJson<Pod[]>(apiPath("nodes", name, "pods")),
   getNodeEvents: (name: string) => requestJson<K8sEvent[]>(apiPath("nodes", name, "events")),
