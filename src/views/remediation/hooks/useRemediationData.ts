@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { runAsyncAction, runReadLoad } from "../../../app/hooks/asyncTask";
 import { useAuthSession } from "../../../context/AuthSessionContext";
 import { api } from "../../../lib/api";
 import type { RemediationProposal } from "../../../types";
@@ -112,25 +113,23 @@ export function useRemediationData(): UseRemediationDataResult {
   }, []);
 
   const refresh = useCallback(async () => {
-    if (!canRead) {
-      setItems([]);
-      setError("Authenticate to view remediation proposals.");
-      setIsLoading(false);
-      return;
-    }
-    setIsLoading(true);
-    try {
-      const data = await api.listRemediation();
-      setItems(data);
-      setSelectedIDState((current) =>
-        current && data.some((item) => item.id === current) ? current : (data[0]?.id ?? null),
-      );
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load remediation proposals");
-    } finally {
-      setIsLoading(false);
-    }
+    await runReadLoad({
+      canRead,
+      deniedMessage: "Authenticate to view remediation proposals.",
+      fallbackError: "Failed to load remediation proposals",
+      setIsLoading,
+      setError,
+      onDenied: () => {
+        setItems([]);
+      },
+      load: async () => {
+        const data = await api.listRemediation();
+        setItems(data);
+        setSelectedIDState((current) =>
+          current && data.some((item) => item.id === current) ? current : (data[0]?.id ?? null),
+        );
+      },
+    });
   }, [canRead]);
 
   useEffect(() => {
@@ -189,18 +188,18 @@ export function useRemediationData(): UseRemediationDataResult {
   }, [items]);
 
   const propose = useCallback(async () => {
-    setIsActing(true);
-    try {
-      const proposals = await api.proposeRemediation();
-      setItems(proposals);
-      chooseDefaultSelection(proposals);
-      setMessage(`Generated ${proposals.length} remediation proposal(s).`);
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to generate proposals");
-    } finally {
-      setIsActing(false);
-    }
+    await runAsyncAction({
+      setBusy: setIsActing,
+      setError,
+      fallbackError: "Failed to generate proposals",
+      action: async () => {
+        const proposals = await api.proposeRemediation();
+        setItems(proposals);
+        chooseDefaultSelection(proposals);
+        setMessage(`Generated ${proposals.length} remediation proposal(s).`);
+        setError(null);
+      },
+    });
   }, [chooseDefaultSelection]);
 
   const approve = useCallback(
@@ -208,19 +207,19 @@ export function useRemediationData(): UseRemediationDataResult {
       if (!canWrite) {
         return null;
       }
-      setIsActing(true);
-      try {
-        const updated = await api.approveRemediation(id);
-        setItems((current) => current.map((item) => (item.id === id ? updated : item)));
-        setMessage(`Proposal ${id} approved.`);
-        setError(null);
-        return updated;
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to approve proposal");
-        return null;
-      } finally {
-        setIsActing(false);
-      }
+      let updated: RemediationProposal | null = null;
+      await runAsyncAction({
+        setBusy: setIsActing,
+        setError,
+        fallbackError: "Failed to approve proposal",
+        action: async () => {
+          updated = await api.approveRemediation(id);
+          setItems((current) => current.map((item) => (item.id === id ? updated! : item)));
+          setMessage(`Proposal ${id} approved.`);
+          setError(null);
+        },
+      });
+      return updated;
     },
     [canWrite],
   );
@@ -242,18 +241,18 @@ export function useRemediationData(): UseRemediationDataResult {
       if (!canWrite) {
         return;
       }
-      setIsActing(true);
-      try {
-        const updated = await api.executeRemediation(proposal.id);
-        setItems((current) => current.map((item) => (item.id === proposal.id ? updated : item)));
-        setExecutingState(null);
-        setMessage(`Proposal ${proposal.id} executed.`);
-        setError(null);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to execute proposal");
-      } finally {
-        setIsActing(false);
-      }
+      await runAsyncAction({
+        setBusy: setIsActing,
+        setError,
+        fallbackError: "Failed to execute proposal",
+        action: async () => {
+          const updated = await api.executeRemediation(proposal.id);
+          setItems((current) => current.map((item) => (item.id === proposal.id ? updated : item)));
+          setExecutingState(null);
+          setMessage(`Proposal ${proposal.id} executed.`);
+          setError(null);
+        },
+      });
     },
     [canWrite],
   );
@@ -263,19 +262,19 @@ export function useRemediationData(): UseRemediationDataResult {
       if (!canRead) {
         return;
       }
-      setIsActing(true);
-      try {
-        const updated = await api.rejectRemediation(id, { reason });
-        setItems((current) => current.map((item) => (item.id === id ? updated : item)));
-        setRejectingIDState(null);
-        setRejectReasonState("");
-        setMessage(`Proposal ${id} rejected.`);
-        setError(null);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to reject proposal");
-      } finally {
-        setIsActing(false);
-      }
+      await runAsyncAction({
+        setBusy: setIsActing,
+        setError,
+        fallbackError: "Failed to reject proposal",
+        action: async () => {
+          const updated = await api.rejectRemediation(id, { reason });
+          setItems((current) => current.map((item) => (item.id === id ? updated : item)));
+          setRejectingIDState(null);
+          setRejectReasonState("");
+          setMessage(`Proposal ${id} rejected.`);
+          setError(null);
+        },
+      });
     },
     [canRead],
   );

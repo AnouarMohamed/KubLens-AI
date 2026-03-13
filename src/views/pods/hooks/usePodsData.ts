@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { runReadLoad } from "../../../app/hooks/asyncTask";
 import { useStreamRefresh } from "../../../app/hooks/useStreamRefresh";
 import { useAuthSession } from "../../../context/AuthSessionContext";
 import { api } from "../../../lib/api";
@@ -112,26 +113,23 @@ export function usePodsData(): UsePodsDataResult {
   }, []);
 
   const load = useCallback(async () => {
-    if (!canRead) {
-      setPods([]);
-      setNamespaces([]);
-      setError("Authenticate to view pod data.");
-      setIsLoading(false);
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      const [podRows, namespaceRows] = await Promise.all([api.getPods(), api.getNamespaces()]);
-      setPods(podRows);
-      setNamespaces(namespaceRows);
-      setConfirmingDeleteId(null);
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load pods");
-    } finally {
-      setIsLoading(false);
-    }
+    await runReadLoad({
+      canRead,
+      deniedMessage: "Authenticate to view pod data.",
+      fallbackError: "Failed to load pods",
+      setIsLoading,
+      setError,
+      onDenied: () => {
+        setPods([]);
+        setNamespaces([]);
+      },
+      load: async () => {
+        const [podRows, namespaceRows] = await Promise.all([api.getPods(), api.getNamespaces()]);
+        setPods(podRows);
+        setNamespaces(namespaceRows);
+        setConfirmingDeleteId(null);
+      },
+    });
   }, [canRead]);
 
   useEffect(() => {

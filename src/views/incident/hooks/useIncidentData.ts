@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { runReadLoad } from "../../../app/hooks/asyncTask";
 import { useAuthSession } from "../../../context/AuthSessionContext";
 import { api } from "../../../lib/api";
 import type {
@@ -126,30 +127,27 @@ export function useIncidentData(): UseIncidentDataResult {
   }, []);
 
   const refreshIncidents = useCallback(async () => {
-    if (!canRead) {
-      setError("Authenticate to view incidents.");
-      setIncidents([]);
-      setSelected(null);
-      setIsLoading(false);
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      const data = await api.listIncidents();
-      setIncidents(data);
-      if (selected?.id) {
-        const fresh = data.find((item) => item.id === selected.id);
-        if (fresh) {
-          setSelected(fresh);
+    await runReadLoad({
+      canRead,
+      deniedMessage: "Authenticate to view incidents.",
+      fallbackError: "Failed to load incidents",
+      setIsLoading,
+      setError,
+      onDenied: () => {
+        setIncidents([]);
+        setSelected(null);
+      },
+      load: async () => {
+        const data = await api.listIncidents();
+        setIncidents(data);
+        if (selected?.id) {
+          const fresh = data.find((item) => item.id === selected.id);
+          if (fresh) {
+            setSelected(fresh);
+          }
         }
-      }
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load incidents");
-    } finally {
-      setIsLoading(false);
-    }
+      },
+    });
   }, [canRead, selected?.id]);
 
   const loadIncidentDetail = useCallback(async (id: string) => {

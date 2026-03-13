@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { runReadLoad } from "../../../app/hooks/asyncTask";
 import { useStreamRefresh } from "../../../app/hooks/useStreamRefresh";
 import { useAuthSession } from "../../../context/AuthSessionContext";
 import { api } from "../../../lib/api";
@@ -92,31 +93,33 @@ export function useNodesData(): UseNodesDataResult {
   }, []);
 
   const load = useCallback(async () => {
-    if (!canRead) {
-      setNodes([]);
-      reportError("Authenticate to view node data.");
-      setIsLoading(false);
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      const [nodeRows, eventRows, lifecycleRows] = await Promise.all([
-        api.getNodes(),
-        api.getEvents(),
-        api.getAlertLifecycle().catch(() => [] as NodeAlertLifecycle[]),
-      ]);
-      setNodes(nodeRows);
-      setClusterEvents(eventRows);
-      setAlertLifecycleByID(indexAlertLifecycleByID(lifecycleRows));
-      setSelectedNodeNames((state) => state.filter((name) => nodeRows.some((node) => node.name === name)));
-      setError(null);
-    } catch (err) {
-      reportError(err instanceof Error ? err.message : "Failed to load nodes");
-    } finally {
-      setIsLoading(false);
-    }
-  }, [canRead, reportError, setSelectedNodeNames]);
+    await runReadLoad({
+      canRead,
+      deniedMessage: "Authenticate to view node data.",
+      fallbackError: "Failed to load nodes",
+      setIsLoading,
+      setError,
+      onDenied: () => {
+        setNodes([]);
+        setClusterEvents([]);
+        setAlertLifecycleByID({});
+        setSelectedNodeNames([]);
+        setNotice(null);
+      },
+      load: async () => {
+        const [nodeRows, eventRows, lifecycleRows] = await Promise.all([
+          api.getNodes(),
+          api.getEvents(),
+          api.getAlertLifecycle().catch(() => [] as NodeAlertLifecycle[]),
+        ]);
+        setNodes(nodeRows);
+        setClusterEvents(eventRows);
+        setAlertLifecycleByID(indexAlertLifecycleByID(lifecycleRows));
+        setSelectedNodeNames((state) => state.filter((name) => nodeRows.some((node) => node.name === name)));
+        setNotice(null);
+      },
+    });
+  }, [canRead, setSelectedNodeNames]);
 
   useEffect(() => {
     if (authLoading) {
