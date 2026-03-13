@@ -1,33 +1,35 @@
 # API Guide
 
-KubeLens API is served under `/api` and documented formally in `backend/internal/httpapi/openapi.yaml`.
+KubeLens API is served under `/api`.  
+Formal schema source of truth: `backend/internal/httpapi/openapi.yaml`.
 
-This guide provides a practical overview of endpoint groups, auth behavior, and common request patterns.
+This guide focuses on practical endpoint groups and operational behavior.
 
 ## Base URL
 
-- Local dev: `http://localhost:3000/api`
-- In-cluster: service/ingress URL + `/api`
+- Local: `http://localhost:3000/api`
+- In-cluster: your service/ingress URL + `/api`
 
-## Authentication and authorization
+## Auth, RBAC, and write gating
 
-KubeLens supports token and cookie-based session auth.
+### Login/session
 
-### Login flow
-
-1. `POST /auth/login` with `{ "token": "<bearer-token>" }`
+1. `POST /auth/login` with `{ "token": "<token>" }`
 2. Server validates token and sets an HttpOnly session cookie.
-3. Client can query `GET /auth/session` for active session state.
+3. `GET /auth/session` returns current session state.
+4. `POST /auth/logout` clears the session.
 
 ### Roles
 
-- `viewer`: read/assist/stream operations
-- `operator`: viewer + mutating operations (when global write gate is enabled)
-- `admin`: operator + policy/admin operations
+- `viewer`: read + assist + stream
+- `operator`: viewer + write routes (if write gate enabled)
+- `admin`: operator + admin-level routes
 
-### Error model
+### Write gate
 
-Non-success responses use:
+Mutating cluster routes are additionally blocked unless `WRITE_ACTIONS_ENABLED=true`.
+
+### Error shape
 
 ```json
 { "error": "message" }
@@ -35,7 +37,7 @@ Non-success responses use:
 
 ## Endpoint groups
 
-## System and runtime
+## System and observability
 
 - `GET /healthz`
 - `GET /readyz`
@@ -45,21 +47,30 @@ Non-success responses use:
 - `GET /metrics`
 - `GET /metrics/prometheus`
 
-## Auth and session
+## Auth and cluster context
 
 - `GET /auth/session`
 - `POST /auth/login`
 - `POST /auth/logout`
-
-## Cluster context and streaming
-
 - `GET /clusters`
 - `POST /clusters/select`
+
+## Streams and audit
+
 - `GET /stream` (SSE)
 - `GET /stream/ws` (WebSocket)
+- `GET /audit`
 
-## Core Kubernetes inventory
+## Alerts
 
+- `POST /alerts/dispatch`
+- `POST /alerts/test`
+- `GET /alerts/lifecycle`
+- `POST /alerts/lifecycle`
+
+## Cluster inventory and detail
+
+- `GET /cluster-info`
 - `GET /namespaces`
 - `GET /pods`
 - `GET /pods/{namespace}/{name}`
@@ -69,9 +80,11 @@ Non-success responses use:
 - `GET /pods/{namespace}/{name}/describe`
 - `GET /nodes`
 - `GET /nodes/{name}`
+- `GET /nodes/{name}/pods`
+- `GET /nodes/{name}/events`
+- `GET /events`
 - `GET /resources/{kind}`
 - `GET /resources/{kind}/{namespace}/{name}/yaml`
-- `GET /events`
 - `GET /stats`
 
 ## Mutating cluster operations
@@ -80,6 +93,9 @@ Non-success responses use:
 - `POST /pods/{namespace}/{name}/restart`
 - `DELETE /pods/{namespace}/{name}`
 - `POST /nodes/{name}/cordon`
+- `POST /nodes/{name}/uncordon`
+- `GET /nodes/{name}/drain/preview`
+- `POST /nodes/{name}/drain`
 - `PUT /resources/{kind}/{namespace}/{name}/yaml`
 - `POST /resources/{kind}/{namespace}/{name}/scale`
 - `POST /resources/{kind}/{namespace}/{name}/restart`
@@ -89,11 +105,12 @@ Non-success responses use:
 
 - `GET /diagnostics`
 - `GET /predictions`
+- `GET /predictive-incidents` (backward-compatible alias)
 - `POST /assistant`
 - `POST /assistant/references/feedback`
 - `GET /rag/telemetry`
 
-## Incident and remediation workflows
+## Incident, remediation, memory, postmortem
 
 - `POST /incidents`
 - `GET /incidents`
@@ -108,21 +125,12 @@ Non-success responses use:
 - `POST /remediation/{id}/approve`
 - `POST /remediation/{id}/execute`
 - `POST /remediation/{id}/reject`
-
-## Memory and risk guard
-
 - `GET /memory/runbooks`
 - `POST /memory/runbooks`
 - `PUT /memory/runbooks/{id}`
 - `GET /memory/fixes`
 - `POST /memory/fixes`
 - `POST /risk-guard/analyze`
-
-## Alerts and audit
-
-- `POST /alerts/dispatch`
-- `POST /alerts/test`
-- `GET /audit`
 
 ## Example requests
 
@@ -134,10 +142,24 @@ curl -X POST http://localhost:3000/api/auth/login \
   -d '{"token":"viewer-token"}'
 ```
 
-### Create incident snapshot
+### Request diagnostics
 
 ```bash
-curl -X POST http://localhost:3000/api/incidents \
+curl -s http://localhost:3000/api/diagnostics \
+  -H "Authorization: Bearer viewer-token"
+```
+
+### Propose remediation from current state
+
+```bash
+curl -X POST http://localhost:3000/api/remediation/propose \
+  -H "Authorization: Bearer viewer-token"
+```
+
+### Execute approved remediation
+
+```bash
+curl -X POST http://localhost:3000/api/remediation/<proposal-id>/execute \
   -H "Authorization: Bearer operator-token"
 ```
 
@@ -150,18 +172,18 @@ curl -X POST http://localhost:3000/api/risk-guard/analyze \
   -d '{"manifest":"apiVersion: apps/v1\nkind: Deployment\n..."}'
 ```
 
-## Environment variables related to API behavior
+## Environment keys that affect API behavior
 
-- `APP_MODE`, `DEV_MODE`
-- `AUTH_ENABLED`, `AUTH_TOKENS`, `AUTH_PROVIDER`, `AUTH_OIDC_*`
-- `WRITE_ACTIONS_ENABLED`
-- `RATE_LIMIT_ENABLED`, `RATE_LIMIT_REQUESTS`, `RATE_LIMIT_WINDOW_SECONDS`
-- `PREDICTOR_BASE_URL`, `PREDICTOR_SHARED_SECRET`
-- `ASSISTANT_PROVIDER`, `ASSISTANT_*`
-- `CHATOPS_*`
+- Runtime/security: `APP_MODE`, `DEV_MODE`, `WRITE_ACTIONS_ENABLED`
+- Auth: `AUTH_ENABLED`, `AUTH_TOKENS`, `AUTH_PROVIDER`, `AUTH_OIDC_*`
+- Rate limits: `RATE_LIMIT_ENABLED`, `RATE_LIMIT_REQUESTS`, `RATE_LIMIT_WINDOW_SECONDS`
+- Predictor: `PREDICTOR_BASE_URL`, `PREDICTOR_SHARED_SECRET`
+- Assistant/RAG: `ASSISTANT_*`, `OLLAMA_*`
+- Alerts: `ALERTMANAGER_WEBHOOK_URL`, `SLACK_WEBHOOK_URL`, `PAGERDUTY_*`
+- ChatOps: `CHATOPS_*`
 
-## Source of truth
+## Contract source of truth
 
-For exact schemas, status codes, and parameter definitions, use:
+For exact schemas/status codes, use:
 
 - `backend/internal/httpapi/openapi.yaml`

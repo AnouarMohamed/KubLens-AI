@@ -1,49 +1,53 @@
 # Threat Model
 
-This document defines high-risk attack paths for KubeLens AI and the explicit controls that block them.
+This document captures high-risk abuse paths and implemented controls for the current KubeLens release.
 
 ## Scope
 
-- Frontend (`src/`)
+- Frontend UI (`src/`)
 - Backend API and middleware (`backend/internal/httpapi`)
-- Cluster command/data integration (`backend/internal/cluster`)
-- Optional integrations (assistant provider, predictor, alert webhooks)
+- Cluster integration (`backend/internal/cluster`)
+- Intelligence/assistant/predictor/alerts integrations
 
-## Assets
+## Critical assets
 
-- Kubernetes credentials (`KUBECONFIG_DATA`, context payloads)
-- Cluster state and resource manifests
-- Operator actions (restart, delete, scale, rollback)
-- Audit trail integrity
-- Runtime auth/session state
+- Kubernetes credentials and context payloads (`KUBECONFIG_DATA`, `KUBECONFIG_CONTEXTS`)
+- Cluster resource manifests and write operations
+- Session/auth state and role assignments
+- Audit integrity
+- Incident/remediation/postmortem workflow records
 
-## Trust boundaries
+## Primary trust boundaries
 
-1. Browser client -> backend API (`/api/*`)
-2. Backend -> Kubernetes API
-3. Backend -> external integrations (AI, predictor, alert channels)
+1. Browser -> API (`/api/*`)
+2. API -> Kubernetes API
+3. API -> external systems (predictor, assistant provider, alert channels, ChatOps)
 
 ## Abuse cases and controls
 
-| Threat                                 | Primary Risk                                | Control                                                                         |
-| -------------------------------------- | ------------------------------------------- | ------------------------------------------------------------------------------- |
-| Missing/invalid auth token             | Unauthorized reads/writes                   | `authMiddleware` requires token when auth is enabled                            |
-| Privilege escalation via role misuse   | Viewer/operator performing admin operations | Route-level role gates in `requiredRole()`                                      |
-| CSRF on cookie-auth writes             | Cross-site mutating requests                | Same-origin `Origin`/`Referer` check for cookie-auth mutating methods           |
-| Header token replay/sprawl             | Weak non-standard token transport           | `X-Auth-Token` disabled by default; hard-failed in prod config                  |
-| Write action misuse                    | High-impact resource mutation               | Global `WRITE_ACTIONS_ENABLED` gate + role checks                               |
-| Rate-limit bypass via source variation | API resource exhaustion                     | Per-IP limiter keying on canonicalized host (ignores source port)               |
-| Audit poisoning/leakage                | Forensics loss or secret exposure           | Structured audit entries, sanitized client IP/path fields, no token persistence |
+| Threat                                       | Risk                                  | Controls                                                                         |
+| -------------------------------------------- | ------------------------------------- | -------------------------------------------------------------------------------- |
+| Missing/forged auth token                    | Unauthorized read/write access        | Auth middleware, token/session validation, route role checks                     |
+| Privilege escalation                         | Viewer bypasses operator/admin policy | Deterministic route-to-role mapping in RBAC policy                               |
+| Write misuse                                 | High-impact cluster mutations         | Global write gate + role checks on mutating routes                               |
+| CSRF on cookie-auth writes                   | Cross-site mutation                   | Same-origin `Origin`/`Referer` checks for cookie-auth writes                     |
+| Rate-limit bypass                            | API exhaustion                        | Central limiter on `/api/*` requests                                             |
+| Remediation self-approval/execution in prod  | Separation-of-duties failure          | Four-eyes enforcement in remediation execute path (`prod`)                       |
+| Prompt/knowledge injection in assistant flow | Misleading recommendations            | Deterministic context backbone, optional references, explicit source attribution |
+| Webhook integration abuse                    | Exfiltration or spam                  | Explicitly configured webhook endpoints and auth-gated dispatch/test endpoints   |
+| Audit poisoning                              | Forensics degradation                 | Structured audit schema, bounded storage, sanitized fields                       |
+| Cluster context confusion                    | Wrong-cluster operations              | Explicit context selection API and visible active context in UI                  |
 
-## Explicit non-goals (current release)
+## Current assumptions and non-goals
 
-- No interactive OAuth browser login flows yet (JWT/OIDC bearer validation is supported)
-- No hardware-backed secret management in local mode
-- No signed audit log chain/tamper-evidence yet
+- Full OAuth browser redirect flow is out of scope (OIDC/JWT bearer validation is supported).
+- Tamper-evident signed audit ledger is not implemented in this release.
+- Secret-management backends are deployment-specific and external to this codebase.
 
 ## Verification references
 
 - `backend/internal/httpapi/security_test.go`
 - `backend/internal/httpapi/auth_audit_test.go`
+- `backend/internal/httpapi/handlers_ops_test.go`
 - `backend/internal/httpapi/contract_test.go`
 - `docs/OPERATIONS_VERIFICATION.md`

@@ -12,6 +12,12 @@ KubeLens AI helps engineers diagnose cluster issues, understand failures, and op
 
 ---
 
+## Feature reference
+
+For a complete feature-by-feature breakdown (all views, workflows, and backing APIs), see [docs/FEATURES.md](docs/FEATURES.md).
+
+---
+
 ## Architecture
 
 ```mermaid
@@ -45,17 +51,21 @@ flowchart TD
 
 ## What it does
 
-| Area              | Detail                                                                                   |
-| ----------------- | ---------------------------------------------------------------------------------------- |
-| **Inventory**     | Pods, nodes, deployments, services, ingresses, namespaces, RBAC, events, storage, config |
-| **Diagnostics**   | Deterministic intelligence engine with evidence + recommendations                        |
-| **Risk scoring**  | Pod/node risk signals with confidence scoring and trend detection                        |
-| **Ops assistant** | Deterministic answer with optional LLM explanation and RAG grounding                     |
-| **Metrics**       | CPU/memory via `metrics.k8s.io` when Metrics Server is present                           |
-| **Streaming**     | Real-time event stream over SSE/WebSocket                                                |
-| **Multi-cluster** | Switch between named cluster contexts at runtime                                         |
-| **Audit trail**   | Per-request log with actor attribution and outcome                                       |
-| **Alerts**        | Alertmanager, Slack, PagerDuty integration                                               |
+| Area                        | Detail                                                                                               |
+| --------------------------- | ---------------------------------------------------------------------------------------------------- |
+| **Inventory**               | Pods, nodes, deployments, services, ingresses, namespaces, RBAC, events, storage, config             |
+| **Safe operations**         | Controlled write actions (restart/scale/rollback/cordon/drain/apply) behind RBAC + global write gate |
+| **Diagnostics**             | Deterministic intelligence engine with evidence + recommendations                                    |
+| **Predictions**             | Predictor-backed risk scoring with deterministic local fallback                                      |
+| **Assistant + RAG**         | Deterministic context with optional OpenAI-compatible LLM and documentation grounding                |
+| **Incident workflow**       | Incident creation, runbook step progression, resolution, and remediation association                 |
+| **Remediation workflow**    | Proposal, approval, execution, rejection (with four-eyes enforcement in `prod`)                      |
+| **Cluster memory**          | Runbook and fix-pattern memory for operational learning                                              |
+| **Postmortems**             | Generated postmortems from incident timeline + runbook state                                         |
+| **Metrics + observability** | API telemetry, Prometheus export, dashboard charts, tracing integration                              |
+| **Streaming + audit**       | Live stream (SSE/WebSocket) and request-level audit trail                                            |
+| **Multi-cluster**           | Runtime context switching via named kubeconfig contexts                                              |
+| **Alerts**                  | Alert dispatch + lifecycle state with Alertmanager/Slack/PagerDuty                                   |
 
 ---
 
@@ -396,6 +406,7 @@ e2e/                Playwright end-to-end tests
 
 ## Documentation index
 
+- [docs/FEATURES.md](docs/FEATURES.md) - complete product feature map and view-by-view capabilities
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) - system topology, boundaries, and data flow
 - [docs/api.md](docs/api.md) - endpoint groups, auth model, and request examples
 - [docs/SECURITY.md](docs/SECURITY.md) - controls and trust boundaries

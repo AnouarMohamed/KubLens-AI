@@ -10,10 +10,18 @@
 - `bootstrap/` -> dependency assembly and server construction
 - `diagnostics/` -> health scoring + issue inference
 - `events/` -> in-process event bus for streaming updates
+- `alerts/` -> alert dispatch and webhook channel integrations
 - `httpapi/` -> HTTP handlers, routing, transport concerns
 - `intelligence/` -> deterministic diagnostic engine and scoring
 - `model/` -> canonical backend API models
 - `rag/` -> documentation retrieval and grounding for assistant responses
+- `incident/` -> incident lifecycle and runbook progression
+- `remediation/` -> remediation proposal + execution
+- `memory/` -> runbook/fix persistence and retrieval
+- `postmortem/` -> postmortem generation and storage
+- `chatops/` -> Slack notification formatting and delivery
+- `observability/` -> OTEL tracing bootstrap
+- `riskguard/` -> manifest risk analysis
 - `state/` -> informer-backed cluster cache
 
 Navigation tips:
@@ -30,6 +38,10 @@ Use-case file conventions:
   - `mapper_*` -> model mapping logic
   - `service_*` -> service lifecycle/cache/runtime wiring
   - `support_*` -> shared utility helpers
+- `httpapi/`
+  - `handlers_*` -> endpoint-group handlers
+  - `assistant_*` -> assistant orchestration helpers
+  - `auth_*`/`audit*` -> auth, RBAC and audit transport concerns
 - `diagnostics/`
   - `analysis_*` -> diagnosis and scoring engine logic
   - `present_*` -> narrative/output formatting

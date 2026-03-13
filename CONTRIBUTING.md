@@ -35,3 +35,4 @@ npm run build
 - Keep commits focused by subsystem
 - Add or update tests for security-sensitive changes
 - Update docs when behavior or configuration changes
+- Keep `docs/FEATURES.md` in sync when adding or changing user-facing features

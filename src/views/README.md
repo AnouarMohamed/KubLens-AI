@@ -15,13 +15,23 @@ Rules:
 
 Current views:
 
-- `dashboard/` -> overview page
-- `pods/` -> pod operations view
-- `deployments/` -> deployment-specific detail and rollout controls
-- `nodes/` -> node operations view
-- `metrics/` -> telemetry/analytics view
-- `audit/` -> live audit and activity stream view
-- `predictions/` -> incident forecast view
-- `diagnostics/` -> issue analysis view
-- `opsassistant/` -> assistant workflow
-- `resourcecatalog/` -> generic resource listing/actions
+- `dashboard/` -> cluster overview and health KPIs
+- `pods/` -> pod operations, logs, restart/delete
+- `deployments/` -> deployment controls and rollout health
+- `nodes/` -> node health + maintenance operations
+- `events/` -> cluster event feed
+- `namespaces/` -> namespace inventory
+- `rbac/` -> access policy inventory
+- `metrics/` -> telemetry and trend analytics
+- `audit/` -> live request/action audit stream
+- `predictions/` -> incident risk scoring
+- `diagnostics/` -> deterministic findings and recommendations
+- `opsassistant/` -> assistant Q&A with optional RAG references
+- `incident/` -> incident timeline/runbook workflow
+- `remediation/` -> proposal approval/execution workflow
+- `memory/` -> runbook and fix-pattern memory
+- `shiftbrief/` -> on-call handoff snapshot
+- `playbooks/` -> curated operational response guides
+- `riskguard/` -> manifest risk analysis
+- `postmortem/` -> generated postmortems
+- `resourcecatalog/` -> generic view for remaining Kubernetes resource kinds

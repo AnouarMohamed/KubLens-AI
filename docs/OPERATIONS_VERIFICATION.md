@@ -1,8 +1,8 @@
 # Operations Verification Runbook
 
-Use this checklist after deploys and before enabling write features in shared environments.
+Use this checklist after deployments and before enabling write features in shared environments.
 
-## 1. Runtime posture
+## 1) Runtime posture
 
 ```bash
 curl -s http://localhost:3000/api/runtime | jq
@@ -12,75 +12,115 @@ Verify:
 
 - `mode` is expected (`dev`/`demo`/`prod`)
 - `authEnabled=true` in production
-- `writeActionsEnabled` matches intended posture
+- `writeActionsEnabled` matches intended policy
+- `alertsEnabled` and `ragEnabled` match configuration intent
 
-## 2. Auth and role gating
+## 2) Auth and role gating
 
-1. Login as viewer token (`/api/auth/login`) and call `POST /api/pods`
-   Expected: `403` with `{"error":"..."}`.
-2. Login as operator token and call `POST /api/pods`
-   Expected: `200` when `WRITE_ACTIONS_ENABLED=true`, else `403`.
+1. Login as viewer (`POST /api/auth/login`).
+2. Attempt mutating operation (for example `POST /api/pods`).
+3. Expected: `403`.
+4. Login as operator and repeat.
+5. Expected: `200` only when `WRITE_ACTIONS_ENABLED=true`.
 
-## 3. CSRF protection for cookie-auth writes
+## 3) CSRF protection for cookie-auth writes
 
 With a valid session cookie:
 
-- `POST /api/pods` with `Origin: https://evil.example`
+- Send mutating request with `Origin: https://evil.example`
   Expected: `403` (`cross-site request blocked`).
-- Same request with same-origin `Origin` or valid `Referer`
-  Expected: request proceeds to normal auth/validation path.
+- Send same request with same-origin `Origin`/`Referer`
+  Expected: normal auth/validation path.
 
-## 4. Audit trail verification
+## 4) Audit trail verification
 
 ```bash
-curl -s http://localhost:3000/api/audit?limit=20 | jq
+curl -s "http://localhost:3000/api/audit?limit=20" | jq
 ```
 
 Verify:
 
-- Mutating actions are recorded (`pod.create`, `resource.scale`, etc.)
-- `clientIp` does not include source port
-- Entries do not contain bearer token values
+- Mutating actions are logged (`pod.create`, `node.cordon`, `resource.apply`, `remediation.execute`, etc.)
+- Actor fields (`user`, `role`) are populated for authenticated requests
+- `clientIp` is normalized and does not include source port
+- No bearer tokens are persisted in log entries
 
-## 5. API contract verification
+## 5) Node maintenance safety checks
 
-Run:
+Test node maintenance endpoints:
+
+- `GET /api/nodes/{name}/drain/preview`
+- `POST /api/nodes/{name}/drain`
+- `POST /api/nodes/{name}/cordon`
+- `POST /api/nodes/{name}/uncordon`
+
+Verify:
+
+- Force drain requires admin role and non-empty reason
+- Not-found/unsupported responses are explicit and stable
+
+## 6) Remediation workflow checks
+
+1. `POST /api/remediation/propose`
+2. `POST /api/remediation/{id}/approve`
+3. `POST /api/remediation/{id}/execute`
+4. `POST /api/remediation/{id}/reject` on a different proposal
+
+Verify:
+
+- Execution only allowed after approval
+- In `prod`, approver and executor must differ (four-eyes)
+- Executed proposal links back to incidents where applicable
+
+## 7) Alerting and lifecycle checks
+
+- `POST /api/alerts/test` or `/api/alerts/dispatch`
+- `GET /api/alerts/lifecycle`
+- `POST /api/alerts/lifecycle`
+
+Verify:
+
+- Channel dispatch result contains per-channel outcome
+- Lifecycle status transitions are persisted and returned correctly
+
+## 8) API contract and backend quality checks
 
 ```bash
 npm run test:go
+npm run ci:backend
 ```
 
-Critical contract suites:
+Critical suites include:
 
-- `TestAPIContractCoreEndpoints`
-- `TestAPIContractMutatingActionResultShape`
-- `TestAPIContractErrorShapeForAuthFailures`
+- API contract tests
+- Auth/audit/security tests
+- Handler policy tests (including remediation operations)
 
-## 6. Browser smoke verification
-
-Run:
+## 9) Frontend and e2e checks
 
 ```bash
+npm run lint
+npm run test:web
 npm run test:e2e
 ```
 
-Expected:
+Verify:
 
-- Core navigation smoke passes
-- Auth role matrix checks pass (viewer/operator/admin policy behavior)
+- View navigation and search operate correctly
+- Node/pod maintenance flows succeed
+- Audit stream and assistant view load without regressions
 
-## 7. Tracing verification (optional)
+## 10) Tracing verification (optional)
 
 If OTEL export is enabled:
 
-1. Open the Jaeger UI and select service `kubelens-backend`.
-2. Trigger a prediction request (`GET /api/predictions`).
-3. Verify the trace shows browser → API → k8s client → predictor as a single timeline.
+1. Open Jaeger and select `kubelens-backend`.
+2. Trigger a prediction request and an assistant request.
+3. Verify end-to-end span continuity: browser -> API -> cluster/predictor/assistant paths.
 
-## 8. Observability dashboard verification (optional)
+## 11) Observability overlay verification (optional)
 
-If the observability overlay is installed:
+If `k8s/overlays/observability` is installed:
 
-1. Port-forward Grafana (`svc/k8s-ops-grafana`) and log in.
-2. Open the "KubeLens API Overview" dashboard.
-3. Confirm request rate and latency panels are populated after browsing the UI.
+1. Port-forward Grafana and Prometheus services.
+2. Confirm API request rate, latency, and status panels update during active usage.

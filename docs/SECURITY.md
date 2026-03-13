@@ -2,37 +2,58 @@
 
 ## Trust boundaries
 
-- Browser UI is untrusted input.
-- Backend API is policy enforcement boundary.
-- Kubernetes API credentials are high-trust secrets.
-- External integrations (AI provider, alert webhooks) are network trust boundaries.
+- Browser/UI input is untrusted.
+- Backend API is the policy enforcement boundary.
+- Kubernetes credentials/context payloads are high-trust secrets.
+- External providers (assistant, predictor, alert channels, ChatOps) are outbound trust boundaries.
 
-## Enforced controls
+## Runtime security controls
 
-- Bearer token auth with role-based permissions
-- Optional OIDC/JWT bearer validation with role claim mapping
-- Global write-action feature gate
-- Terminal execution off by default, admin-only when enabled
-- Terminal requires global write enablement and admin role when enabled
-- Terminal deny/allow policy + timeout + output cap
-- Per-route audit logging with actor attribution
-- Request rate limiting
+## Auth and authorization
 
-## Deployment controls
+- Token/session authentication with explicit role mapping (`viewer`, `operator`, `admin`)
+- Route-level minimum role checks
+- Optional OIDC/JWT issuer + claim mapping
+- `X-Auth-Token` transport disabled by default and rejected in `prod`
 
-- ServiceAccounts + explicit ClusterRole bindings
-- NetworkPolicy defaults deny and explicit allow paths
-- Pod security context (non-root, no privilege escalation, dropped caps)
-- PDB + HPA included for runtime resilience
+## Write safety
+
+- Global write gate: mutating cluster actions require `WRITE_ACTIONS_ENABLED=true`
+- Mutating routes still require authorized role (`operator`/`admin`)
+- In `prod`, remediation execution enforces four-eyes separation (approver != executor)
+
+## Request protection
+
+- Rate limiting on `/api/*`
+- Same-origin CSRF checks for cookie-authenticated mutating requests
+- Request timeout middleware on non-streaming paths
+- Recovery middleware for panic containment
+
+## Audit and traceability
+
+- Per-request audit records with actor, route, status, and latency
+- Action-specific audit labels for critical operations
+- Optional OpenTelemetry traces for backend and predictor paths
+
+## Deployment hardening
+
+- Non-root containers
+- Dropped Linux capabilities
+- Read-only root filesystem posture in deployment overlays
+- NetworkPolicy with explicit allow paths
+- RBAC manifests per overlay
+- PDB/HPA for availability posture
 
 ## Operational recommendations
 
-- Use `prod` overlay with real secrets and managed ingress/TLS
-- Keep write actions disabled unless operationally required
-- Rotate auth tokens and avoid static long-lived credentials
-- Restrict network egress beyond provided defaults where possible
+- Use `APP_MODE=prod` with `AUTH_ENABLED=true` in shared environments.
+- Keep write actions disabled unless operationally required.
+- Rotate static tokens and prefer OIDC/JWT where possible.
+- Restrict egress to approved integrations only.
+- Review audit logs regularly and alert on suspicious write attempts.
 
-See also:
+## Related docs
 
-- `docs/THREAT_MODEL.md`
-- `docs/OPERATIONS_VERIFICATION.md`
+- [THREAT_MODEL.md](THREAT_MODEL.md)
+- [OPERATIONS_VERIFICATION.md](OPERATIONS_VERIFICATION.md)
+- [api.md](api.md)

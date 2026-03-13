@@ -1,0 +1,88 @@
+# Feature Reference
+
+This document is the canonical feature map for KubeLens AI. It describes what exists today in the product, how it is used, and which API surfaces back each capability.
+
+## Core platform capabilities
+
+| Capability                      | What it does                                                                           | Primary APIs                                                                         |
+| ------------------------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| Cluster inventory               | Lists and summarizes Kubernetes workloads, networking, storage, and access resources.  | `/api/resources/{kind}`, `/api/pods`, `/api/nodes`, `/api/namespaces`, `/api/events` |
+| Safe write operations           | Performs controlled pod/resource/node actions behind RBAC + write gate controls.       | `/api/pods/*`, `/api/resources/*`, `/api/nodes/*`                                    |
+| Deterministic diagnostics       | Produces evidence-based issue findings with severity and recommendations.              | `/api/diagnostics`                                                                   |
+| Risk predictions                | Scores likely incidents from current runtime signals (predictor-backed with fallback). | `/api/predictions`                                                                   |
+| Ops assistant                   | Combines deterministic cluster context with optional LLM and RAG grounding.            | `/api/assistant`, `/api/rag/telemetry`, `/api/assistant/references/feedback`         |
+| Incident workflow               | Creates/updates incidents with timeline and runbook execution state.                   | `/api/incidents/*`                                                                   |
+| Remediation workflow            | Generates, approves, executes, and rejects remediation proposals.                      | `/api/remediation/*`                                                                 |
+| Cluster memory                  | Stores reusable runbooks and fix patterns from executed operations.                    | `/api/memory/runbooks*`, `/api/memory/fixes*`                                        |
+| Postmortems                     | Generates and serves incident postmortems with timeline/runbook sections.              | `/api/incidents/{id}/postmortem`, `/api/postmortems*`                                |
+| Alert dispatch + lifecycle      | Sends alerts to external channels and tracks alert lifecycle state.                    | `/api/alerts/dispatch`, `/api/alerts/test`, `/api/alerts/lifecycle`                  |
+| Streaming + audit               | Streams operational events and preserves request/action audit history.                 | `/api/stream`, `/api/stream/ws`, `/api/audit`                                        |
+| Multi-cluster runtime switching | Switches active cluster context without restarting the UI.                             | `/api/clusters`, `/api/clusters/select`                                              |
+
+## User-facing views
+
+| View                   | Purpose                                                                                | Primary APIs                                                                                                    |
+| ---------------------- | -------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| Cluster Overview       | Executive summary: cluster KPIs, risk rails, utilization trends, diagnostics snapshot. | `/api/stats`, `/api/diagnostics`, `/api/events`, `/api/nodes`, `/api/pods`, `/api/metrics`                      |
+| Pods                   | Pod lifecycle operations: detail, events, logs, describe, restart, delete.             | `/api/pods`, `/api/pods/{ns}/{name}*`                                                                           |
+| Deployments            | Deployment-focused state and rollout controls.                                         | `/api/resources/deployments`, `/api/resources/*/scale`, `/api/resources/*/restart`, `/api/resources/*/rollback` |
+| ReplicaSets            | ReplicaSet inventory in the resource catalog.                                          | `/api/resources/replicasets`                                                                                    |
+| StatefulSets           | Stateful workload inventory and controls in resource catalog.                          | `/api/resources/statefulsets`                                                                                   |
+| DaemonSets             | Node-level workload inventory and controls in resource catalog.                        | `/api/resources/daemonsets`                                                                                     |
+| Jobs                   | Batch workload inventory in resource catalog.                                          | `/api/resources/jobs`                                                                                           |
+| CronJobs               | Scheduled workload inventory in resource catalog.                                      | `/api/resources/cronjobs`                                                                                       |
+| Services               | Service exposure inventory in resource catalog.                                        | `/api/resources/services`                                                                                       |
+| Ingresses              | Ingress routing inventory in resource catalog.                                         | `/api/resources/ingresses`                                                                                      |
+| Network Policies       | Network isolation inventory in resource catalog.                                       | `/api/resources/networkpolicies`                                                                                |
+| ConfigMaps             | Config object inventory in resource catalog.                                           | `/api/resources/configmaps`                                                                                     |
+| Secrets                | Secret inventory in resource catalog (RBAC-dependent visibility).                      | `/api/resources/secrets`                                                                                        |
+| PersistentVolumes      | Cluster storage inventory in resource catalog.                                         | `/api/resources/persistentvolumes`                                                                              |
+| PersistentVolumeClaims | Namespace claim inventory in resource catalog.                                         | `/api/resources/persistentvolumeclaims`                                                                         |
+| StorageClasses         | Provisioning policy inventory in resource catalog.                                     | `/api/resources/storageclasses`                                                                                 |
+| Nodes                  | Node health + maintenance operations (detail, pods/events, cordon/uncordon/drain).     | `/api/nodes`, `/api/nodes/{name}*`                                                                              |
+| Namespaces             | Namespace inventory view.                                                              | `/api/namespaces`, `/api/resources/namespaces`                                                                  |
+| Events                 | Recent cluster event stream and filtering.                                             | `/api/events`                                                                                                   |
+| Service Accounts       | Workload identity inventory in resource catalog.                                       | `/api/resources/serviceaccounts`                                                                                |
+| RBAC                   | Role/rolebinding/cluster-role summary view.                                            | `/api/resources/rbac`                                                                                           |
+| Metrics                | Interactive telemetry dashboards and API metrics surfaces.                             | `/api/metrics`, `/api/metrics/prometheus`                                                                       |
+| Audit Trail            | Live and historical request-level audit activity with attribution.                     | `/api/audit`, `/api/stream/ws`                                                                                  |
+| Predictions            | Incident risk list with confidence and resource context.                               | `/api/predictions`                                                                                              |
+| Diagnostics            | Structured issue list with severity, evidence, and recommendations.                    | `/api/diagnostics`                                                                                              |
+| Shift Brief            | On-call handoff summary from incidents/remediation/signals.                            | Incident + remediation + diagnostics APIs                                                                       |
+| Playbooks              | Curated operational playbooks for recurring failure classes.                           | Frontend data modules under `src/views/playbooks/api`                                                           |
+| Incidents              | Incident list/detail, runbook step progression, and resolution.                        | `/api/incidents*`                                                                                               |
+| Remediation            | Proposal queue with approve/execute/reject lifecycle.                                  | `/api/remediation*`                                                                                             |
+| Cluster Memory         | Team knowledge base for runbooks and fix patterns.                                     | `/api/memory/runbooks*`, `/api/memory/fixes*`                                                                   |
+| Risk Guard             | Manifest risk analysis with force-override flow for high-risk applies.                 | `/api/risk-guard/analyze`, `/api/resources/*/yaml`                                                              |
+| Postmortems            | Generated postmortem records and detail review.                                        | `/api/postmortems*`                                                                                             |
+| Assistant              | Conversational troubleshooting with deterministic context + optional LLM.              | `/api/assistant`, `/api/rag/telemetry`                                                                          |
+
+## Write-safety model
+
+Mutating cluster actions are protected by both of these controls:
+
+1. Role-based authorization (`operator` or `admin` for mutating routes).
+2. Global write gate (`WRITE_ACTIONS_ENABLED=true`).
+
+In production mode, remediation execution enforces a four-eyes policy: the approver and executor must be different users.
+
+## Optional integrations
+
+| Integration                          | Purpose                                              | Config keys                                                    |
+| ------------------------------------ | ---------------------------------------------------- | -------------------------------------------------------------- |
+| Predictor service                    | External deterministic risk scoring service.         | `PREDICTOR_BASE_URL`, `PREDICTOR_SHARED_SECRET`                |
+| OpenAI-compatible assistant provider | Natural-language enrichment for assistant output.    | `ASSISTANT_PROVIDER`, `ASSISTANT_API_*`, `ASSISTANT_MODEL`     |
+| RAG embeddings                       | Semantic retrieval for assistant grounding.          | `OLLAMA_*` and/or `ASSISTANT_EMBEDDING_*`                      |
+| ChatOps webhook                      | Sends incident/remediation/postmortem notifications. | `CHATOPS_*`                                                    |
+| Alert channels                       | Dispatches alerts to Alertmanager/Slack/PagerDuty.   | `ALERTMANAGER_WEBHOOK_URL`, `SLACK_WEBHOOK_URL`, `PAGERDUTY_*` |
+| OpenTelemetry                        | Trace export for backend and predictor paths.        | `OTEL_*`                                                       |
+
+## Feature flags and mode defaults
+
+- `APP_MODE=dev|demo|prod` controls default security posture.
+- `AUTH_ENABLED` controls authentication middleware.
+- `WRITE_ACTIONS_ENABLED` controls mutating operation availability.
+- `ASSISTANT_PROVIDER=none` disables assistant LLM enrichment.
+- `ASSISTANT_RAG_ENABLED` toggles docs retrieval grounding.
+
+For exact settings, use `.env.example` and `README.md`.
