@@ -377,6 +377,9 @@ npm run test:e2e          # Playwright (Chromium + Firefox)
 npm run build             # Production build
 ```
 
+`npm run ci:backend` runs `go test -race` with `CGO_ENABLED=1`, so a local C compiler is required (`gcc` or `clang`).
+On Windows, install MSYS2 MinGW-w64 and add `mingw64\bin` to `PATH`.
+
 CI runs all of the above plus:
 
 - Release/version consistency across `package.json`, Docker image tags, and k8s manifests
