@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"net/netip"
 	"os"
 	"strings"
 	"time"
@@ -115,6 +116,7 @@ func Load() (Config, error) {
 		Enabled:            authEnabled,
 		AllowHeaderToken:   parseBoolDefault(os.Getenv("AUTH_ALLOW_HEADER_TOKEN"), devMode),
 		TrustedCSRFDomains: parseCSV(os.Getenv("AUTH_TRUSTED_CSRF_DOMAINS")),
+		TrustedProxyCIDRs:  parseCSV(os.Getenv("AUTH_TRUSTED_PROXY_CIDRS")),
 		Tokens:             tokens,
 		OIDC: AuthOIDCConfig{
 			Enabled:       oidcEnabled,
@@ -201,6 +203,11 @@ func validate(cfg Config) error {
 	}
 	if cfg.Auth.Enabled && cfg.Auth.OIDC.Enabled && strings.TrimSpace(cfg.Auth.OIDC.ClientID) == "" {
 		return errors.New("AUTH_OIDC_CLIENT_ID is required when OIDC auth is enabled")
+	}
+	for _, raw := range cfg.Auth.TrustedProxyCIDRs {
+		if _, err := netip.ParsePrefix(strings.TrimSpace(raw)); err != nil {
+			return fmt.Errorf("invalid AUTH_TRUSTED_PROXY_CIDRS entry %q: %w", raw, err)
+		}
 	}
 
 	if cfg.WriteActionsEnabled && !cfg.Auth.Enabled {

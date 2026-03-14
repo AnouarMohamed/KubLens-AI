@@ -258,6 +258,51 @@ func TestAuthLoginRateLimitDoesNotTrustForwardedForHeader(t *testing.T) {
 	}
 }
 
+func TestAuthLoginRateLimitUsesForwardedForFromAllowedProxyCIDR(t *testing.T) {
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	server := newServer(
+		testClusterReader{},
+		nil,
+		logger,
+		WithWriteActionsEnabled(true),
+		WithTrustedProxyCIDRs([]string{"10.0.0.0/8"}),
+		WithAuth(AuthConfig{
+			Enabled: true,
+			Tokens: []AuthToken{
+				{Token: "viewer-token", User: "viewer", Role: "viewer"},
+			},
+		}),
+		WithAuthLoginProtection(AuthLoginProtectionConfig{
+			Enabled:       true,
+			MaxFailures:   2,
+			FailureWindow: 10 * time.Minute,
+			Lockout:       2 * time.Minute,
+			MaxEntries:    100,
+		}),
+	)
+	router := server.Router("")
+
+	first := httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(`{"token":"bad-token"}`))
+	first.Header.Set("Content-Type", "application/json")
+	first.Header.Set("X-Forwarded-For", "198.51.100.10")
+	first.RemoteAddr = "10.7.1.4:4321"
+	firstResp := httptest.NewRecorder()
+	router.ServeHTTP(firstResp, first)
+	if firstResp.Code != http.StatusUnauthorized {
+		t.Fatalf("first failed login status = %d, want 401", firstResp.Code)
+	}
+
+	second := httptest.NewRequest(http.MethodPost, "/api/auth/login", strings.NewReader(`{"token":"viewer-token"}`))
+	second.Header.Set("Content-Type", "application/json")
+	second.Header.Set("X-Forwarded-For", "203.0.113.42")
+	second.RemoteAddr = "10.7.1.4:9999"
+	secondResp := httptest.NewRecorder()
+	router.ServeHTTP(secondResp, second)
+	if secondResp.Code != http.StatusOK {
+		t.Fatalf("second login status = %d, want 200 for different forwarded client ip", secondResp.Code)
+	}
+}
+
 func TestAuthBlocksHeaderTokenWhenDisabled(t *testing.T) {
 	router := newAuthTestServer().Router("")
 

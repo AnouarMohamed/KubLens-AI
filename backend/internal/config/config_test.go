@@ -108,6 +108,15 @@ func TestLoadOIDCWithClientIDAllowsTokenlessAuth(t *testing.T) {
 	}
 }
 
+func TestLoadRejectsInvalidTrustedProxyCIDRs(t *testing.T) {
+	clearConfigEnv(t)
+	t.Setenv("AUTH_TRUSTED_PROXY_CIDRS", "10.0.0.0/8,not-a-cidr")
+
+	if _, err := Load(); err == nil {
+		t.Fatal("expected error for invalid AUTH_TRUSTED_PROXY_CIDRS entry")
+	}
+}
+
 func TestLoadOllamaEmbeddingDefaults(t *testing.T) {
 	clearConfigEnv(t)
 	t.Setenv("OLLAMA_BASE_URL", "http://localhost:11434")
@@ -164,6 +173,7 @@ func clearConfigEnv(t *testing.T) {
 		"AUTH_ENABLED",
 		"AUTH_ALLOW_HEADER_TOKEN",
 		"AUTH_TRUSTED_CSRF_DOMAINS",
+		"AUTH_TRUSTED_PROXY_CIDRS",
 		"AUTH_TOKENS",
 		"AUTH_PROVIDER",
 		"AUTH_OIDC_PROVIDER",

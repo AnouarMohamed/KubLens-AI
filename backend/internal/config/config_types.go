@@ -87,6 +87,7 @@ type AuthConfig struct {
 	Enabled            bool
 	AllowHeaderToken   bool
 	TrustedCSRFDomains []string
+	TrustedProxyCIDRs  []string
 	Tokens             []AuthToken
 	OIDC               AuthOIDCConfig
 }

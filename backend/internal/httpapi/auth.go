@@ -322,7 +322,7 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	clientIP := sanitizeClientIP(r.RemoteAddr)
+	clientIP := s.clientIPFromRequest(r)
 	if s.authLogin != nil {
 		if allowed, retryAfter := s.authLogin.allow(s.now(), clientIP); !allowed {
 			s.recordAuthFailure(r, http.StatusTooManyRequests, "login_rate_limited")
@@ -554,7 +554,7 @@ func (s *Server) recordAuthFailure(r *http.Request, status int, action string) {
 		Path:      sanitizeAuditPath(r.URL.Path),
 		Action:    action,
 		Status:    status,
-		ClientIP:  sanitizeClientIP(r.RemoteAddr),
+		ClientIP:  s.clientIPFromRequest(r),
 		Success:   false,
 	})
 }

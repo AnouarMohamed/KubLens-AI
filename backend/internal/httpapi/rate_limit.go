@@ -58,6 +58,10 @@ func (l *rateLimiter) configure(config RateLimitConfig) {
 }
 
 func (l *rateLimiter) middleware(now func() time.Time) func(http.Handler) http.Handler {
+	return l.middlewareWithKey(now, rateLimitKey)
+}
+
+func (l *rateLimiter) middlewareWithKey(now func() time.Time, keyFunc func(*http.Request) string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if !l.enabled || !isAPIPath(r.URL.Path) {
@@ -65,7 +69,10 @@ func (l *rateLimiter) middleware(now func() time.Time) func(http.Handler) http.H
 				return
 			}
 
-			key := rateLimitKey(r)
+			key := ""
+			if keyFunc != nil {
+				key = strings.TrimSpace(keyFunc(r))
+			}
 			if key == "" {
 				key = "unknown"
 			}

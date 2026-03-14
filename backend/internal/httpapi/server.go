@@ -51,6 +51,7 @@ type Server struct {
 	runtime        model.RuntimeStatus
 	auth           authRuntime
 	authLogin      *authLoginProtection
+	trustedProxies trustedProxyMatcher
 	limiter        rateLimiter
 	writesOn       bool
 	anonPerms      []string
@@ -334,7 +335,7 @@ func (s *Server) Router(distDir string) http.Handler {
 	r.Use(middleware.RequestID)
 	r.Use(middleware.Recoverer)
 	r.Use(timeoutUnlessPath(20*time.Second, apiStreamPrefix))
-	r.Use(s.limiter.middleware(s.now))
+	r.Use(s.limiter.middlewareWithKey(s.now, s.clientIPFromRequest))
 	r.Use(s.metrics.middleware(s.logger))
 	r.Use(s.authMiddleware)
 	r.Use(s.clusterMiddleware)

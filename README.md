@@ -160,6 +160,7 @@ AUTH_OIDC_ISSUER_URL=""         # required for oidc/keycloak
 AUTH_OIDC_CLIENT_ID=""          # required when OIDC auth is enabled
 AUTH_OIDC_USERNAME_CLAIM=""      # optional (defaults to preferred_username/email)
 AUTH_OIDC_ROLE_CLAIM=""          # optional (defaults to roles/role/groups)
+AUTH_TRUSTED_PROXY_CIDRS=""      # optional reverse-proxy CIDR allowlist for X-Forwarded-For
 ```
 
 **Roles:**
@@ -343,6 +344,7 @@ AUTH_OIDC_ISSUER_URL=
 AUTH_OIDC_CLIENT_ID=
 AUTH_OIDC_USERNAME_CLAIM=
 AUTH_OIDC_ROLE_CLAIM=
+AUTH_TRUSTED_PROXY_CIDRS=        # comma-separated proxy CIDRs allowed for X-Forwarded-For
 WRITE_ACTIONS_ENABLED=false
 
 PREDICTOR_BASE_URL=

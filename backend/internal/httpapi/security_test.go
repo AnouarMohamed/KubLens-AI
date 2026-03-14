@@ -108,6 +108,40 @@ func TestRateLimiterDoesNotTrustForwardedForHeader(t *testing.T) {
 	}
 }
 
+func TestRateLimiterTrustsForwardedForFromAllowedProxyCIDR(t *testing.T) {
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	server := newServer(
+		testClusterReader{},
+		nil,
+		logger,
+		WithTrustedProxyCIDRs([]string{"10.0.0.0/8"}),
+		WithRateLimit(RateLimitConfig{
+			Enabled:  true,
+			Requests: 1,
+			Window:   time.Minute,
+		}),
+	)
+	router := server.Router("")
+
+	first := httptest.NewRequest(http.MethodGet, "/api/pods", nil)
+	first.RemoteAddr = "10.7.1.4:1111"
+	first.Header.Set("X-Forwarded-For", "198.51.100.10")
+	firstResp := httptest.NewRecorder()
+	router.ServeHTTP(firstResp, first)
+	if firstResp.Code != http.StatusOK {
+		t.Fatalf("first status = %d, want 200", firstResp.Code)
+	}
+
+	second := httptest.NewRequest(http.MethodGet, "/api/pods", nil)
+	second.RemoteAddr = "10.7.1.4:2222"
+	second.Header.Set("X-Forwarded-For", "203.0.113.42")
+	secondResp := httptest.NewRecorder()
+	router.ServeHTTP(secondResp, second)
+	if secondResp.Code != http.StatusOK {
+		t.Fatalf("second status = %d, want 200 when forwarded client ip differs", secondResp.Code)
+	}
+}
+
 func TestErrorPayloadShapeConsistency(t *testing.T) {
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
 	server := newServer(

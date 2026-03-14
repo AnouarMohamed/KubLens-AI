@@ -147,6 +147,7 @@ func Build(cfg config.Config) (Result, error) {
 		httpapi.WithChatOpsNotifier(chatopsNotifier),
 		httpapi.WithPredictor(cfg.Predictor.BaseURL, cfg.Predictor.Timeout, cfg.Predictor.SharedSecret),
 		httpapi.WithAuth(toHTTPAuth(cfg.Auth)),
+		httpapi.WithTrustedProxyCIDRs(cfg.Auth.TrustedProxyCIDRs),
 		httpapi.WithRateLimit(httpapi.RateLimitConfig{
 			Enabled:  cfg.RateLimit.Enabled,
 			Requests: cfg.RateLimit.Requests,

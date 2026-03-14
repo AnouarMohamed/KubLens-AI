@@ -165,7 +165,7 @@ func (s *Server) auditMiddleware(next http.Handler) http.Handler {
 			Status:     status,
 			DurationMs: s.now().Sub(start).Milliseconds(),
 			Bytes:      int64(ww.BytesWritten()),
-			ClientIP:   sanitizeClientIP(r.RemoteAddr),
+			ClientIP:   s.clientIPFromRequest(r),
 			Success:    status < http.StatusBadRequest,
 		}
 		if p, ok := auth.PrincipalFromContext(r.Context()); ok {
