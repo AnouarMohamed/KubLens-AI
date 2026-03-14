@@ -34,18 +34,15 @@ flowchart TD
 
 ---
 
-## Screenshots
+## Screenshots (Latest)
 
-![Overview](./screenshots/overview.png)
-![Diagnostics](./screenshots/diagnostics.png)
-![Assistant](./screenshots/assistant.png)
-![Metrics](./screenshots/metrics.png)
-
----
-
-## Demo
-
-![Demo](./screenshots/demo.gif)
+| UI 1 | UI 2 | UI 3 |
+| --- | --- | --- |
+| ![KubeLens UI 1](Screenshots/Screenshot%202026-03-13%20235520.png) | ![KubeLens UI 2](Screenshots/Screenshot%202026-03-13%20235534.png) | ![KubeLens UI 3](Screenshots/Screenshot%202026-03-13%20235552.png) |
+| ![KubeLens UI 4](Screenshots/Screenshot%202026-03-13%20235600.png) | ![KubeLens UI 5](Screenshots/Screenshot%202026-03-13%20235615.png) | ![KubeLens UI 6](Screenshots/Screenshot%202026-03-13%20235627.png) |
+| ![KubeLens UI 7](Screenshots/Screenshot%202026-03-13%20235723.png) | ![KubeLens UI 8](Screenshots/Screenshot%202026-03-13%20235802.png) | ![KubeLens UI 9](Screenshots/Screenshot%202026-03-13%20235824.png) |
+| ![KubeLens UI 10](Screenshots/Screenshot%202026-03-13%20235843.png) | ![KubeLens UI 11](Screenshots/Screenshot%202026-03-13%20235859.png) | ![KubeLens UI 12](Screenshots/Screenshot%202026-03-13%20235921.png) |
+| ![KubeLens UI 13](Screenshots/Screenshot%202026-03-13%20235943.png) | ![KubeLens UI 14](Screenshots/Screenshot%202026-03-13%20235957.png) | ![KubeLens UI 15](Screenshots/Screenshot%202026-03-14%20000100.png) |
 
 ---
 
@@ -96,6 +93,12 @@ npm run dev
 - Backend -> `http://localhost:3000`
 
 Runs in `demo` mode with mock data. No cluster required, no config needed.
+
+---
+
+## Full usage, deploy, and GitHub guide
+
+For the detailed step-by-step guide (daily use, deployment paths, and GitHub workflow), see [RUN_AND_USE.md](RUN_AND_USE.md).
 
 ---
 
@@ -409,6 +412,7 @@ e2e/                Playwright end-to-end tests
 
 ## Documentation index
 
+- [RUN_AND_USE.md](RUN_AND_USE.md) - detailed guide for local usage, deployment paths, and GitHub contribution workflow
 - [docs/FEATURES.md](docs/FEATURES.md) - complete product feature map and view-by-view capabilities
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) - system topology, boundaries, and data flow
 - [docs/api.md](docs/api.md) - endpoint groups, auth model, and request examples
