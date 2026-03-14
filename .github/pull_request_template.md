@@ -13,6 +13,7 @@
 - [ ] `npm run test:predictor`
 - [ ] `npm run verify:release`
 - [ ] `npm run verify:changelog`
+- [ ] `npm run verify:docs`
 - [ ] `npm run build`
 
 ## Security and operations impact
@@ -21,6 +22,7 @@
 - [ ] Terminal policy changed (explain)
 - [ ] Audit schema/behavior changed (explain)
 - [ ] Kubernetes manifests changed (explain)
+- [ ] Documentation updated for behavior/configuration changes (explain)
 
 ## Rollout and rollback
 

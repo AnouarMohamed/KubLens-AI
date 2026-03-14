@@ -14,7 +14,8 @@ This policy defines mandatory controls for release integrity, artifact traceabil
 2. Every release image must be signed (Sigstore Cosign, keyless OIDC identity).
 3. Every release image must have an SBOM attached (CycloneDX JSON minimum).
 4. Release artifacts must be immutable and referenced by digest.
-5. CI security checks (`Trivy`, `Hadolint`, tests) must pass before release publication.
+5. CI security checks (`Trivy`, `Hadolint`, `CodeQL`, tests) must pass before release publication.
+6. Dependency update automation (`Dependabot`) must remain enabled for supported ecosystems.
 
 ## 3) Signing requirements
 
@@ -57,3 +58,4 @@ Before approving release deployment:
 - [SECURITY.md](SECURITY.md)
 - [OPERATIONS_VERIFICATION.md](OPERATIONS_VERIFICATION.md)
 - [SECRET_ROTATION_RUNBOOK.md](SECRET_ROTATION_RUNBOOK.md)
+- [DOCUMENTATION_GOVERNANCE.md](DOCUMENTATION_GOVERNANCE.md)

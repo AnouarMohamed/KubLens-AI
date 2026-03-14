@@ -139,10 +139,20 @@ If `k8s/overlays/observability` is installed:
 Before production release:
 
 1. Confirm release artifacts are signed and SBOM attestations exist.
-2. Confirm secret-rotation evidence is up to date for the current quarter.
-3. Validate no expired security exceptions exist for signing/SBOM/rotation controls.
+2. Confirm `CodeQL` scans report no new high-severity findings.
+3. Confirm secret-rotation evidence is up to date for the current quarter.
+4. Validate no expired security exceptions exist for signing/SBOM/rotation controls.
+
+## 14) Documentation governance controls
+
+Before merge/release:
+
+1. Run `npm run verify:docs`.
+2. Confirm feature/security/operations changes are reflected in docs.
+3. Review latest docs staleness workflow report and close/update any open governance issue.
 
 References:
 
 - [SUPPLY_CHAIN_POLICY.md](SUPPLY_CHAIN_POLICY.md)
 - [SECRET_ROTATION_RUNBOOK.md](SECRET_ROTATION_RUNBOOK.md)
+- [DOCUMENTATION_GOVERNANCE.md](DOCUMENTATION_GOVERNANCE.md)

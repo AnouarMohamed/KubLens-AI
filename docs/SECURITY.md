@@ -38,6 +38,13 @@
 - Action-specific audit labels for critical operations
 - Optional OpenTelemetry traces for backend and predictor paths
 
+## Continuous assurance
+
+- CodeQL SAST scanning for Go, JavaScript/TypeScript, and Python (`.github/workflows/codeql.yml`)
+- Trivy + Hadolint checks in CI for filesystem/image and Dockerfile risk detection
+- Dependabot weekly dependency update PRs for npm, Go modules, pip, and GitHub Actions
+- Documentation governance checks in CI and weekly staleness monitoring
+
 ## Supply chain controls
 
 - Release workflow signs dashboard and predictor container digests with Cosign keyless signatures
@@ -68,4 +75,5 @@
 - [OPERATIONS_VERIFICATION.md](OPERATIONS_VERIFICATION.md)
 - [SUPPLY_CHAIN_POLICY.md](SUPPLY_CHAIN_POLICY.md)
 - [SECRET_ROTATION_RUNBOOK.md](SECRET_ROTATION_RUNBOOK.md)
+- [DOCUMENTATION_GOVERNANCE.md](DOCUMENTATION_GOVERNANCE.md)
 - [api.md](api.md)

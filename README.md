@@ -423,6 +423,7 @@ e2e/                Playwright end-to-end tests
 - [docs/OPERATIONS_VERIFICATION.md](docs/OPERATIONS_VERIFICATION.md) - production verification checklist
 - [docs/SUPPLY_CHAIN_POLICY.md](docs/SUPPLY_CHAIN_POLICY.md) - signed release and SBOM requirements
 - [docs/SECRET_ROTATION_RUNBOOK.md](docs/SECRET_ROTATION_RUNBOOK.md) - formal secret-rotation controls and procedures
+- [docs/DOCUMENTATION_GOVERNANCE.md](docs/DOCUMENTATION_GOVERNANCE.md) - mandatory docs update policy and review cadence
 
 ---
 
@@ -453,8 +454,10 @@ e2e/                Playwright end-to-end tests
 - Explicit HTTP security headers (`CSP`, `HSTS`, `X-Frame-Options`, `X-Content-Type-Options`)
 - Signed release artifacts and SBOM attestations for tagged releases
 - Formal secret-rotation runbook controls for runtime and integrations
+- Continuous CodeQL SAST scans across Go, TypeScript/JavaScript, and Python
+- Continuous documentation governance checks in CI plus scheduled staleness monitoring
 
-Full details: [SECURITY.md](docs/SECURITY.md) | [THREAT_MODEL.md](docs/THREAT_MODEL.md) | [OPERATIONS_VERIFICATION.md](docs/OPERATIONS_VERIFICATION.md) | [SUPPLY_CHAIN_POLICY.md](docs/SUPPLY_CHAIN_POLICY.md) | [SECRET_ROTATION_RUNBOOK.md](docs/SECRET_ROTATION_RUNBOOK.md)
+Full details: [SECURITY.md](docs/SECURITY.md) | [THREAT_MODEL.md](docs/THREAT_MODEL.md) | [OPERATIONS_VERIFICATION.md](docs/OPERATIONS_VERIFICATION.md) | [SUPPLY_CHAIN_POLICY.md](docs/SUPPLY_CHAIN_POLICY.md) | [SECRET_ROTATION_RUNBOOK.md](docs/SECRET_ROTATION_RUNBOOK.md) | [DOCUMENTATION_GOVERNANCE.md](docs/DOCUMENTATION_GOVERNANCE.md)
 
 ---
 

@@ -40,6 +40,7 @@ This document captures high-risk abuse paths and implemented controls for the cu
 | Audit poisoning                              | Forensics degradation                 | Structured audit schema, bounded storage, sanitized fields                       |
 | Cluster context confusion                    | Wrong-cluster operations              | Explicit context selection API and visible active context in UI                  |
 | Unsigned release artifact                    | Supply-chain compromise               | Signed image digests + SBOM attestations with release policy enforcement         |
+| Documentation drift                          | Unsafe/inaccurate operations          | CI docs verification + scheduled staleness checks with governance workflow       |
 
 ## Current assumptions and non-goals
 
@@ -56,3 +57,4 @@ This document captures high-risk abuse paths and implemented controls for the cu
 - `docs/OPERATIONS_VERIFICATION.md`
 - `docs/SUPPLY_CHAIN_POLICY.md`
 - `docs/SECRET_ROTATION_RUNBOOK.md`
+- `docs/DOCUMENTATION_GOVERNANCE.md`
