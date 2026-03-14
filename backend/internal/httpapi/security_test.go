@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"log/slog"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"kubelens-backend/internal/model"
+	"nhooyr.io/websocket"
 )
 
 func TestRateLimiterBlocksExcessRequests(t *testing.T) {
@@ -239,4 +241,97 @@ func TestRuntimeEndpoint(t *testing.T) {
 	if payload.Mode != "demo" {
 		t.Fatalf("mode = %s, want demo", payload.Mode)
 	}
+}
+
+func TestSecurityHeadersPresentOnAPIResponses(t *testing.T) {
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	server := newServer(testClusterReader{}, nil, logger)
+	router := server.Router("")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/healthz", nil)
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rr.Code)
+	}
+
+	if got := strings.TrimSpace(rr.Header().Get("Content-Security-Policy")); got == "" {
+		t.Fatal("expected Content-Security-Policy header")
+	}
+	if got := rr.Header().Get("X-Frame-Options"); got != "DENY" {
+		t.Fatalf("X-Frame-Options = %q, want DENY", got)
+	}
+	if got := rr.Header().Get("X-Content-Type-Options"); got != "nosniff" {
+		t.Fatalf("X-Content-Type-Options = %q, want nosniff", got)
+	}
+	if got := rr.Header().Get("Strict-Transport-Security"); got != "" {
+		t.Fatalf("Strict-Transport-Security = %q, want empty on non-HTTPS request", got)
+	}
+}
+
+func TestSecurityHeadersSetHSTSForSecureRequests(t *testing.T) {
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	server := newServer(testClusterReader{}, nil, logger)
+	router := server.Router("")
+
+	req := httptest.NewRequest(http.MethodGet, "/api/healthz", nil)
+	req.Header.Set("X-Forwarded-Proto", "https")
+	rr := httptest.NewRecorder()
+	router.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200", rr.Code)
+	}
+
+	if got := rr.Header().Get("Strict-Transport-Security"); got != defaultHSTSHeaderValue {
+		t.Fatalf("Strict-Transport-Security = %q, want %q", got, defaultHSTSHeaderValue)
+	}
+}
+
+func TestWebSocketRejectsCrossOriginUpgrade(t *testing.T) {
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	server := newServer(testClusterReader{}, nil, logger)
+	httpServer := httptest.NewServer(server.Router(""))
+	defer httpServer.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(httpServer.URL, "http") + "/api/stream/ws"
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	headers := http.Header{}
+	headers.Set("Origin", "https://evil.example")
+	conn, resp, err := websocket.Dial(ctx, wsURL, &websocket.DialOptions{HTTPHeader: headers})
+	if conn != nil {
+		_ = conn.Close(websocket.StatusNormalClosure, "")
+	}
+	if err == nil {
+		t.Fatal("expected websocket dial to fail for cross-origin request")
+	}
+	if resp == nil {
+		t.Fatal("expected HTTP response for rejected websocket upgrade")
+	}
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403", resp.StatusCode)
+	}
+}
+
+func TestWebSocketAllowsSameOriginUpgrade(t *testing.T) {
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	server := newServer(testClusterReader{}, nil, logger)
+	httpServer := httptest.NewServer(server.Router(""))
+	defer httpServer.Close()
+
+	wsURL := "ws" + strings.TrimPrefix(httpServer.URL, "http") + "/api/stream/ws"
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	headers := http.Header{}
+	headers.Set("Origin", httpServer.URL)
+	conn, resp, err := websocket.Dial(ctx, wsURL, &websocket.DialOptions{HTTPHeader: headers})
+	if err != nil {
+		if resp != nil {
+			t.Fatalf("websocket dial failed: %v (status=%d)", err, resp.StatusCode)
+		}
+		t.Fatalf("websocket dial failed: %v", err)
+	}
+	_ = conn.Close(websocket.StatusNormalClosure, "")
 }

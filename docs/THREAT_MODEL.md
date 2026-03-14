@@ -31,12 +31,15 @@ This document captures high-risk abuse paths and implemented controls for the cu
 | Privilege escalation                         | Viewer bypasses operator/admin policy | Deterministic route-to-role mapping in RBAC policy                               |
 | Write misuse                                 | High-impact cluster mutations         | Global write gate + role checks on mutating routes                               |
 | CSRF on cookie-auth writes                   | Cross-site mutation                   | Same-origin `Origin`/`Referer` checks for cookie-auth writes                     |
+| Cross-origin WebSocket upgrade               | Event stream/session abuse            | Same-origin/trusted-origin check on `/api/stream/ws`                             |
 | Rate-limit bypass                            | API exhaustion                        | Central limiter on `/api/*` requests                                             |
+| Proxy-header spoofing                        | Rate-limit and audit evasion          | Trusted proxy CIDR allowlist for `X-Forwarded-For` trust                         |
 | Remediation self-approval/execution in prod  | Separation-of-duties failure          | Four-eyes enforcement in remediation execute path (`prod`)                       |
 | Prompt/knowledge injection in assistant flow | Misleading recommendations            | Deterministic context backbone, optional references, explicit source attribution |
 | Webhook integration abuse                    | Exfiltration or spam                  | Explicitly configured webhook endpoints and auth-gated dispatch/test endpoints   |
 | Audit poisoning                              | Forensics degradation                 | Structured audit schema, bounded storage, sanitized fields                       |
 | Cluster context confusion                    | Wrong-cluster operations              | Explicit context selection API and visible active context in UI                  |
+| Unsigned release artifact                    | Supply-chain compromise               | Signed image digests + SBOM attestations with release policy enforcement         |
 
 ## Current assumptions and non-goals
 
@@ -51,3 +54,5 @@ This document captures high-risk abuse paths and implemented controls for the cu
 - `backend/internal/httpapi/handlers_ops_test.go`
 - `backend/internal/httpapi/contract_test.go`
 - `docs/OPERATIONS_VERIFICATION.md`
+- `docs/SUPPLY_CHAIN_POLICY.md`
+- `docs/SECRET_ROTATION_RUNBOOK.md`

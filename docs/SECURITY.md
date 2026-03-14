@@ -25,15 +25,25 @@
 ## Request protection
 
 - Rate limiting on `/api/*`
+- Trusted proxy CIDR allowlist (`AUTH_TRUSTED_PROXY_CIDRS`) for controlled `X-Forwarded-For` trust
 - Same-origin CSRF checks for cookie-authenticated mutating requests
+- Same-origin WebSocket origin checks (`/api/stream/ws`)
 - Request timeout middleware on non-streaming paths
 - Recovery middleware for panic containment
+- Explicit HTTP security headers (`CSP`, `HSTS`, `X-Frame-Options`, `X-Content-Type-Options`)
 
 ## Audit and traceability
 
 - Per-request audit records with actor, route, status, and latency
 - Action-specific audit labels for critical operations
 - Optional OpenTelemetry traces for backend and predictor paths
+
+## Supply chain controls
+
+- Release workflow signs dashboard and predictor container digests with Cosign keyless signatures
+- Release workflow generates CycloneDX SBOMs and attaches signed SBOM attestations
+- Release policy documented in `SUPPLY_CHAIN_POLICY.md`
+- Secret rotation process documented in `SECRET_ROTATION_RUNBOOK.md`
 
 ## Deployment hardening
 
@@ -56,4 +66,6 @@
 
 - [THREAT_MODEL.md](THREAT_MODEL.md)
 - [OPERATIONS_VERIFICATION.md](OPERATIONS_VERIFICATION.md)
+- [SUPPLY_CHAIN_POLICY.md](SUPPLY_CHAIN_POLICY.md)
+- [SECRET_ROTATION_RUNBOOK.md](SECRET_ROTATION_RUNBOOK.md)
 - [api.md](api.md)

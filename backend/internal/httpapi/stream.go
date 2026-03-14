@@ -71,16 +71,12 @@ func (s *Server) handleStream(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleStreamWebSocket(w http.ResponseWriter, r *http.Request) {
-	if s.auth.enabled {
-		if err := validateCSRFSameOrigin(r, s.auth.trustedCSRFDomains); err != nil {
-			writeError(w, http.StatusForbidden, err.Error())
-			return
-		}
+	if err := validateCSRFSameOrigin(r, s.auth.trustedCSRFDomains); err != nil {
+		writeError(w, http.StatusForbidden, err.Error())
+		return
 	}
 
-	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-		OriginPatterns: []string{"*"},
-	})
+	conn, err := websocket.Accept(w, r, nil)
 	if err != nil {
 		return
 	}

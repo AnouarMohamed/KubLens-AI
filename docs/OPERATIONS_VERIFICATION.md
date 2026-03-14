@@ -124,3 +124,25 @@ If `k8s/overlays/observability` is installed:
 
 1. Port-forward Grafana and Prometheus services.
 2. Confirm API request rate, latency, and status panels update during active usage.
+
+## 12) Security headers and WebSocket origin checks
+
+- Call `GET /api/healthz` and verify response headers include:
+  - `Content-Security-Policy`
+  - `X-Frame-Options: DENY`
+  - `X-Content-Type-Options: nosniff`
+- For HTTPS traffic, verify `Strict-Transport-Security` is present.
+- Attempt `/api/stream/ws` with cross-origin `Origin` and verify `403`.
+
+## 13) Supply chain and secret-rotation controls
+
+Before production release:
+
+1. Confirm release artifacts are signed and SBOM attestations exist.
+2. Confirm secret-rotation evidence is up to date for the current quarter.
+3. Validate no expired security exceptions exist for signing/SBOM/rotation controls.
+
+References:
+
+- [SUPPLY_CHAIN_POLICY.md](SUPPLY_CHAIN_POLICY.md)
+- [SECRET_ROTATION_RUNBOOK.md](SECRET_ROTATION_RUNBOOK.md)

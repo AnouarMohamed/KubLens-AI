@@ -1,0 +1,93 @@
+name: Release Supply Chain
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+  attestations: write
+
+jobs:
+  signed-release:
+    runs-on: ubuntu-latest
+    env:
+      DASHBOARD_IMAGE: ghcr.io/${{ github.repository_owner }}/kubelens-ai
+      PREDICTOR_IMAGE: ghcr.io/${{ github.repository_owner }}/kubelens-ai-predictor
+      VERSION_TAG: ${{ github.ref_name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push dashboard image
+        id: build_dashboard
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          push: true
+          tags: ${{ env.DASHBOARD_IMAGE }}:${{ env.VERSION_TAG }}
+
+      - name: Build and push predictor image
+        id: build_predictor
+        uses: docker/build-push-action@v6
+        with:
+          context: ./predictor
+          file: ./predictor/Dockerfile
+          push: true
+          tags: ${{ env.PREDICTOR_IMAGE }}:${{ env.VERSION_TAG }}
+
+      - name: Install Syft
+        uses: anchore/sbom-action/download-syft@v0
+
+      - name: Generate dashboard SBOM
+        run: |
+          syft "${{ env.DASHBOARD_IMAGE }}@${{ steps.build_dashboard.outputs.digest }}" \
+            -o cyclonedx-json > dashboard.sbom.cdx.json
+
+      - name: Generate predictor SBOM
+        run: |
+          syft "${{ env.PREDICTOR_IMAGE }}@${{ steps.build_predictor.outputs.digest }}" \
+            -o cyclonedx-json > predictor.sbom.cdx.json
+
+      - name: Upload SBOM artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-sboms-${{ env.VERSION_TAG }}
+          path: |
+            dashboard.sbom.cdx.json
+            predictor.sbom.cdx.json
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3.8.1
+
+      - name: Sign dashboard image
+        run: cosign sign --yes "${{ env.DASHBOARD_IMAGE }}@${{ steps.build_dashboard.outputs.digest }}"
+
+      - name: Sign predictor image
+        run: cosign sign --yes "${{ env.PREDICTOR_IMAGE }}@${{ steps.build_predictor.outputs.digest }}"
+
+      - name: Attest dashboard SBOM
+        run: |
+          cosign attest --yes --type cyclonedx \
+            --predicate dashboard.sbom.cdx.json \
+            "${{ env.DASHBOARD_IMAGE }}@${{ steps.build_dashboard.outputs.digest }}"
+
+      - name: Attest predictor SBOM
+        run: |
+          cosign attest --yes --type cyclonedx \
+            --predicate predictor.sbom.cdx.json \
+            "${{ env.PREDICTOR_IMAGE }}@${{ steps.build_predictor.outputs.digest }}"

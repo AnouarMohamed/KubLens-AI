@@ -61,6 +61,11 @@ Mutating cluster routes are additionally blocked unless `WRITE_ACTIONS_ENABLED=t
 - `GET /stream/ws` (WebSocket)
 - `GET /audit`
 
+Notes:
+
+- WebSocket upgrades enforce same-origin/trusted-origin checks.
+- Cross-origin upgrade attempts are rejected with `403`.
+
 ## Alerts
 
 - `POST /alerts/dispatch`
@@ -175,7 +180,7 @@ curl -X POST http://localhost:3000/api/risk-guard/analyze \
 ## Environment keys that affect API behavior
 
 - Runtime/security: `APP_MODE`, `DEV_MODE`, `WRITE_ACTIONS_ENABLED`
-- Auth: `AUTH_ENABLED`, `AUTH_TOKENS`, `AUTH_PROVIDER`, `AUTH_OIDC_*`
+- Auth: `AUTH_ENABLED`, `AUTH_TOKENS`, `AUTH_PROVIDER`, `AUTH_OIDC_*`, `AUTH_TRUSTED_PROXY_CIDRS`
 - Rate limits: `RATE_LIMIT_ENABLED`, `RATE_LIMIT_REQUESTS`, `RATE_LIMIT_WINDOW_SECONDS`
 - Predictor: `PREDICTOR_BASE_URL`, `PREDICTOR_SHARED_SECRET`
 - Assistant/RAG: `ASSISTANT_*`, `OLLAMA_*`

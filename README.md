@@ -421,6 +421,8 @@ e2e/                Playwright end-to-end tests
 - [docs/SECURITY.md](docs/SECURITY.md) - controls and trust boundaries
 - [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md) - threat model details
 - [docs/OPERATIONS_VERIFICATION.md](docs/OPERATIONS_VERIFICATION.md) - production verification checklist
+- [docs/SUPPLY_CHAIN_POLICY.md](docs/SUPPLY_CHAIN_POLICY.md) - signed release and SBOM requirements
+- [docs/SECRET_ROTATION_RUNBOOK.md](docs/SECRET_ROTATION_RUNBOOK.md) - formal secret-rotation controls and procedures
 
 ---
 
@@ -445,9 +447,14 @@ e2e/                Playwright end-to-end tests
 - PDB + HPA included in all overlays
 - Per-request audit log with actor attribution
 - Rate limiting on all `/api/*` routes
+- Trusted proxy CIDR allowlist for `X-Forwarded-For`/`X-Forwarded-Proto`
 - CSRF same-origin enforcement on mutating cookie-authenticated requests
+- Same-origin WebSocket enforcement on `/api/stream/ws`
+- Explicit HTTP security headers (`CSP`, `HSTS`, `X-Frame-Options`, `X-Content-Type-Options`)
+- Signed release artifacts and SBOM attestations for tagged releases
+- Formal secret-rotation runbook controls for runtime and integrations
 
-Full details: [SECURITY.md](docs/SECURITY.md) | [THREAT_MODEL.md](docs/THREAT_MODEL.md) | [OPERATIONS_VERIFICATION.md](docs/OPERATIONS_VERIFICATION.md)
+Full details: [SECURITY.md](docs/SECURITY.md) | [THREAT_MODEL.md](docs/THREAT_MODEL.md) | [OPERATIONS_VERIFICATION.md](docs/OPERATIONS_VERIFICATION.md) | [SUPPLY_CHAIN_POLICY.md](docs/SUPPLY_CHAIN_POLICY.md) | [SECRET_ROTATION_RUNBOOK.md](docs/SECRET_ROTATION_RUNBOOK.md)
 
 ---
 

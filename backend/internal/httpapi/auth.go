@@ -3,6 +3,7 @@ package httpapi
 import (
 	"errors"
 	"math"
+	"net"
 	"net/http"
 	"net/url"
 	"slices"
@@ -508,15 +509,53 @@ func validateCSRFSameOrigin(r *http.Request, trustedDomains []string) error {
 }
 
 func hostAllowed(candidate, host string, trustedDomains []string) bool {
-	if candidate == host {
+	if hostMatches(candidate, host) {
 		return true
 	}
 	for _, domain := range trustedDomains {
-		if candidate == domain {
+		if hostMatches(candidate, domain) {
 			return true
 		}
 	}
 	return false
+}
+
+func hostMatches(candidate, expected string) bool {
+	cHost, cPort := parseHostAndPort(candidate)
+	eHost, ePort := parseHostAndPort(expected)
+	if cHost == "" || eHost == "" {
+		return false
+	}
+	if cHost != eHost {
+		return false
+	}
+
+	// If either side omitted an explicit port, treat it as host-level match.
+	if cPort == "" || ePort == "" {
+		return true
+	}
+	return cPort == ePort
+}
+
+func parseHostAndPort(raw string) (string, string) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return "", ""
+	}
+
+	if host, port, err := net.SplitHostPort(trimmed); err == nil {
+		return strings.ToLower(strings.TrimSpace(host)), strings.TrimSpace(port)
+	}
+
+	if parsed, err := url.Parse("//" + trimmed); err == nil {
+		host := strings.ToLower(strings.TrimSpace(parsed.Hostname()))
+		port := strings.TrimSpace(parsed.Port())
+		if host != "" {
+			return host, port
+		}
+	}
+
+	return strings.ToLower(trimmed), ""
 }
 
 func (s *Server) handleAuthSession(w http.ResponseWriter, r *http.Request) {
