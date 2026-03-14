@@ -42,6 +42,9 @@ This document is the canonical feature map for KubeLens AI. It describes what ex
 | Nodes                  | Node health + maintenance operations (detail, pods/events, cordon/uncordon/drain).                                                                                       | `/api/nodes`, `/api/nodes/{name}*`                                                                              |
 | Namespaces             | Namespace inventory view.                                                                                                                                                | `/api/namespaces`, `/api/resources/namespaces`                                                                  |
 | Events                 | Recent cluster event stream and filtering.                                                                                                                               | `/api/events`                                                                                                   |
+| Notifications Panel    | Right-side live signal console with unread tracking, warning-only filtering, burst detection, and export of filtered payloads.                                           | `/api/events`, `/api/stream/ws`                                                                                 |
+| Profile Panel          | Session posture and auth operations (authenticate/logout/refresh), runtime safety diagnostics, permission matrix, and profile snapshot export.                           | `/api/auth/session`, `/api/auth/login`, `/api/auth/logout`, `/api/runtime`                                      |
+| Settings Panel         | Per-user workspace settings (refresh cadence, panel width, notification limits, muted keywords, sensitive-value redaction, desktop alerts).                              | Local browser settings persistence                                                                              |
 | Service Accounts       | Workload identity inventory in resource catalog.                                                                                                                         | `/api/resources/serviceaccounts`                                                                                |
 | RBAC                   | Role/rolebinding/cluster-role summary view.                                                                                                                              | `/api/resources/rbac`                                                                                           |
 | Metrics                | Interactive telemetry dashboards and API metrics surfaces.                                                                                                               | `/api/metrics`, `/api/metrics/prometheus`                                                                       |
@@ -86,3 +89,9 @@ In production mode, remediation execution enforces a four-eyes policy: the appro
 - `ASSISTANT_RAG_ENABLED` toggles docs retrieval grounding.
 
 For exact settings, use `.env.example` and `README.md`.
+
+## Workspace auth and notification safeguards
+
+- Profile authentication normalizes pasted `Bearer <token>` values before submission and blocks empty/bearer-only submissions.
+- Notification filters default from user settings and update live when settings change.
+- Notification copies/exports are user-triggered actions; sensitive event content redaction follows user settings.

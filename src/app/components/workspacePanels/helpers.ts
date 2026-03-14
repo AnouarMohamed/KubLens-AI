@@ -37,8 +37,8 @@ export function topNotificationReasons(events: K8sEvent[], take = 3): Array<{ re
     .map(([reason, count]) => ({ reason, count }));
 }
 
-export function notificationTone(type: string): "warning" | "normal" | "other" {
-  const normalized = type.trim().toLowerCase();
+export function notificationTone(type?: string | null): "warning" | "normal" | "other" {
+  const normalized = (type ?? "").trim().toLowerCase();
   if (normalized === "warning") {
     return "warning";
   }
@@ -104,7 +104,7 @@ export function formatAbsoluteTime(value: string): string {
   return parsed.toLocaleString();
 }
 
-export function notificationBadgeClass(type: string): string {
+export function notificationBadgeClass(type?: string | null): string {
   const tone = notificationTone(type);
   if (tone === "warning") {
     return "border-[var(--amber)]/45 bg-[var(--amber)]/14 text-zinc-100";
@@ -185,7 +185,10 @@ export async function copyText(value: string): Promise<void> {
 
 export function sanitizeAuthTokenInput(raw: string): string {
   const trimmed = raw.trim();
-  const bearerPrefixPattern = /^bearer\s+/i;
+  if (trimmed === "") {
+    return "";
+  }
+  const bearerPrefixPattern = /^bearer(?:\s+|$)/i;
   if (bearerPrefixPattern.test(trimmed)) {
     return trimmed.replace(bearerPrefixPattern, "").trim();
   }

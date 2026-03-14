@@ -48,6 +48,8 @@ export function ProfilePanel({
 }: ProfilePanelProps) {
   const [authTokenVisible, setAuthTokenVisible] = useState(false);
   const permissionSet = useMemo(() => new Set(authSession?.permissions ?? []), [authSession?.permissions]);
+  const sanitizedAuthToken = useMemo(() => sanitizeAuthTokenInput(authToken), [authToken]);
+  const needsTokenNormalization = authToken.trim() !== "" && authToken.trim() !== sanitizedAuthToken;
 
   return (
     <PanelShell title="Profile" subtitle="Identity, permissions, and runtime posture">
@@ -122,6 +124,8 @@ export function ProfilePanel({
               type={authTokenVisible ? "text" : "password"}
               onChange={(event) => setAuthToken(event.target.value)}
               placeholder="Paste API token"
+              autoComplete="off"
+              spellCheck={false}
               className="field w-full"
             />
             <button onClick={() => setAuthTokenVisible((value) => !value)} className="btn-sm" type="button">
@@ -131,6 +135,9 @@ export function ProfilePanel({
           <p className="mt-2 text-[11px] text-zinc-500">
             Paste the raw token value. If you paste <code>Bearer &lt;token&gt;</code>, it will be normalized.
           </p>
+          {needsTokenNormalization && (
+            <p className="mt-1 text-[11px] text-zinc-500">Bearer prefix will be stripped before authentication.</p>
+          )}
         </label>
 
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -140,13 +147,12 @@ export function ProfilePanel({
                 onAuthMessage("Auth is disabled in this environment. Sign-in is not required.");
                 return;
               }
-              const sanitizedToken = sanitizeAuthTokenInput(authToken);
-              if (sanitizedToken === "") {
+              if (sanitizedAuthToken === "") {
                 onAuthMessage("Token is required.");
                 return;
               }
               try {
-                const loginSession = await login(sanitizedToken);
+                const loginSession = await login(sanitizedAuthToken);
                 const refreshed = await refreshSession();
                 const finalSession = refreshed ?? loginSession;
                 setAuthToken("");
@@ -167,7 +173,7 @@ export function ProfilePanel({
             }}
             className="btn-sm"
             type="button"
-            disabled={authLoading || authToken.trim() === ""}
+            disabled={authLoading || sanitizedAuthToken === ""}
           >
             Authenticate
           </button>
