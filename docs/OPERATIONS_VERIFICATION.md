@@ -144,6 +144,7 @@ Before production release:
 2. Confirm `CodeQL` scans report no new high-severity findings.
 3. Confirm secret-rotation evidence is up to date for the current quarter.
 4. Validate no expired security exceptions exist for signing/SBOM/rotation controls.
+5. Confirm automated CD deploy jobs succeeded for `dev` and `staging` before approving production promotion.
 
 ## 14) Documentation governance controls
 

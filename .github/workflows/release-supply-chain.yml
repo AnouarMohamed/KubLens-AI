@@ -4,6 +4,30 @@ on:
   push:
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      deploy_environment:
+        description: "Environment to deploy an existing release tag"
+        required: true
+        type: choice
+        default: staging
+        options:
+          - dev
+          - staging
+          - prod
+      version_tag:
+        description: "Existing release tag to deploy (for example v0.4.0)"
+        required: true
+        type: string
+      namespace:
+        description: "Kubernetes namespace for Helm release"
+        required: false
+        type: string
+        default: kubernetes-operations-dashboard
+      release_name:
+        description: "Helm release name"
+        required: false
+        type: string
+        default: kubelens
 
 permissions:
   contents: read
@@ -13,6 +37,7 @@ permissions:
 
 jobs:
   signed-release:
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     env:
       DASHBOARD_IMAGE: ghcr.io/${{ github.repository_owner }}/kubelens-ai
@@ -91,3 +116,183 @@ jobs:
           cosign attest --yes --type cyclonedx \
             --predicate predictor.sbom.cdx.json \
             "${{ env.PREDICTOR_IMAGE }}@${{ steps.build_predictor.outputs.digest }}"
+
+  deploy-dev:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: [signed-release]
+    runs-on: ubuntu-latest
+    environment: dev
+    env:
+      DASHBOARD_IMAGE: ghcr.io/${{ github.repository_owner }}/kubelens-ai
+      PREDICTOR_IMAGE: ghcr.io/${{ github.repository_owner }}/kubelens-ai-predictor
+      VERSION_TAG: ${{ github.ref_name }}
+      HELM_RELEASE_NAME: kubelens
+      HELM_NAMESPACE: kubernetes-operations-dashboard-dev
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v4
+
+      - name: Check deployment secret
+        id: kubeconfig
+        run: |
+          if [ -z "${{ secrets.KUBE_CONFIG_B64 }}" ]; then
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "KUBE_CONFIG_B64 is not configured for environment dev. Skipping deployment."
+            exit 0
+          fi
+          echo "available=true" >> "$GITHUB_OUTPUT"
+
+      - name: Configure kubeconfig
+        if: steps.kubeconfig.outputs.available == 'true'
+        run: |
+          mkdir -p "$HOME/.kube"
+          echo "${{ secrets.KUBE_CONFIG_B64 }}" | base64 --decode > "$HOME/.kube/config"
+          chmod 600 "$HOME/.kube/config"
+
+      - name: Deploy Helm release to dev
+        if: steps.kubeconfig.outputs.available == 'true'
+        run: |
+          helm upgrade --install "$HELM_RELEASE_NAME" ./helm/kubelens \
+            --namespace "$HELM_NAMESPACE" \
+            --create-namespace \
+            --wait \
+            --timeout 10m \
+            --set image.repository="$DASHBOARD_IMAGE" \
+            --set image.tag="$VERSION_TAG" \
+            --set predictor.image.repository="$PREDICTOR_IMAGE" \
+            --set predictor.image.tag="$VERSION_TAG"
+
+      - name: Snapshot deployed resources
+        if: steps.kubeconfig.outputs.available == 'true'
+        run: |
+          kubectl -n "$HELM_NAMESPACE" get deploy
+          kubectl -n "$HELM_NAMESPACE" get pods
+
+  deploy-staging:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: [deploy-dev]
+    runs-on: ubuntu-latest
+    environment: staging
+    env:
+      DASHBOARD_IMAGE: ghcr.io/${{ github.repository_owner }}/kubelens-ai
+      PREDICTOR_IMAGE: ghcr.io/${{ github.repository_owner }}/kubelens-ai-predictor
+      VERSION_TAG: ${{ github.ref_name }}
+      HELM_RELEASE_NAME: kubelens
+      HELM_NAMESPACE: kubernetes-operations-dashboard-staging
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v4
+
+      - name: Check deployment secret
+        id: kubeconfig
+        run: |
+          if [ -z "${{ secrets.KUBE_CONFIG_B64 }}" ]; then
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "KUBE_CONFIG_B64 is not configured for environment staging. Skipping deployment."
+            exit 0
+          fi
+          echo "available=true" >> "$GITHUB_OUTPUT"
+
+      - name: Configure kubeconfig
+        if: steps.kubeconfig.outputs.available == 'true'
+        run: |
+          mkdir -p "$HOME/.kube"
+          echo "${{ secrets.KUBE_CONFIG_B64 }}" | base64 --decode > "$HOME/.kube/config"
+          chmod 600 "$HOME/.kube/config"
+
+      - name: Deploy Helm release to staging
+        if: steps.kubeconfig.outputs.available == 'true'
+        run: |
+          helm upgrade --install "$HELM_RELEASE_NAME" ./helm/kubelens \
+            --namespace "$HELM_NAMESPACE" \
+            --create-namespace \
+            --wait \
+            --timeout 10m \
+            --set image.repository="$DASHBOARD_IMAGE" \
+            --set image.tag="$VERSION_TAG" \
+            --set predictor.image.repository="$PREDICTOR_IMAGE" \
+            --set predictor.image.tag="$VERSION_TAG"
+
+      - name: Snapshot deployed resources
+        if: steps.kubeconfig.outputs.available == 'true'
+        run: |
+          kubectl -n "$HELM_NAMESPACE" get deploy
+          kubectl -n "$HELM_NAMESPACE" get pods
+
+  deploy-manual:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.deploy_environment }}
+    env:
+      DASHBOARD_IMAGE: ghcr.io/${{ github.repository_owner }}/kubelens-ai
+      PREDICTOR_IMAGE: ghcr.io/${{ github.repository_owner }}/kubelens-ai-predictor
+      VERSION_TAG: ${{ inputs.version_tag }}
+      HELM_RELEASE_NAME: ${{ inputs.release_name }}
+      HELM_NAMESPACE: ${{ inputs.namespace }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v4
+
+      - name: Validate tag input
+        run: |
+          case "$VERSION_TAG" in
+            v*) ;;
+            *)
+              echo "version_tag must start with 'v' (example: v0.4.0)"
+              exit 1
+              ;;
+          esac
+
+      - name: Check deployment secret
+        id: kubeconfig
+        run: |
+          if [ -z "${{ secrets.KUBE_CONFIG_B64 }}" ]; then
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "KUBE_CONFIG_B64 is not configured for environment ${{ inputs.deploy_environment }}. Skipping deployment."
+            exit 0
+          fi
+          echo "available=true" >> "$GITHUB_OUTPUT"
+
+      - name: Configure kubeconfig
+        if: steps.kubeconfig.outputs.available == 'true'
+        run: |
+          mkdir -p "$HOME/.kube"
+          echo "${{ secrets.KUBE_CONFIG_B64 }}" | base64 --decode > "$HOME/.kube/config"
+          chmod 600 "$HOME/.kube/config"
+
+      - name: Deploy Helm release
+        if: steps.kubeconfig.outputs.available == 'true'
+        run: |
+          helm upgrade --install "$HELM_RELEASE_NAME" ./helm/kubelens \
+            --namespace "$HELM_NAMESPACE" \
+            --create-namespace \
+            --wait \
+            --timeout 10m \
+            --set image.repository="$DASHBOARD_IMAGE" \
+            --set image.tag="$VERSION_TAG" \
+            --set predictor.image.repository="$PREDICTOR_IMAGE" \
+            --set predictor.image.tag="$VERSION_TAG"
+
+      - name: Snapshot deployed resources
+        if: steps.kubeconfig.outputs.available == 'true'
+        run: |
+          kubectl -n "$HELM_NAMESPACE" get deploy
+          kubectl -n "$HELM_NAMESPACE" get pods

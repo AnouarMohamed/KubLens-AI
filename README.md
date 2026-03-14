@@ -398,6 +398,12 @@ CI runs all of the above plus:
 - Trivy filesystem scan + hadolint for Dockerfiles
 - Docker builds for both images
 
+Release/CD workflow (`.github/workflows/release-supply-chain.yml`) adds:
+
+- Tag-triggered signed image publication + SBOM attestations
+- Automatic Helm deployment to `dev` then `staging`
+- Manual Helm deployment dispatch to `dev`/`staging`/`prod` (with environment protections)
+
 ---
 
 ## Directory structure

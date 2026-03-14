@@ -368,6 +368,21 @@ Current CI workflow (`.github/workflows/ci.yml`) runs:
 - Security checks (Trivy, Hadolint)
 - Docker image build + smoke tests
 
+Release + CD workflow (`.github/workflows/release-supply-chain.yml`) runs:
+
+- On release tags (`v*`): build/push signed dashboard + predictor images, generate SBOM attestations, then deploy to `dev` and `staging` via Helm.
+- On manual dispatch: deploy an existing tag to a selected environment (`dev`, `staging`, or `prod`).
+- Production deployments are controlled through GitHub Environment protections/approvals.
+
+Required GitHub Environment secret per deploy target:
+
+- `KUBE_CONFIG_B64` (base64 kubeconfig for that environment)
+
+Default Helm targets in auto-CD:
+
+- `dev`: namespace `kubernetes-operations-dashboard-dev`, release `kubelens`
+- `staging`: namespace `kubernetes-operations-dashboard-staging`, release `kubelens`
+
 Release hygiene:
 
 - Keep `package.json` version, Docker tags, and manifests aligned.

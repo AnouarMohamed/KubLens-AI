@@ -9,6 +9,7 @@ This runbook defines formal secret-rotation controls for KubeLens runtime and in
 - Assistant provider key (`ASSISTANT_API_KEY`)
 - Alerting and ChatOps credentials (`SLACK_WEBHOOK_URL`, `PAGERDUTY_ROUTING_KEY`, `CHATOPS_SLACK_WEBHOOK_URL`)
 - Kubernetes context payload secrets (`KUBECONFIG_DATA`, `KUBECONFIG_CONTEXTS`)
+- GitHub Environment deploy kubeconfigs (`KUBE_CONFIG_B64` for `dev`/`staging`/`prod`)
 
 ## 2) Control objectives
 
@@ -41,6 +42,7 @@ This runbook defines formal secret-rotation controls for KubeLens runtime and in
 3. Execute:
    - apply updated Kubernetes Secret/secret manager entries in production
    - restart workloads only if required by runtime behavior
+   - update GitHub Environment `KUBE_CONFIG_B64` values for automated CD targets when cluster credentials rotate
 4. Validate:
    - verify auth/login behavior
    - verify predictor and alert integrations

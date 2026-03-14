@@ -16,6 +16,8 @@ This policy defines mandatory controls for release integrity, artifact traceabil
 4. Release artifacts must be immutable and referenced by digest.
 5. CI security checks (`Trivy`, `Hadolint`, `CodeQL`, tests) must pass before release publication.
 6. Dependency update automation (`Dependabot`) must remain enabled for supported ecosystems.
+7. Release-tag deployments must flow through the automated CD workflow to `dev` and `staging`.
+8. Production deployment must use manual workflow dispatch with environment approval controls.
 
 ## 3) Signing requirements
 
@@ -38,6 +40,7 @@ Before approving release deployment:
 1. Verify image signatures against expected identity.
 2. Verify SBOM attestations are present for each release image digest.
 3. Confirm security and test workflows are green for the release commit/tag.
+4. Confirm `dev` and `staging` deploy jobs completed successfully (or were intentionally skipped due missing environment secret configuration).
 
 ## 6) Exception handling
 
