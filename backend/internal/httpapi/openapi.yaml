@@ -45,6 +45,17 @@ paths:
             text/plain:
               schema:
                 type: string
+  /version:
+    get:
+      operationId: getVersion
+      summary: Build and version metadata
+      responses:
+        "200":
+          description: Build metadata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BuildInfo"
   /runtime:
     get:
       operationId: getRuntimeStatus
@@ -776,6 +787,24 @@ paths:
     get:
       operationId: getPredictions
       summary: Incident risk predictions
+      parameters:
+        - in: query
+          name: force
+          schema:
+            type: boolean
+          required: false
+      responses:
+        "200":
+          description: Prediction payload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PredictionsResult"
+  /predictive-incidents:
+    get:
+      operationId: getPredictiveIncidents
+      summary: Legacy alias for incident risk predictions
+      deprecated: true
       parameters:
         - in: query
           name: force

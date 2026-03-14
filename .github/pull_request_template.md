@@ -13,6 +13,7 @@
 - [ ] `npm run test:predictor`
 - [ ] `npm run verify:release`
 - [ ] `npm run verify:changelog`
+- [ ] `npm run verify:api-contract`
 - [ ] `npm run verify:docs`
 - [ ] `npm run build`
 

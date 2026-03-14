@@ -32,6 +32,8 @@
     "verify:release": "node scripts/verify-release.mjs",
     "verify:changelog": "node scripts/verify-changelog.mjs",
     "verify:openapi": "node scripts/verify-openapi.mjs",
+    "generate:api-contract": "node scripts/generate-api-contract.mjs",
+    "verify:api-contract": "node scripts/generate-api-contract.mjs --check",
     "verify:docs": "node scripts/verify-docs.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

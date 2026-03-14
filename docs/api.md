@@ -192,3 +192,4 @@ curl -X POST http://localhost:3000/api/risk-guard/analyze \
 For exact schemas/status codes, use:
 
 - `backend/internal/httpapi/openapi.yaml`
+- `src/lib/api/generated/openapi-contract.ts` (generated frontend route contract; run `npm run generate:api-contract`)

@@ -1,6 +1,12 @@
 import type { PredictionsResult } from "../../types";
+import type { OpenAPIPathTemplate } from "./generated/openapi-contract";
 
 const API_PREFIX = "/api";
+const templateTokenPattern = /\{([A-Za-z0-9_]+)\}/g;
+const unresolvedTemplatePattern = /\{[A-Za-z0-9_]+\}/;
+
+type PathParamValue = string | number | boolean;
+type PathParamMap = Record<string, PathParamValue>;
 
 /**
  * Represents a failed API request with an attached HTTP status code.
@@ -27,6 +33,37 @@ export function apiPath(...segments: string[]): string {
   }
   // Callers must pass raw path fragments (not pre-encoded) to avoid double-encoding.
   return `${API_PREFIX}/${segments.map(encodeURIComponent).join("/")}`;
+}
+
+/**
+ * Builds a URL under the `/api` prefix from an OpenAPI path template.
+ *
+ * This enforces contract-aware routing for frontend API modules.
+ *
+ * @param template - Path template from generated OpenAPI contract.
+ * @param params - Named template parameter values.
+ * @returns API-relative path with encoded path parameters.
+ */
+export function apiRoute(template: OpenAPIPathTemplate, params: PathParamMap = {}): string {
+  for (const key of Object.keys(params)) {
+    if (!template.includes(`{${key}}`)) {
+      throw new Error(`Unexpected path param "${key}" for template "${template}"`);
+    }
+  }
+
+  const rendered = template.replace(templateTokenPattern, (_, key: string) => {
+    const value = params[key];
+    if (value === undefined || value === null || String(value).trim() === "") {
+      throw new Error(`Missing path param "${key}" for template "${template}"`);
+    }
+    return encodeURIComponent(String(value));
+  });
+
+  if (unresolvedTemplatePattern.test(rendered)) {
+    throw new Error(`Unresolved path template "${template}"`);
+  }
+
+  return `${API_PREFIX}${rendered}`;
 }
 
 /**
@@ -103,11 +140,11 @@ export async function requestText(url: string): Promise<string> {
 export async function requestPredictions(force = false): Promise<PredictionsResult> {
   const suffix = force ? "?force=1" : "";
   try {
-    return await requestJson<PredictionsResult>(`${apiPath("predictions")}${suffix}`);
+    return await requestJson<PredictionsResult>(`${apiRoute("/predictions")}${suffix}`);
   } catch (err) {
     if (err instanceof ApiError && err.status === 404) {
       // Backward compatibility for pre-v0.2 backends; safe to remove after v1.0.
-      return requestJson<PredictionsResult>(`${apiPath("predictive-incidents")}${suffix}`);
+      return requestJson<PredictionsResult>(`${apiRoute("/predictive-incidents")}${suffix}`);
     }
     throw err;
   }
@@ -117,7 +154,7 @@ export async function requestPredictions(force = false): Promise<PredictionsResu
  * Returns the SSE endpoint URL used for cluster event streams.
  */
 export function buildStreamURL(): string {
-  return apiPath("stream");
+  return apiRoute("/stream");
 }
 
 /**
@@ -125,8 +162,8 @@ export function buildStreamURL(): string {
  */
 export function buildStreamWSURL(): string {
   if (typeof window === "undefined") {
-    return apiPath("stream", "ws");
+    return apiRoute("/stream/ws");
   }
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  return `${protocol}//${window.location.host}${apiPath("stream", "ws")}`;
+  return `${protocol}//${window.location.host}${apiRoute("/stream/ws")}`;
 }

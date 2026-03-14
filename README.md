@@ -379,6 +379,8 @@ npm run test:go           # Go tests
 npm run ci:backend        # Backend CI parity (fmt + vet + ineffassign + tests)
 npm run test:predictor    # Pytest
 npm run test:e2e          # Playwright (Chromium + Firefox)
+npm run verify:openapi    # OpenAPI schema contract checks
+npm run verify:api-contract # OpenAPI-generated frontend route contract sync
 npm run build             # Production build
 ```
 
@@ -390,6 +392,7 @@ CI runs all of the above plus:
 - Release/version consistency across `package.json`, Docker image tags, and k8s manifests
 - Changelog discipline check
 - OpenAPI contract validation
+- OpenAPI-generated frontend API route contract sync check
 - Kustomize build + kubeconform schema validation for all overlays
 - Go linting via `go vet` and `ineffassign`
 - Trivy filesystem scan + hadolint for Dockerfiles

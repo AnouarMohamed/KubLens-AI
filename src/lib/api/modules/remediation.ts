@@ -8,55 +8,55 @@ import type {
   RiskAnalyzeRequest,
   RiskReport,
 } from "../../../types";
-import { apiPath, requestJson } from "../core";
+import { apiRoute, requestJson } from "../core";
 
 export const remediationApi = {
   proposeRemediation: () =>
-    requestJson<RemediationProposal[]>(apiPath("remediation", "propose"), {
+    requestJson<RemediationProposal[]>(apiRoute("/remediation/propose"), {
       method: "POST",
       body: JSON.stringify({}),
     }),
-  listRemediation: () => requestJson<RemediationProposal[]>(apiPath("remediation")),
+  listRemediation: () => requestJson<RemediationProposal[]>(apiRoute("/remediation")),
   approveRemediation: (id: string) =>
-    requestJson<RemediationProposal>(apiPath("remediation", id, "approve"), {
+    requestJson<RemediationProposal>(apiRoute("/remediation/{id}/approve", { id }), {
       method: "POST",
       body: JSON.stringify({}),
     }),
   executeRemediation: (id: string) =>
-    requestJson<RemediationProposal>(apiPath("remediation", id, "execute"), {
+    requestJson<RemediationProposal>(apiRoute("/remediation/{id}/execute", { id }), {
       method: "POST",
       body: JSON.stringify({}),
     }),
   rejectRemediation: (id: string, payload: RemediationRejectRequest) =>
-    requestJson<RemediationProposal>(apiPath("remediation", id, "reject"), {
+    requestJson<RemediationProposal>(apiRoute("/remediation/{id}/reject", { id }), {
       method: "POST",
       body: JSON.stringify(payload),
     }),
   searchMemoryRunbooks: (query = "") => {
     const suffix = query.trim() === "" ? "" : `?q=${encodeURIComponent(query.trim())}`;
-    return requestJson<MemoryRunbook[]>(`${apiPath("memory", "runbooks")}${suffix}`);
+    return requestJson<MemoryRunbook[]>(`${apiRoute("/memory/runbooks")}${suffix}`);
   },
   createMemoryRunbook: (payload: MemoryRunbookUpsertRequest) =>
-    requestJson<MemoryRunbook>(apiPath("memory", "runbooks"), {
+    requestJson<MemoryRunbook>(apiRoute("/memory/runbooks"), {
       method: "POST",
       body: JSON.stringify(payload),
     }),
   updateMemoryRunbook: (id: string, payload: MemoryRunbookUpsertRequest) =>
-    requestJson<MemoryRunbook>(apiPath("memory", "runbooks", id), {
+    requestJson<MemoryRunbook>(apiRoute("/memory/runbooks/{id}", { id }), {
       method: "PUT",
       body: JSON.stringify(payload),
     }),
   listMemoryFixes: (query = "") => {
     const suffix = query.trim() === "" ? "" : `?q=${encodeURIComponent(query.trim())}`;
-    return requestJson<MemoryFixPattern[]>(`${apiPath("memory", "fixes")}${suffix}`);
+    return requestJson<MemoryFixPattern[]>(`${apiRoute("/memory/fixes")}${suffix}`);
   },
   recordMemoryFix: (payload: MemoryFixCreateRequest) =>
-    requestJson<MemoryFixPattern>(apiPath("memory", "fixes"), {
+    requestJson<MemoryFixPattern>(apiRoute("/memory/fixes"), {
       method: "POST",
       body: JSON.stringify(payload),
     }),
   analyzeRiskGuard: (payload: RiskAnalyzeRequest) =>
-    requestJson<RiskReport>(apiPath("risk-guard", "analyze"), {
+    requestJson<RiskReport>(apiRoute("/risk-guard/analyze"), {
       method: "POST",
       body: JSON.stringify(payload),
     }),

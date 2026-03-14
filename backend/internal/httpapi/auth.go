@@ -236,80 +236,99 @@ func normalizeClientKey(clientIP string) string {
 	return normalized
 }
 
+func isAuthBypassPath(path string) bool {
+	switch path {
+	case apiAuthLoginPath, apiAuthLogoutPath, apiHealthzPath, apiReadyzPath, apiOpenAPIPath:
+		return true
+	default:
+		return false
+	}
+}
+
+func (s *Server) maybeAttachAuthSessionPrincipal(r *http.Request) *http.Request {
+	if !s.auth.enabled || s.auth.authenticator == nil {
+		return r
+	}
+	principal, _, err := s.auth.authenticator.AuthenticateRequest(r)
+	if err != nil {
+		return r
+	}
+	return r.WithContext(auth.WithPrincipal(r.Context(), principal))
+}
+
+func (s *Server) authenticateProtectedRequest(r *http.Request) (auth.Principal, auth.Channel, error) {
+	if !s.auth.enabled {
+		return auth.Principal{User: "local-viewer", Role: auth.RoleViewer}, auth.ChannelUnknown, nil
+	}
+	if s.auth.authenticator == nil {
+		return auth.Principal{}, auth.ChannelUnknown, errors.New("authenticator not configured")
+	}
+	return s.auth.authenticator.AuthenticateRequest(r)
+}
+
+type authRejection struct {
+	status  int
+	action  string
+	message string
+}
+
+func (s *Server) authorizeProtectedRequest(r *http.Request, principal auth.Principal, channel auth.Channel) *authRejection {
+	required := auth.RequiredRole(r.Method, r.URL.Path)
+	if principal.Role < required {
+		return &authRejection{
+			status:  http.StatusForbidden,
+			action:  "forbidden",
+			message: "insufficient role for this action",
+		}
+	}
+	if required >= auth.RoleOperator && !s.writesOn && auth.RequiresWriteGate(r.Method, r.URL.Path) {
+		return &authRejection{
+			status:  http.StatusForbidden,
+			message: "mutating operations are disabled for this environment",
+		}
+	}
+	if isMutatingMethod(r.Method) && channel == auth.ChannelCookie {
+		if err := validateCSRFSameOrigin(r, s.auth.trustedCSRFDomains); err != nil {
+			return &authRejection{
+				status:  http.StatusForbidden,
+				action:  "csrf_blocked",
+				message: err.Error(),
+			}
+		}
+	}
+
+	return nil
+}
+
 func (s *Server) authMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !isAPIPath(r.URL.Path) {
+		path := r.URL.Path
+		if !isAPIPath(path) || isAuthBypassPath(path) {
 			next.ServeHTTP(w, r)
 			return
 		}
 
-		if r.URL.Path == apiAuthLoginPath || r.URL.Path == apiAuthLogoutPath {
-			next.ServeHTTP(w, r)
-			return
-		}
-		if r.URL.Path == apiHealthzPath || r.URL.Path == apiReadyzPath || r.URL.Path == apiOpenAPIPath {
-			next.ServeHTTP(w, r)
+		if path == apiAuthSessionPath {
+			next.ServeHTTP(w, s.maybeAttachAuthSessionPrincipal(r))
 			return
 		}
 
-		if r.URL.Path == apiAuthSessionPath {
-			if !s.auth.enabled {
-				next.ServeHTTP(w, r)
-				return
-			}
-
-			if s.auth.authenticator != nil {
-				if p, _, err := s.auth.authenticator.AuthenticateRequest(r); err == nil {
-					next.ServeHTTP(w, r.WithContext(auth.WithPrincipal(r.Context(), p)))
-					return
-				}
-			}
-
-			next.ServeHTTP(w, r)
+		principal, channel, err := s.authenticateProtectedRequest(r)
+		if err != nil {
+			s.recordAuthFailure(r, http.StatusUnauthorized, "unauthenticated")
+			writeError(w, http.StatusUnauthorized, err.Error())
 			return
 		}
 
-		var (
-			p       auth.Principal
-			channel auth.Channel
-			err     error
-		)
-
-		if !s.auth.enabled {
-			p = auth.Principal{User: "local-viewer", Role: auth.RoleViewer}
-		} else {
-			if s.auth.authenticator == nil {
-				s.recordAuthFailure(r, http.StatusUnauthorized, "unauthenticated")
-				writeError(w, http.StatusUnauthorized, "authenticator not configured")
-				return
+		if rejection := s.authorizeProtectedRequest(r, principal, channel); rejection != nil {
+			if strings.TrimSpace(rejection.action) != "" {
+				s.recordAuthFailure(r, rejection.status, rejection.action)
 			}
-			p, channel, err = s.auth.authenticator.AuthenticateRequest(r)
-			if err != nil {
-				s.recordAuthFailure(r, http.StatusUnauthorized, "unauthenticated")
-				writeError(w, http.StatusUnauthorized, err.Error())
-				return
-			}
-		}
-
-		required := auth.RequiredRole(r.Method, r.URL.Path)
-		if p.Role < required {
-			s.recordAuthFailure(r, http.StatusForbidden, "forbidden")
-			writeError(w, http.StatusForbidden, "insufficient role for this action")
+			writeError(w, rejection.status, rejection.message)
 			return
 		}
-		if required >= auth.RoleOperator && !s.writesOn && auth.RequiresWriteGate(r.Method, r.URL.Path) {
-			writeError(w, http.StatusForbidden, "mutating operations are disabled for this environment")
-			return
-		}
-		if isMutatingMethod(r.Method) && channel == auth.ChannelCookie {
-			if err := validateCSRFSameOrigin(r, s.auth.trustedCSRFDomains); err != nil {
-				s.recordAuthFailure(r, http.StatusForbidden, "csrf_blocked")
-				writeError(w, http.StatusForbidden, err.Error())
-				return
-			}
-		}
 
-		next.ServeHTTP(w, r.WithContext(auth.WithPrincipal(r.Context(), p)))
+		next.ServeHTTP(w, r.WithContext(auth.WithPrincipal(r.Context(), principal)))
 	})
 }
 

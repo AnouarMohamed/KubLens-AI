@@ -88,6 +88,8 @@ Verify:
 ```bash
 npm run test:go
 npm run ci:backend
+npm run verify:openapi
+npm run verify:api-contract
 ```
 
 Critical suites include:

@@ -41,3 +41,24 @@ func TestValidateCSRFSameOriginTrustedDomainAllowsCustomPort(t *testing.T) {
 		t.Fatalf("validateCSRFSameOrigin() error = %v, want nil", err)
 	}
 }
+
+func TestIsAuthBypassPath(t *testing.T) {
+	cases := []struct {
+		path string
+		want bool
+	}{
+		{path: apiAuthLoginPath, want: true},
+		{path: apiAuthLogoutPath, want: true},
+		{path: apiHealthzPath, want: true},
+		{path: apiReadyzPath, want: true},
+		{path: apiOpenAPIPath, want: true},
+		{path: apiAuthSessionPath, want: false},
+		{path: apiMountPrefix + "/pods", want: false},
+	}
+
+	for _, tc := range cases {
+		if got := isAuthBypassPath(tc.path); got != tc.want {
+			t.Fatalf("isAuthBypassPath(%q) = %t, want %t", tc.path, got, tc.want)
+		}
+	}
+}

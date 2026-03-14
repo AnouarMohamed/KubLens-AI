@@ -19,6 +19,7 @@ npm run lint
 npm run test:go
 npm run test:web
 npm run test:predictor
+npm run verify:api-contract
 npm run verify:docs
 npm run build
 ```
@@ -37,6 +38,7 @@ npm run build
 - Add or update tests for security-sensitive changes
 - Update docs when behavior or configuration changes
 - Keep `docs/FEATURES.md` in sync when adding or changing user-facing features
+- Keep OpenAPI-derived frontend route contract synced (`npm run generate:api-contract`)
 - Ensure `npm run verify:docs` passes before merge
 
 ## Security and release controls

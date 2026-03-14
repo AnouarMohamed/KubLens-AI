@@ -5,18 +5,21 @@ import type {
   ResourceManifest,
   ScaleRequest,
 } from "../../../types";
-import { apiPath, requestJson } from "../core";
+import { apiRoute, requestJson } from "../core";
 
 export const resourcesApi = {
-  getNamespaces: () => requestJson<string[]>(apiPath("namespaces")),
-  getResources: (kind: string) => requestJson<ResourceList>(apiPath("resources", kind)),
+  getNamespaces: () => requestJson<string[]>(apiRoute("/namespaces")),
+  getResources: (kind: string) => requestJson<ResourceList>(apiRoute("/resources/{kind}", { kind })),
   getResourceYAML: (kind: string, namespace: string, name: string) =>
-    requestJson<ResourceManifest>(apiPath("resources", kind, namespace, name, "yaml")),
+    requestJson<ResourceManifest>(apiRoute("/resources/{kind}/{namespace}/{name}/yaml", { kind, namespace, name })),
   applyResourceYAML: (kind: string, namespace: string, name: string, payload: ResourceManifest) =>
-    requestJson<ApplyResourceYAMLResponse>(apiPath("resources", kind, namespace, name, "yaml"), {
-      method: "PUT",
-      body: JSON.stringify(payload),
-    }),
+    requestJson<ApplyResourceYAMLResponse>(
+      apiRoute("/resources/{kind}/{namespace}/{name}/yaml", { kind, namespace, name }),
+      {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      },
+    ),
   applyResourceYAMLWithForce: (
     kind: string,
     namespace: string,
@@ -25,23 +28,23 @@ export const resourcesApi = {
     force: boolean,
   ) =>
     requestJson<ApplyResourceYAMLResponse>(
-      `${apiPath("resources", kind, namespace, name, "yaml")}${force ? "?force=true" : ""}`,
+      `${apiRoute("/resources/{kind}/{namespace}/{name}/yaml", { kind, namespace, name })}${force ? "?force=true" : ""}`,
       {
         method: "PUT",
         body: JSON.stringify(payload),
       },
     ),
   scaleResource: (kind: string, namespace: string, name: string, payload: ScaleRequest) =>
-    requestJson<ActionResult>(apiPath("resources", kind, namespace, name, "scale"), {
+    requestJson<ActionResult>(apiRoute("/resources/{kind}/{namespace}/{name}/scale", { kind, namespace, name }), {
       method: "POST",
       body: JSON.stringify(payload),
     }),
   restartResource: (kind: string, namespace: string, name: string) =>
-    requestJson<ActionResult>(apiPath("resources", kind, namespace, name, "restart"), {
+    requestJson<ActionResult>(apiRoute("/resources/{kind}/{namespace}/{name}/restart", { kind, namespace, name }), {
       method: "POST",
     }),
   rollbackResource: (kind: string, namespace: string, name: string) =>
-    requestJson<ActionResult>(apiPath("resources", kind, namespace, name, "rollback"), {
+    requestJson<ActionResult>(apiRoute("/resources/{kind}/{namespace}/{name}/rollback", { kind, namespace, name }), {
       method: "POST",
     }),
 };

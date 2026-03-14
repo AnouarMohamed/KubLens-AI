@@ -5,24 +5,24 @@ import type {
   NodeAlertLifecycle,
   NodeAlertLifecycleUpdateRequest,
 } from "../../../types";
-import { apiPath, requestJson } from "../core";
+import { apiRoute, requestJson } from "../core";
 
 export const alertsApi = {
   dispatchAlert: (payload: AlertDispatchRequest) =>
-    requestJson<AlertDispatchResponse>(apiPath("alerts", "dispatch"), {
+    requestJson<AlertDispatchResponse>(apiRoute("/alerts/dispatch"), {
       method: "POST",
       body: JSON.stringify(payload),
     }),
   sendTestAlert: () =>
-    requestJson<AlertDispatchResponse>(apiPath("alerts", "test"), {
+    requestJson<AlertDispatchResponse>(apiRoute("/alerts/test"), {
       method: "POST",
       body: JSON.stringify({}),
     }),
-  getAlertLifecycle: () => requestJson<NodeAlertLifecycle[]>(apiPath("alerts", "lifecycle")),
+  getAlertLifecycle: () => requestJson<NodeAlertLifecycle[]>(apiRoute("/alerts/lifecycle")),
   updateAlertLifecycle: (payload: NodeAlertLifecycleUpdateRequest) =>
-    requestJson<NodeAlertLifecycle>(apiPath("alerts", "lifecycle"), {
+    requestJson<NodeAlertLifecycle>(apiRoute("/alerts/lifecycle"), {
       method: "POST",
       body: JSON.stringify(payload),
     }),
-  getAuditLog: (limit = 120) => requestJson<AuditLogResponse>(`${apiPath("audit")}?limit=${limit}`),
+  getAuditLog: (limit = 120) => requestJson<AuditLogResponse>(`${apiRoute("/audit")}?limit=${limit}`),
 };

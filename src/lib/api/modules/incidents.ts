@@ -1,29 +1,29 @@
 import type { Incident, IncidentStepStatusPatch, Postmortem } from "../../../types";
-import { apiPath, requestJson } from "../core";
+import { apiRoute, requestJson } from "../core";
 
 export const incidentsApi = {
   createIncident: () =>
-    requestJson<Incident>(apiPath("incidents"), {
+    requestJson<Incident>(apiRoute("/incidents"), {
       method: "POST",
       body: JSON.stringify({}),
     }),
-  listIncidents: () => requestJson<Incident[]>(apiPath("incidents")),
-  getIncident: (id: string) => requestJson<Incident>(apiPath("incidents", id)),
+  listIncidents: () => requestJson<Incident[]>(apiRoute("/incidents")),
+  getIncident: (id: string) => requestJson<Incident>(apiRoute("/incidents/{id}", { id })),
   updateIncidentStep: (id: string, stepID: string, payload: IncidentStepStatusPatch) =>
-    requestJson<Incident>(apiPath("incidents", id, "steps", stepID), {
+    requestJson<Incident>(apiRoute("/incidents/{id}/steps/{step}", { id, step: stepID }), {
       method: "PATCH",
       body: JSON.stringify(payload),
     }),
   resolveIncident: (id: string) =>
-    requestJson<Incident>(apiPath("incidents", id, "resolve"), {
+    requestJson<Incident>(apiRoute("/incidents/{id}/resolve", { id }), {
       method: "POST",
       body: JSON.stringify({}),
     }),
   generatePostmortem: (incidentID: string) =>
-    requestJson<Postmortem>(apiPath("incidents", incidentID, "postmortem"), {
+    requestJson<Postmortem>(apiRoute("/incidents/{id}/postmortem", { id: incidentID }), {
       method: "POST",
       body: JSON.stringify({}),
     }),
-  listPostmortems: () => requestJson<Postmortem[]>(apiPath("postmortems")),
-  getPostmortem: (id: string) => requestJson<Postmortem>(apiPath("postmortems", id)),
+  listPostmortems: () => requestJson<Postmortem[]>(apiRoute("/postmortems")),
+  getPostmortem: (id: string) => requestJson<Postmortem>(apiRoute("/postmortems/{id}", { id })),
 };

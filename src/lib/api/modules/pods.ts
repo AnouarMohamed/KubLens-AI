@@ -1,17 +1,18 @@
 import type { ActionResult, K8sEvent, Pod, PodCreateRequest, PodDetail } from "../../../types";
-import { apiPath, requestJson, requestText } from "../core";
+import { apiRoute, requestJson, requestText } from "../core";
 
 export const podsApi = {
-  getEvents: (signal?: AbortSignal) => requestJson<K8sEvent[]>(apiPath("events"), { signal }),
-  getPods: (signal?: AbortSignal) => requestJson<Pod[]>(apiPath("pods"), { signal }),
+  getEvents: (signal?: AbortSignal) => requestJson<K8sEvent[]>(apiRoute("/events"), { signal }),
+  getPods: (signal?: AbortSignal) => requestJson<Pod[]>(apiRoute("/pods"), { signal }),
   createPod: (payload: PodCreateRequest) =>
-    requestJson<ActionResult>(apiPath("pods"), {
+    requestJson<ActionResult>(apiRoute("/pods"), {
       method: "POST",
       body: JSON.stringify(payload),
     }),
-  getPodDetail: (namespace: string, name: string) => requestJson<PodDetail>(apiPath("pods", namespace, name)),
+  getPodDetail: (namespace: string, name: string) =>
+    requestJson<PodDetail>(apiRoute("/pods/{namespace}/{name}", { namespace, name })),
   getPodEvents: (namespace: string, name: string) =>
-    requestJson<K8sEvent[]>(apiPath("pods", namespace, name, "events")),
+    requestJson<K8sEvent[]>(apiRoute("/pods/{namespace}/{name}/events", { namespace, name })),
   getPodLogs: (namespace: string, name: string, lines = 100, container?: string) => {
     const params = new URLSearchParams();
     if (lines > 0) {
@@ -21,7 +22,9 @@ export const podsApi = {
       params.set("container", container.trim());
     }
     const suffix = params.toString();
-    return requestText(`${apiPath("pods", namespace, name, "logs")}${suffix ? `?${suffix}` : ""}`);
+    return requestText(
+      `${apiRoute("/pods/{namespace}/{name}/logs", { namespace, name })}${suffix ? `?${suffix}` : ""}`,
+    );
   },
   streamPodLogs: (
     namespace: string,
@@ -38,18 +41,22 @@ export const podsApi = {
       params.set("container", container.trim());
     }
     const suffix = params.toString();
-    return fetch(`${apiPath("pods", namespace, name, "logs", "stream")}${suffix ? `?${suffix}` : ""}`, {
-      credentials: "same-origin",
-      signal,
-    });
+    return fetch(
+      `${apiRoute("/pods/{namespace}/{name}/logs/stream", { namespace, name })}${suffix ? `?${suffix}` : ""}`,
+      {
+        credentials: "same-origin",
+        signal,
+      },
+    );
   },
-  getPodDescribe: (namespace: string, name: string) => requestText(apiPath("pods", namespace, name, "describe")),
+  getPodDescribe: (namespace: string, name: string) =>
+    requestText(apiRoute("/pods/{namespace}/{name}/describe", { namespace, name })),
   restartPod: (namespace: string, name: string) =>
-    requestJson<ActionResult>(apiPath("pods", namespace, name, "restart"), {
+    requestJson<ActionResult>(apiRoute("/pods/{namespace}/{name}/restart", { namespace, name }), {
       method: "POST",
     }),
   deletePod: (namespace: string, name: string) =>
-    requestJson<ActionResult>(apiPath("pods", namespace, name), {
+    requestJson<ActionResult>(apiRoute("/pods/{namespace}/{name}", { namespace, name }), {
       method: "DELETE",
     }),
 };

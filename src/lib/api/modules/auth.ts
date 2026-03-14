@@ -1,23 +1,23 @@
 import type { AuthSession, ClusterContextList, ClusterSelectResponse } from "../../../types";
-import { apiPath, buildStreamURL, buildStreamWSURL, requestJson } from "../core";
+import { apiRoute, buildStreamURL, buildStreamWSURL, requestJson } from "../core";
 
 export const authApi = {
   login: (token: string) =>
-    requestJson<AuthSession>(apiPath("auth", "login"), {
+    requestJson<AuthSession>(apiRoute("/auth/login"), {
       method: "POST",
       body: JSON.stringify({ token }),
     }),
   logout: () =>
-    requestJson<AuthSession>(apiPath("auth", "logout"), {
+    requestJson<AuthSession>(apiRoute("/auth/logout"), {
       method: "POST",
       body: JSON.stringify({}),
     }),
   getStreamURL: () => buildStreamURL(),
   getStreamWSURL: () => buildStreamWSURL(),
-  getAuthSession: () => requestJson<AuthSession>(apiPath("auth", "session")),
-  getClusters: () => requestJson<ClusterContextList>(apiPath("clusters")),
+  getAuthSession: () => requestJson<AuthSession>(apiRoute("/auth/session")),
+  getClusters: () => requestJson<ClusterContextList>(apiRoute("/clusters")),
   selectCluster: (name: string) =>
-    requestJson<ClusterSelectResponse>(apiPath("clusters", "select"), {
+    requestJson<ClusterSelectResponse>(apiRoute("/clusters/select"), {
       method: "POST",
       body: JSON.stringify({ name }),
     }),

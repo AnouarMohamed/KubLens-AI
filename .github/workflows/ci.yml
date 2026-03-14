@@ -30,6 +30,9 @@ jobs:
       - name: Verify OpenAPI contract
         run: npm run verify:openapi
 
+      - name: Verify generated API contract sync
+        run: npm run verify:api-contract
+
   docs-discipline:
     runs-on: ubuntu-latest
     steps:
