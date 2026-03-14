@@ -209,7 +209,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Build dashboard image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: Dockerfile
@@ -218,7 +218,7 @@ jobs:
           tags: kubernetes-operations-dashboard:ci
 
       - name: Build predictor image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ./predictor
           file: ./predictor/Dockerfile

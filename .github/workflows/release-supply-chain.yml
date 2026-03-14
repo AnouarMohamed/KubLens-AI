@@ -34,7 +34,7 @@ jobs:
 
       - name: Build and push dashboard image
         id: build_dashboard
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: Dockerfile
@@ -43,7 +43,7 @@ jobs:
 
       - name: Build and push predictor image
         id: build_predictor
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ./predictor
           file: ./predictor/Dockerfile
