@@ -332,7 +332,6 @@ func newServer(clusterSvc ClusterReader, now func() time.Time, logger *slog.Logg
 func (s *Server) Router(distDir string) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
-	r.Use(middleware.RealIP)
 	r.Use(middleware.Recoverer)
 	r.Use(timeoutUnlessPath(20*time.Second, apiStreamPrefix))
 	r.Use(s.limiter.middleware(s.now))

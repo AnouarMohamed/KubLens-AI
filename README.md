@@ -157,7 +157,7 @@ OIDC/JWT auth:
 AUTH_ENABLED=true
 AUTH_PROVIDER=google           # google | keycloak | oidc | github
 AUTH_OIDC_ISSUER_URL=""         # required for oidc/keycloak
-AUTH_OIDC_CLIENT_ID=""          # optional (set if your issuer requires it)
+AUTH_OIDC_CLIENT_ID=""          # required when OIDC auth is enabled
 AUTH_OIDC_USERNAME_CLAIM=""      # optional (defaults to preferred_username/email)
 AUTH_OIDC_ROLE_CLAIM=""          # optional (defaults to roles/role/groups)
 ```

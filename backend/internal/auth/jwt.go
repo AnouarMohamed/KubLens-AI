@@ -55,11 +55,12 @@ func (o *oidcVerifier) verify(ctx context.Context, rawToken string) (Principal, 
 		}
 
 		config := &oidc.Config{}
-		if strings.TrimSpace(o.cfg.ClientID) == "" {
-			config.SkipClientIDCheck = true
-		} else {
-			config.ClientID = strings.TrimSpace(o.cfg.ClientID)
+		clientID := strings.TrimSpace(o.cfg.ClientID)
+		if clientID == "" {
+			o.err = errors.New("oidc client id is required")
+			return
 		}
+		config.ClientID = clientID
 
 		o.provider = provider
 		o.verifier = provider.Verifier(config)
@@ -159,25 +160,27 @@ func parseRoleClaim(raw any) Role {
 		return RoleViewer
 	}
 
+	role := RoleViewer
 	for _, value := range values {
 		normalized := strings.ToLower(strings.TrimSpace(value))
 		switch normalized {
 		case "admin":
-			return RoleAdmin
+			role = maxRole(role, RoleAdmin)
 		case "operator":
-			return RoleOperator
+			role = maxRole(role, RoleOperator)
 		case "viewer":
-			return RoleViewer
-		}
-		if strings.Contains(normalized, "admin") {
-			return RoleAdmin
-		}
-		if strings.Contains(normalized, "operator") {
-			return RoleOperator
+			role = maxRole(role, RoleViewer)
 		}
 	}
 
-	return RoleViewer
+	return role
+}
+
+func maxRole(a, b Role) Role {
+	if a >= b {
+		return a
+	}
+	return b
 }
 
 func claimString(claims map[string]any, keys ...string) string {

@@ -75,6 +75,39 @@ func TestRateLimiterCanonicalizesHostPortForSameIP(t *testing.T) {
 	}
 }
 
+func TestRateLimiterDoesNotTrustForwardedForHeader(t *testing.T) {
+	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
+	server := newServer(
+		testClusterReader{},
+		nil,
+		logger,
+		WithRateLimit(RateLimitConfig{
+			Enabled:  true,
+			Requests: 1,
+			Window:   time.Minute,
+		}),
+	)
+	router := server.Router("")
+
+	first := httptest.NewRequest(http.MethodGet, "/api/pods", nil)
+	first.RemoteAddr = "10.0.0.20:1111"
+	first.Header.Set("X-Forwarded-For", "198.51.100.10")
+	firstResp := httptest.NewRecorder()
+	router.ServeHTTP(firstResp, first)
+	if firstResp.Code != http.StatusOK {
+		t.Fatalf("first status = %d, want 200", firstResp.Code)
+	}
+
+	second := httptest.NewRequest(http.MethodGet, "/api/pods", nil)
+	second.RemoteAddr = "10.0.0.20:2222"
+	second.Header.Set("X-Forwarded-For", "203.0.113.42")
+	secondResp := httptest.NewRecorder()
+	router.ServeHTTP(secondResp, second)
+	if secondResp.Code != http.StatusTooManyRequests {
+		t.Fatalf("second status = %d, want 429", secondResp.Code)
+	}
+}
+
 func TestErrorPayloadShapeConsistency(t *testing.T) {
 	logger := slog.New(slog.NewJSONHandler(io.Discard, nil))
 	server := newServer(

@@ -76,6 +76,38 @@ func TestProdDisallowsHeaderTokenAuth(t *testing.T) {
 	}
 }
 
+func TestLoadOIDCRequiresClientID(t *testing.T) {
+	clearConfigEnv(t)
+	t.Setenv("AUTH_ENABLED", "true")
+	t.Setenv("AUTH_PROVIDER", "oidc")
+	t.Setenv("AUTH_OIDC_ISSUER_URL", "https://issuer.example")
+	t.Setenv("AUTH_OIDC_ENABLED", "true")
+
+	if _, err := Load(); err == nil {
+		t.Fatal("expected error when OIDC enabled without AUTH_OIDC_CLIENT_ID")
+	}
+}
+
+func TestLoadOIDCWithClientIDAllowsTokenlessAuth(t *testing.T) {
+	clearConfigEnv(t)
+	t.Setenv("AUTH_ENABLED", "true")
+	t.Setenv("AUTH_PROVIDER", "oidc")
+	t.Setenv("AUTH_OIDC_ISSUER_URL", "https://issuer.example")
+	t.Setenv("AUTH_OIDC_CLIENT_ID", "kubelens-web")
+	t.Setenv("AUTH_OIDC_ENABLED", "true")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if !cfg.Auth.OIDC.Enabled {
+		t.Fatal("expected OIDC to be enabled")
+	}
+	if cfg.Auth.OIDC.ClientID != "kubelens-web" {
+		t.Fatalf("OIDC client id = %q, want kubelens-web", cfg.Auth.OIDC.ClientID)
+	}
+}
+
 func TestLoadOllamaEmbeddingDefaults(t *testing.T) {
 	clearConfigEnv(t)
 	t.Setenv("OLLAMA_BASE_URL", "http://localhost:11434")
@@ -133,6 +165,13 @@ func clearConfigEnv(t *testing.T) {
 		"AUTH_ALLOW_HEADER_TOKEN",
 		"AUTH_TRUSTED_CSRF_DOMAINS",
 		"AUTH_TOKENS",
+		"AUTH_PROVIDER",
+		"AUTH_OIDC_PROVIDER",
+		"AUTH_OIDC_ENABLED",
+		"AUTH_OIDC_ISSUER_URL",
+		"AUTH_OIDC_CLIENT_ID",
+		"AUTH_OIDC_USERNAME_CLAIM",
+		"AUTH_OIDC_ROLE_CLAIM",
 		"RATE_LIMIT_ENABLED",
 		"RATE_LIMIT_REQUESTS",
 		"RATE_LIMIT_WINDOW_SECONDS",

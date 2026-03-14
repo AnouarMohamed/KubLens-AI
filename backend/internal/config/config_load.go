@@ -199,6 +199,9 @@ func validate(cfg Config) error {
 	if cfg.Auth.Enabled && len(cfg.Auth.Tokens) == 0 && !cfg.Auth.OIDC.Enabled {
 		return errors.New("AUTH_ENABLED=true requires AUTH_TOKENS or AUTH_OIDC_* configuration")
 	}
+	if cfg.Auth.Enabled && cfg.Auth.OIDC.Enabled && strings.TrimSpace(cfg.Auth.OIDC.ClientID) == "" {
+		return errors.New("AUTH_OIDC_CLIENT_ID is required when OIDC auth is enabled")
+	}
 
 	if cfg.WriteActionsEnabled && !cfg.Auth.Enabled {
 		return errors.New("WRITE_ACTIONS_ENABLED=true requires AUTH_ENABLED=true")
