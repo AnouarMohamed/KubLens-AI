@@ -13,6 +13,9 @@ permissions:
   contents: read
   security-events: write
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   analyze:
     name: Analyze (${{ matrix.language }})
@@ -25,13 +28,34 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup Go
+        if: matrix.language == 'go'
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+
+      - name: Initialize CodeQL (manual Go build)
+        if: matrix.language == 'go'
+        uses: github/codeql-action/init@v4
+        with:
+          languages: go
+          build-mode: manual
+
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
+        if: matrix.language != 'go'
+        uses: github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}
 
+      - name: Build Go for CodeQL
+        if: matrix.language == 'go'
+        run: |
+          cd backend
+          go build ./...
+
       - name: Autobuild
-        uses: github/codeql-action/autobuild@v3
+        if: matrix.language != 'go'
+        uses: github/codeql-action/autobuild@v4
 
       - name: Analyze
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@v4
