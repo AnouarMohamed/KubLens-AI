@@ -1,6 +1,9 @@
 import { expect, test } from "@playwright/test";
 
 test("notifications panel triage flow and events handoff", async ({ page }) => {
+  const loginResponse = await page.request.post("/api/auth/login", { data: { token: "e2e-viewer-token" } });
+  expect(loginResponse.status()).toBe(200);
+
   await page.goto("/");
 
   await page.getByRole("button", { name: "Notifications" }).click();
