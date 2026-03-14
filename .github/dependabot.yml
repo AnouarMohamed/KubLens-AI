@@ -4,7 +4,11 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
-    open-pull-requests-limit: 10
+    open-pull-requests-limit: 2
+    groups:
+      npm-dependencies:
+        patterns:
+          - "*"
     labels:
       - "dependencies"
       - "security"
@@ -13,7 +17,11 @@ updates:
     directory: "/backend"
     schedule:
       interval: "weekly"
-    open-pull-requests-limit: 10
+    open-pull-requests-limit: 2
+    groups:
+      go-dependencies:
+        patterns:
+          - "*"
     labels:
       - "dependencies"
       - "security"
@@ -22,7 +30,11 @@ updates:
     directory: "/predictor"
     schedule:
       interval: "weekly"
-    open-pull-requests-limit: 10
+    open-pull-requests-limit: 2
+    groups:
+      python-dependencies:
+        patterns:
+          - "*"
     labels:
       - "dependencies"
       - "security"
@@ -31,7 +43,11 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
-    open-pull-requests-limit: 10
+    open-pull-requests-limit: 2
+    groups:
+      action-dependencies:
+        patterns:
+          - "*"
     labels:
       - "dependencies"
       - "security"
