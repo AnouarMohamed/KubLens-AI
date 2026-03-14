@@ -4,11 +4,11 @@ This is the full operator and contributor guide for KubeLens AI.
 
 ## Screenshot gallery
 
-| UI 1 | UI 2 | UI 3 |
-| --- | --- | --- |
-| ![KubeLens UI 1](Screenshots/Screenshot%202026-03-13%20235520.png) | ![KubeLens UI 2](Screenshots/Screenshot%202026-03-13%20235534.png) | ![KubeLens UI 3](Screenshots/Screenshot%202026-03-13%20235552.png) |
-| ![KubeLens UI 4](Screenshots/Screenshot%202026-03-13%20235600.png) | ![KubeLens UI 5](Screenshots/Screenshot%202026-03-13%20235615.png) | ![KubeLens UI 6](Screenshots/Screenshot%202026-03-13%20235627.png) |
-| ![KubeLens UI 7](Screenshots/Screenshot%202026-03-13%20235723.png) | ![KubeLens UI 8](Screenshots/Screenshot%202026-03-13%20235802.png) | ![KubeLens UI 9](Screenshots/Screenshot%202026-03-13%20235824.png) |
+| UI 1                                                                | UI 2                                                                | UI 3                                                                |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| ![KubeLens UI 1](Screenshots/Screenshot%202026-03-13%20235520.png)  | ![KubeLens UI 2](Screenshots/Screenshot%202026-03-13%20235534.png)  | ![KubeLens UI 3](Screenshots/Screenshot%202026-03-13%20235552.png)  |
+| ![KubeLens UI 4](Screenshots/Screenshot%202026-03-13%20235600.png)  | ![KubeLens UI 5](Screenshots/Screenshot%202026-03-13%20235615.png)  | ![KubeLens UI 6](Screenshots/Screenshot%202026-03-13%20235627.png)  |
+| ![KubeLens UI 7](Screenshots/Screenshot%202026-03-13%20235723.png)  | ![KubeLens UI 8](Screenshots/Screenshot%202026-03-13%20235802.png)  | ![KubeLens UI 9](Screenshots/Screenshot%202026-03-13%20235824.png)  |
 | ![KubeLens UI 10](Screenshots/Screenshot%202026-03-13%20235843.png) | ![KubeLens UI 11](Screenshots/Screenshot%202026-03-13%20235859.png) | ![KubeLens UI 12](Screenshots/Screenshot%202026-03-13%20235921.png) |
 | ![KubeLens UI 13](Screenshots/Screenshot%202026-03-13%20235943.png) | ![KubeLens UI 14](Screenshots/Screenshot%202026-03-13%20235957.png) | ![KubeLens UI 15](Screenshots/Screenshot%202026-03-14%20000100.png) |
 
