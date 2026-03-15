@@ -8,7 +8,7 @@ AI-powered Kubernetes operations assistant for deterministic diagnostics and roo
 
 ## Product vision
 
-KubeLens AI helps engineers diagnose cluster issues, understand failures, and optimize workloads. The differentiator is a deterministic cluster intelligence engine that produces structured diagnostics. The AI layer explains those diagnostics and suggests safe remediation steps; it does not invent facts.
+KubeLens AI helps engineers diagnose cluster issues, understand failures, and optimize workloads. The differentiator is a deterministic cluster intelligence engine that produces structured diagnostics. The AI layer explains those diagnostics and suggests safe remediation steps.
 
 ---
 
