@@ -15,6 +15,7 @@
 - [ ] `npm run verify:changelog`
 - [ ] `npm run verify:api-contract`
 - [ ] `npm run verify:docs`
+- [ ] `npm run verify:doc-impact`
 - [ ] `npm run build`
 
 ## Security and operations impact
@@ -24,6 +25,7 @@
 - [ ] Audit schema/behavior changed (explain)
 - [ ] Kubernetes manifests changed (explain)
 - [ ] Documentation updated for behavior/configuration changes (explain)
+- [ ] Implementation program status/scope updated when roadmap epics changed (explain)
 
 ## Rollout and rollback
 

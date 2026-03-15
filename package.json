@@ -35,6 +35,10 @@
     "generate:api-contract": "node scripts/generate-api-contract.mjs",
     "verify:api-contract": "node scripts/generate-api-contract.mjs --check",
     "verify:docs": "node scripts/verify-docs.mjs",
+    "verify:doc-impact": "node scripts/verify-doc-impact.mjs",
+    "audit:npm": "npm audit --omit=dev --audit-level=high",
+    "audit:go": "node scripts/go-task.mjs -C backend run golang.org/x/vuln/cmd/govulncheck@latest ./...",
+    "audit:predictor": "python -m pip_audit -r predictor/requirements.txt -r predictor/requirements-dev.txt",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "npm run lint:types && npm run lint:eslint && npm run lint:structure && npm run format:check"

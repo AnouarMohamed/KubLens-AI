@@ -42,8 +42,11 @@
 
 - CodeQL SAST scanning for Go, JavaScript/TypeScript, and Python (`.github/workflows/codeql.yml`)
 - Trivy + Hadolint checks in CI for filesystem/image and Dockerfile risk detection
+- Go vulnerability scanning (`govulncheck`) in CI
+- npm production dependency audit (`npm audit --omit=dev --audit-level=high`) in CI
+- Predictor dependency vulnerability audit (`pip-audit`) in CI
 - Dependabot weekly dependency update PRs for npm, Go modules, pip, and GitHub Actions
-- Documentation governance checks in CI and weekly staleness monitoring
+- Documentation governance checks in CI (`verify:docs` + `verify:doc-impact`) and weekly staleness monitoring
 
 ## Supply chain controls
 

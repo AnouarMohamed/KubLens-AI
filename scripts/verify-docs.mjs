@@ -32,6 +32,7 @@ const requiredDocs = [
   "SUPPLY_CHAIN_POLICY.md",
   "SECRET_ROTATION_RUNBOOK.md",
   "DOCUMENTATION_GOVERNANCE.md",
+  "IMPLEMENTATION_PROGRAM.md",
 ];
 
 function fail(message) {
